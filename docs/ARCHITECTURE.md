@@ -66,7 +66,7 @@ moteur/src/
   config.rs     GameConfig et sa validation
   error.rs      GameError : toutes les raisons de refus
   common/       Player, Position, Direction
-  board/        Board, Cell
+  board/        Board, Cell, Pion, PionId
   game/         Game, Action, Event
   rules/        règles pures qui lisent le plateau (alignement)
   rng.rs        (cible) générateur déterministe maison, sans dépendance
@@ -81,12 +81,12 @@ moteur/src/
 
 Tout ce qui change pour un observateur (un pion posé, tué, déplacé, qui change de camp, un tour qui se termine…) produit un `Event`. Le labo, Godot et les bots ne lisent que ces événements pour animer. C'est vérifié par l'invariant du miroir (principe 5).
 
-### Le modèle de décision (cible, tâche T4)
+### Le modèle de décision
 
 Les attaques demandent plusieurs choix (carte, pion lanceur, cible, sauts enchaînés). Les réactions se jouent pendant le tour adverse, et le draft est une suite de choix. Au lieu d'une `Action` géante qui contiendrait tout, **le moteur expose à tout moment qui doit choisir quoi** :
 
-- `pending_decision()` : la décision attendue (action principale, choix du lanceur, choix d'une cible, fenêtre de réaction, choix de draft…) et le joueur concerné ;
-- `legal_actions()` : la liste exacte des actions acceptées maintenant.
+- `pending_decision()` : la décision attendue et le joueur concerné. Aujourd'hui seulement `MainAction` ; viendront le choix du lanceur, d'une cible, la fenêtre de réaction, le draft…
+- `legal_actions()` : la liste exacte des actions acceptées maintenant, dans un ordre fixe. Elle est construite en passant chaque candidate par la validation elle-même : elle ne peut pas contredire `apply`. Un test le vérifie sur des parties aléatoires.
 
 Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(pos)`, `Pass`, `EndTurn`…). Avantages :
 
@@ -102,16 +102,18 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
 - **Les effets primitifs** (`Effect`) sont le cœur DRY : tuer, déplacer, échanger, poser, changer de camp, ajouter un effet en cours, creuser un trou, gagner des actions. Une famille *décrit* ses effets. **Un résolveur central** les applique, émet les `Event` et déclenche les conséquences : retour en réserve, tombe, vengeance de Meilleurs amis, fenêtres de réaction. Les attaques changent souvent, les primitives rarement.
 - **Les nombres d'une famille** (portée, nombre de cibles, durée) sont des constantes nommées dans son fichier. Ils passeront dans la configuration quand l'équilibrage par bots en aura besoin (principe 6).
 
-### Les pions et les cases (cible, tâche T3)
+### Les pions et les cases
 
-- Chaque pion a une **identité stable `PawnId`**. Un effet en cours vise un pion, pas une position, car un pion peut être attiré, échangé ou téléporté.
-- Une case est une **structure en couches** (un pion optionnel, puis le terrain : trou, tombe… ajoutés quand une attaque en a besoin). Ce n'est pas un enum exclusif : une tombe n'empêche pas un pion d'être sur la même case.
+- Chaque pion (`Pion`) a une **identité stable `PionId`**, donnée dans l'ordre des poses à partir de 0. Un effet en cours vise un pion, pas une position, car un pion peut être attiré, échangé ou téléporté. Seul le moteur crée des pions ; les clients les lisent dans `Event::PionPlaced` ou sur le plateau.
+- Une case (`Cell`) est une **structure en couches** : aujourd'hui un pion optionnel ; le terrain (trou, tombe…) s'ajoutera quand une attaque en aura besoin. Ce n'est pas un enum exclusif : une tombe n'empêche pas un pion d'être sur la même case.
 
 ### La victoire et la fin de partie
 
 - Une ligne de `align_to_win` pions **faite en posant** gagne tout de suite.
 - **Règle d'or (cible, B2)** : une ligne obtenue grâce à une attaque donne une victoire en attente, qui doit survivre à un tour adverse.
-- **Fin garantie (cible, T4)** : une issue `Draw` avec une limite de tours dans la configuration. Sans elle, des bots peuvent jouer à l'infini.
+- **Fin garantie** : toute partie se termine (`GameEnd`), soit par alignement, soit **figée** (plus personne ne pourra jamais agir), soit par la **limite de tours** `max_turns`, filet de sécurité pour les bots.
+- Trois choses sont séparées pour rester modifiables : le **déclencheur** (`EndReason`, utile aux statistiques), le **résultat** (`Outcome`, calculé à un seul endroit : nul pour l'instant, départage possible plus tard) et la **limite** (réglage).
+- « Figée » veut dire *plus personne ne peut agir et rien de programmé ne peut changer la situation*. Une future mécanique anti-stagnation (Effondrement) devra être prise en compte dans ce test.
 
 ## 5. Bots et machine learning (préparé, construit après la v1.0)
 

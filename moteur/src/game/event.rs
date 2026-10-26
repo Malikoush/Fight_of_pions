@@ -1,4 +1,4 @@
-use crate::{Player, Position};
+use crate::{GameEnd, Pion, Player, Position};
 
 /// Ce que le moteur annonce après une action acceptée.
 ///
@@ -6,9 +6,9 @@ use crate::{Player, Position};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Event {
     /// Un pion a été posé.
-    PawnPlaced {
-        /// Le propriétaire du pion.
-        player: Player,
+    PionPlaced {
+        /// Le pion posé, avec son identité et son propriétaire.
+        pion: Pion,
         /// La case où il a été posé.
         at: Position,
     },
@@ -17,9 +17,6 @@ pub enum Event {
         /// Le joueur qui joue maintenant.
         next: Player,
     },
-    /// La partie est gagnée.
-    GameWon {
-        /// Le joueur qui a aligné assez de pions.
-        winner: Player,
-    },
+    /// La partie est finie : victoire ou match nul, avec sa raison.
+    GameEnded(GameEnd),
 }

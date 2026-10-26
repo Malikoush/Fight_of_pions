@@ -12,15 +12,19 @@ pub struct GameConfig {
     /// et `board_size`.
     pub align_to_win: usize,
     /// Pions en réserve pour chaque joueur au début, au moins 1.
-    pub pawns_per_player: u32,
+    pub pions_per_player: u32,
     /// Actions du tout premier tour de la partie, au moins 1.
     pub first_turn_actions: u32,
     /// Actions des tours suivants, au moins 1.
     pub actions_per_turn: u32,
     /// Actions non utilisées qu'on peut garder pour le tour suivant.
     pub max_banked_actions: u32,
-    /// Actions que coûte la pose d'un pion, au moins 1.
+    /// Actions que coûte la pose d'un pion, au moins 1, et atteignable en économisant :
+    /// au plus `actions_per_turn + max_banked_actions`.
     pub place_cost: u32,
+    /// La partie s'arrête (match nul) à la fin de ce tour, au moins 1. Filet de sécurité
+    /// pour les bots : une vraie partie ne doit pas l'atteindre.
+    pub max_turns: u32,
 }
 
 impl Default for GameConfig {
@@ -28,11 +32,12 @@ impl Default for GameConfig {
         Self {
             board_size: 10,
             align_to_win: 6,
-            pawns_per_player: 15,
+            pions_per_player: 15,
             first_turn_actions: 1,
             actions_per_turn: 2,
             max_banked_actions: 2,
             place_cost: 1,
+            max_turns: 200,
         }
     }
 }
@@ -47,11 +52,15 @@ pub enum ConfigError {
     /// La ligne gagnante est plus longue que le plateau.
     AlignmentLongerThanBoard,
     /// Un joueur commencerait sans pion.
-    NoPawns,
+    NoPions,
     /// Un tour ne donnerait aucune action.
     NoActionsPerTurn,
     /// Poser un pion ne coûterait rien : toute la réserve partirait en un tour.
     FreePlacement,
+    /// Poser un pion coûterait plus que le maximum d'actions d'un tour, même en économisant.
+    PlacementUnreachable,
+    /// La limite de tours vaudrait 0 : la partie finirait avant de commencer.
+    NoTurnLimit,
 }
 
 impl fmt::Display for ConfigError {
@@ -71,13 +80,18 @@ impl fmt::Display for ConfigError {
             ConfigError::AlignmentLongerThanBoard => {
                 write!(f, "l'alignement est plus long que le plateau")
             }
-            ConfigError::NoPawns => write!(f, "chaque joueur doit avoir au moins un pion"),
+            ConfigError::NoPions => write!(f, "chaque joueur doit avoir au moins un pion"),
             ConfigError::NoActionsPerTurn => {
                 write!(f, "chaque tour doit donner au moins une action")
             }
             ConfigError::FreePlacement => {
                 write!(f, "poser un pion doit coûter au moins une action")
             }
+            ConfigError::PlacementUnreachable => write!(
+                f,
+                "poser un pion coûte plus que le maximum d'actions d'un tour, même en économisant"
+            ),
+            ConfigError::NoTurnLimit => write!(f, "la limite de tours doit valoir au moins 1"),
         }
     }
 }
@@ -106,8 +120,8 @@ impl GameConfig {
         if self.align_to_win > self.board_size {
             return Some(ConfigError::AlignmentLongerThanBoard);
         }
-        if self.pawns_per_player == 0 {
-            return Some(ConfigError::NoPawns);
+        if self.pions_per_player == 0 {
+            return Some(ConfigError::NoPions);
         }
         if self.first_turn_actions == 0 || self.actions_per_turn == 0 {
             return Some(ConfigError::NoActionsPerTurn);
@@ -115,7 +129,19 @@ impl GameConfig {
         if self.place_cost == 0 {
             return Some(ConfigError::FreePlacement);
         }
+        if self.place_cost > self.max_actions_in_a_turn() {
+            return Some(ConfigError::PlacementUnreachable);
+        }
+        if self.max_turns == 0 {
+            return Some(ConfigError::NoTurnLimit);
+        }
         None
+    }
+
+    /// Le plus d'actions qu'un joueur peut avoir en un tour ordinaire, en ayant économisé.
+    fn max_actions_in_a_turn(&self) -> u32 {
+        self.actions_per_turn
+            .saturating_add(self.max_banked_actions)
     }
 }
 
@@ -170,12 +196,12 @@ mod tests {
     }
 
     #[test]
-    fn each_player_needs_at_least_one_pawn() {
+    fn each_player_needs_at_least_one_pion() {
         let config = GameConfig {
-            pawns_per_player: 0,
+            pions_per_player: 0,
             ..GameConfig::default()
         };
-        assert_eq!(problem(config), Some(ConfigError::NoPawns));
+        assert_eq!(problem(config), Some(ConfigError::NoPions));
     }
 
     #[test]
@@ -199,6 +225,38 @@ mod tests {
             ..GameConfig::default()
         };
         assert_eq!(problem(config), Some(ConfigError::FreePlacement));
+    }
+
+    #[test]
+    fn placing_must_be_reachable_by_saving_actions() {
+        let with_cost = |place_cost| GameConfig {
+            place_cost,
+            ..GameConfig::default()
+        };
+        // 2 actions par tour + 2 gardées = 4 au plus.
+        assert_eq!(problem(with_cost(4)), None);
+        assert_eq!(
+            problem(with_cost(5)),
+            Some(ConfigError::PlacementUnreachable)
+        );
+    }
+
+    #[test]
+    fn impossible_victory_is_accepted_for_tests() {
+        let config = GameConfig {
+            pions_per_player: 2,
+            ..GameConfig::default()
+        };
+        assert_eq!(problem(config), None);
+    }
+
+    #[test]
+    fn turn_limit_must_be_at_least_one() {
+        let config = GameConfig {
+            max_turns: 0,
+            ..GameConfig::default()
+        };
+        assert_eq!(problem(config), Some(ConfigError::NoTurnLimit));
     }
 
     #[test]

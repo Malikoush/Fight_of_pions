@@ -4,7 +4,7 @@
 use crate::partie::{Demande, Nouvelle};
 use crate::theme;
 use eframe::egui;
-use fight_of_pions::{Action, Event, Game, Player, Position};
+use fight_of_pions::{Action, Event, Game, GameEnd, Outcome, Player, Position};
 
 #[derive(Default)]
 pub struct Panneau {
@@ -89,12 +89,13 @@ impl Panneau {
 
 fn etat(ui: &mut egui::Ui, game: &Game) {
     ui.label(format!("Tour {}", game.turn()));
-    match game.winner() {
-        Some(winner) => {
-            ui.colored_label(
-                theme::couleur_joueur(winner),
-                format!("{} a gagné !", theme::nom_joueur(winner)),
-            );
+    match game.end() {
+        Some(fin) => {
+            let couleur = match fin.outcome {
+                Outcome::Won(winner) => theme::couleur_joueur(winner),
+                Outcome::Draw => ui.visuals().text_color(),
+            };
+            ui.colored_label(couleur, texte_fin(fin));
         }
         None => {
             ui.label(format!(
@@ -115,10 +116,27 @@ fn etat(ui: &mut egui::Ui, game: &Game) {
 
 fn decrire(event: &Event) -> String {
     match event {
-        Event::PawnPlaced { player, at } => {
-            format!("{} pose en {}", theme::nom_joueur(*player), at)
+        Event::PionPlaced { pion, at } => {
+            format!(
+                "{} pose le pion {} en {}",
+                theme::nom_joueur(pion.owner()),
+                pion.id(),
+                at
+            )
         }
         Event::TurnEnded { next } => format!("Au tour de {}", theme::nom_joueur(*next)),
-        Event::GameWon { winner } => format!("{} gagne la partie !", theme::nom_joueur(*winner)),
+        Event::GameEnded(fin) => texte_fin(*fin),
+    }
+}
+
+/// « Joueur 1 (violet) gagne la partie (alignement) » ou « Match nul (…) ».
+fn texte_fin(fin: GameEnd) -> String {
+    match fin.outcome {
+        Outcome::Won(winner) => format!(
+            "{} gagne la partie ({})",
+            theme::nom_joueur(winner),
+            fin.reason
+        ),
+        Outcome::Draw => format!("Match nul ({})", fin.reason),
     }
 }

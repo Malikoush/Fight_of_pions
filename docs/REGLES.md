@@ -7,7 +7,7 @@ Ce carnet dit **ce que le moteur implémente réellement**, avec la date de chaq
 ### Plateau et objectif (2026-10-26)
 
 - Plateau de `board_size × board_size` cases (10 par défaut), toutes jouables.
-- Chaque joueur a `pawns_per_player` pions en réserve (15 par défaut).
+- Chaque joueur a `pions_per_player` pions en réserve (15 par défaut).
 - Aligner au moins `align_to_win` pions (6 par défaut) en ligne droite (horizontale, verticale ou diagonale) **en posant** gagne immédiatement.
 
 ### Configuration (2026-10-26)
@@ -18,7 +18,11 @@ Une partie refuse de démarrer si ses réglages sont incohérents :
 - l'alignement doit être compris entre 2 et la taille du plateau ;
 - chaque joueur doit avoir au moins un pion ;
 - chaque tour, y compris le premier, doit donner au moins une action ;
-- poser un pion doit coûter au moins une action, sinon toute la réserve partirait en un seul tour.
+- poser un pion doit coûter au moins une action, sinon toute la réserve partirait en un seul tour ;
+- poser un pion doit être possible en économisant : `place_cost` ≤ `actions_per_turn` + `max_banked_actions` ;
+- la limite de tours `max_turns` doit valoir au moins 1.
+
+Une configuration où la victoire semble impossible (moins de pions que l'alignement demandé) est **acceptée** : elle sert aux tests, et les invocations pourraient la rendre jouable (à revoir en B5).
 
 ### Tour de jeu (2026-10-26)
 
@@ -36,13 +40,23 @@ Une action est refusée, sans rien modifier, si :
 - la case est hors du plateau ou occupée ;
 - la réserve de pions est vide.
 
+### Fin de partie (2026-10-26)
+
+Une partie se termine dans l'un de ces trois cas, vérifiés dans cet ordre :
+
+1. **Alignement** : le joueur qui aligne en posant gagne immédiatement.
+2. **Partie figée** : plus aucun joueur ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation. Avec les règles actuelles, c'est le cas quand le plateau est plein, ou quand les deux réserves sont vides. Résultat : **match nul**.
+   Le jeu étant centré sur les attaques, **une réserve vide ne figera plus la partie dès B1** : un joueur qui a un pion lanceur et une attaque utilisable, même en recharge, peut encore agir. Le blocage complet deviendra rare ; le risque principal sera alors la partie sans fin, traité par la limite de tours, la règle de répétition (B1) et l'anti-stagnation.
+3. **Limite de tours** : à la fin du tour numéro `max_turns` (200 par défaut). Chaque tour d'un joueur compte : 200 tours font 100 tours par joueur. C'est un filet de sécurité pour les bots ; il n'est pas censé arriver dans une vraie partie. Résultat : **match nul**.
+
+Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors alignement est pour l'instant toujours le nul ; un départage pourra le remplacer sans toucher au reste.
+
 ## Pas encore implémenté
 
 - Les attaques et les réactions.
 - La règle d'or.
 - Le draft et la cache secrète.
-- Le match nul.
-- L'Effondrement (règle optionnelle, mise de côté par le GDD).
+- La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
 
 ## Questions bloquantes
 
@@ -50,12 +64,14 @@ Une action est refusée, sans rien modifier, si :
 
 | Bloque | Question | Proposition par défaut | Réponse |
 |---|---|---|---|
-| T4 | Comment finit une partie où plus personne ne peut aligner (réserves vides, attaques inutiles) ? | Match nul après `max_turns` tours (réglable), en attendant l'Effondrement | |
-| T4 | Une configuration valide peut rendre la partie impossible à finir : pose impossible (`place_cost` > `actions_per_turn` + `max_banked_actions`) ou victoire impossible (`pawns_per_player` < `align_to_win`). Faut-il la refuser ? | Oui : refuser ces configurations dans `validate` | |
+| T4 | Comment finit une partie où plus personne ne peut aligner (réserves vides, attaques inutiles) ? | Match nul après `max_turns` tours (réglable), en attendant l'Effondrement | **2026-10-26** : partie figée → nul ; limite de 200 tours → nul (filet de sécurité). L'anti-stagnation (Effondrement, boost) est une tâche de design à part. |
+| T4 | Une configuration valide peut rendre la partie impossible à finir : pose impossible (`place_cost` > `actions_per_turn` + `max_banked_actions`) ou victoire impossible (`pions_per_player` < `align_to_win`). Faut-il la refuser ? | Oui : refuser ces configurations dans `validate` | **2026-10-26** : mixte. On refuse la pose impossible ; on accepte la victoire impossible (tests, invocations). |
 | B1 | Le coût d'une attaque est-il payé quand tous les choix sont faits ? Peut-on annuler gratuitement pendant le ciblage ? | Oui et oui | |
 | B1 | Un pion tué retourne dans la réserve de son propriétaire, et laisse-t-il une tombe dès maintenant ? | Retour en réserve oui ; tombe ajoutée avec le Médecin | |
 | B2 | « Survivre à un tour adverse » : la même ligne, ou n'importe quelle ligne de 6 ? | N'importe quelle ligne de 6 au début du tour suivant du joueur | |
 | B2 | Si une attaque crée une ligne pour **l'adversaire** (échange, séduction), que se passe-t-il ? | Victoire en attente pour cet adversaire | |
+| B2 | Si la partie s'arrête (figée ou limite de tours) alors qu'une victoire est en attente, que se passe-t-il ? | La victoire en attente l'emporte | |
+| Anti-stagnation | Effondrement, boost d'actions par tour, ou les deux ? Nul ou départage quand la partie s'arrête sans alignement ? | À mesurer avec les bots | |
 | B3 | « Pendant N tours » : les tours de qui ? | N tours du joueur qui subit l'effet | |
 | B3 | Un pion immobilisé peut-il lancer une attaque ? Être déplacé ou échangé par une attaque ? | Ne peut ni lancer ni bouger de lui-même ; peut subir | |
 | B4 | Le déplacement est-il retiré des actions de base ? | Oui (proposition du GDD) | |
@@ -73,3 +89,5 @@ Une action est refusée, sans rien modifier, si :
 |---|---|
 | 2026-10-26 | Carnet créé. Correctif : l'événement de fin de tour annonçait le mauvais joueur. |
 | 2026-10-26 | T2 : bornes de configuration vérifiées ; coût de la pose réglable (`place_cost`) ; `action_per_turn` renommé `actions_per_turn`. Aucune règle de jeu modifiée. |
+| 2026-10-26 | T3 : chaque pion reçoit une identité stable à sa pose ; `pawns_per_player` renommé `pions_per_player`. Aucune règle de jeu modifiée. |
+| 2026-10-26 | T4 : fin de partie par partie figée ou limite de tours (nul) ; configuration où la pose est impossible refusée. |

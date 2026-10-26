@@ -2,6 +2,9 @@
 //!
 //! Un client (terminal, labo, bot, Godot) crée une [`Game`], lui envoie des [`Action`]
 //! avec [`Game::apply`] et réagit aux [`Event`] renvoyés. Il ne contient jamais de règle.
+//!
+//! Pour savoir quoi jouer, un client (ou un bot) demande [`Game::pending_decision`]
+//! (qui doit choisir quoi) et [`Game::legal_actions`] (la liste exacte des actions permises).
 
 #![cfg_attr(
     not(test),
@@ -30,8 +33,8 @@ pub mod game;
 /// Les règles pures, qui lisent le plateau sans le modifier.
 pub mod rules;
 
-pub use board::{Board, Cell};
+pub use board::{Board, Cell, Pion, PionId};
 pub use common::{Direction, Player, Position};
 pub use config::{ConfigError, GameConfig};
 pub use error::GameError;
-pub use game::{Action, Event, Game};
+pub use game::{Action, Decision, EndReason, Event, Game, GameEnd, Outcome};

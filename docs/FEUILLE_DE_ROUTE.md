@@ -38,7 +38,7 @@ On ne commence jamais la suivante avant. Une tâche bloquée par une question de
   - **Exécution :**
     - rendre `execute` infaillible : plus de `?` après une modification d'état ;
     - supprimer la branche morte `turn == 1` de `start_turn`.
-  - **Code prévu pour des règles pas encore tranchées** (principe 6), à réintroduire en B1/B4 : `ensure_owned`, `GameError::NotYourPawn`, `GameError::IllegalMove`, `Position::isadjacent`.
+  - **Code prévu pour des règles pas encore tranchées** (principe 6), à réintroduire en B1/B4 : `ensure_owned`, `GameError::NotYourPion`, `GameError::IllegalMove`, `Position::isadjacent`.
   - **Noms conformes au glossaire :**
     - module `alignement` → `alignment` ;
     - variables `ecart_l` et `ecart_c` ;
@@ -52,18 +52,20 @@ On ne commence jamais la suivante avant. Une tâche bloquée par une question de
   - Ajouter `Hash`, et `PartialEq`/`Eq` (y compris sur `Game`).
   - **Terminal** : le sortir dans un membre `terminal/`, ce qui fait de `moteur` une pure bibliothèque ; lire le nombre d'actions gardées dans la configuration ; ne plus dupliquer le nom des colonnes.
   - **Labo** : l'arrondi des cases (`0.0` dans `plateau.rs`) passe dans `theme.rs`.
-- [ ] **T3 · Identité des pions**
-  - `Pawn { id: PawnId, owner }`, `Cell` en structure (`pawn: Option<Pawn>`).
+- [x] **T3 · Identité des pions**
+  - `Pion { id: PionId, owner }`, `Cell` en structure (`pion: Option<Pion>`).
   - Compteur d'identifiants dans `Game`, déterministe.
-  - `Event::PawnPlaced` porte l'identifiant.
+  - `Event::PionPlaced` porte le pion, donc son identifiant.
   - `rules/alignment` est inchangé grâce à `board.owner()`.
-- [ ] **T4 · Modèle de décision et fin de partie** (attend la réponse à la question « match nul »)
-  - `Decision`, `pending_decision()` et `legal_actions()`.
-  - `Outcome { Won, Draw }` et `max_turns` dans la configuration.
+  - Vocabulaire harmonisé : « Pion » partout dans le code (`pions_per_player`, `PionPlaced`…).
+- [x] **T4 · Modèle de décision et fin de partie**
+  - `Decision`, `pending_decision()` et `legal_actions()` (construite à partir de la validation).
+  - `GameEnd { Outcome, EndReason }`, `Event::GameEnded` ; partie figée et `max_turns` (200) → nul.
+  - Configuration : pose impossible refusée (`PlacementUnreachable`), limite de tours ≥ 1.
   - Tests :
-    - toute action listée est acceptée ;
-    - une action non listée est refusée ;
-    - toute partie se termine.
+    - toute action listée est acceptée, une action non listée est refusée, sur 100 parties aléatoires ;
+    - toute partie se termine ;
+    - plateau plein, réserves vides et limite de tours donnent un nul ; l'alignement passe avant.
 - [ ] **T5 · Déterminisme, replay et invariants**
   - `rng.rs` (SplitMix64 maison, testé sur des valeurs connues), graine dans `Game`.
   - `GameRecord` et sa relecture. Feature `serde` optionnelle.
@@ -86,14 +88,18 @@ De la plus stable à la plus floue. Aucune famille « EN REFONTE » avant que sa
 - [ ] **B1 · Squelette des attaques + Ours R/É** (tuer un adjacent)
   - Types : `AttackKind`, `Rarity`, `AttackStats`, `AttackCatalog` dans la configuration, `Arsenal` par joueur avec recharge.
   - Choix : `Action::UseAttack(slot)`, puis `Choose` pour le lanceur et la cible ; annulation.
-  - Résolution : `Effect::Kill`, résolveur central, `Event::PawnKilled`, retour en réserve.
+  - Résolution : `Effect::Kill`, résolveur central, `Event::PionKilled`, retour en réserve.
   - Labo : arsenal de test réglable, choix de la carte, clic du lanceur puis de la cible.
+  - À vérifier : avec les pions tués puis reposés, `PionId` ne doit jamais pouvoir saturer (borné par `max_turns`, T4).
+  - Règle de répétition (même position 3 fois → fin), puisque les kills rendent les cycles possibles. À écrire d'abord dans le carnet.
+  - « Partie figée » : un joueur qui a un pion lanceur et une attaque utilisable, même en recharge, peut encore agir. Une réserve vide ne fige donc plus la partie (décision du 2026-10-26).
 - [ ] **B2 · Règle d'or** : victoire en attente, avant la première attaque qui peut créer une ligne.
 - [ ] **B3 · Effets en cours** : `ActiveEffect` et ses échéances ; Beauté fatale C et Saut du loup C (immobiliser).
 - [ ] **B4 · Mouvement** : Beauté fatale R, Ours C, Saut du loup R/É/L (sauts enchaînés), Lièvre, Interchange.
 - [ ] **B5 · Invocation et changement de camp** : Beauté fatale É/L, Familia, Meilleurs amis (vengeance).
 - [ ] **B6 · Économie** : Massacre divin.
 - [ ] **B7 · Terrain** : Coup du taureau (trous).
+- [ ] **Design · Anti-stagnation** : Effondrement et/ou boost d'actions par tour ; nul ou départage. Plusieurs variantes en réglages, essayées au labo, puis comparées par les bots (taux de nul, durée, avantage du premier joueur). « Partie figée » doit tenir compte des effondrements à venir.
 - [ ] **B8 · Réactions** : fenêtres de réaction dans le modèle de décision (avant ou après la résolution) ; Feintaille, Sentinelle, Queue du lézard, Perroquet, Hibou.
 - [ ] **B9 · Refontes figées** : Reine, Attila, Médecin (tombes et zombies).
 - [ ] **B10 · Draft et cache secrète** : tirage avec la graine, bans et picks, `PlayerView`, arsenal rempli par le draft.
