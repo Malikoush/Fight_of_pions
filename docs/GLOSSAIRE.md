@@ -4,7 +4,7 @@ Dernière mise à jour : 2026-10-26.
 
 Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de règles et dans le code.
 
-- **Code du moteur** : les noms sont en anglais, sauf « Pion », qui est le nom même du jeu. Les commentaires et la doc sont en français. Le labo, outil interne, est entièrement en français.
+- **Code du moteur** : les noms sont en anglais, sauf « Pion », qui est le nom même du jeu et s'écrit ainsi partout : `Pion`, `PionId`, `PionPlaced`, `pions_per_player`, `reserve_pions`. Jamais « pawn ». Les commentaires et la doc sont en français. Le labo, outil interne, est entièrement en français.
 - **Joueur** : le texte affiché est en français, via `Display` ou le thème du client.
 - **Vocabulaire du GDD** : en cas de doute, c'est lui qui gagne (« attaque », pas « pouvoir »).
 
@@ -27,9 +27,13 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Événement | `Event` | Ce que le moteur annonce après une action |
 | Refus | `GameError` | Pourquoi une action ou une configuration est refusée |
 | Configuration incohérente | `ConfigError` | La raison précise du refus d'une configuration (`GameError::InvalidConfig`) |
-| Décision attendue | `Decision`, `pending_decision()` (cible) | Qui doit choisir quoi, maintenant |
-| Actions légales | `legal_actions()` (cible) | La liste exacte des actions acceptées maintenant |
-| Issue | `Outcome` (cible) | `Won(Player)` ou `Draw` |
+| Décision attendue | `Decision`, `pending_decision()` | Qui doit choisir quoi, maintenant (`MainAction` pour l'instant) |
+| Actions légales | `legal_actions()` | La liste exacte des actions acceptées maintenant |
+| Fin de partie | `GameEnd`, `Event::GameEnded` | Le résultat et la raison de la fin |
+| Résultat | `Outcome` | `Won(Player)` ou `Draw` (match nul) |
+| Raison de la fin | `EndReason` | `Alignment`, `Frozen` (partie figée) ou `TurnLimit` |
+| Partie figée | `EndReason::Frozen` | Plus personne ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation |
+| Limite de tours | `max_turns` | Le tour après lequel la partie s'arrête en match nul (200 par défaut) : filet de sécurité |
 | Graine | `seed` (cible) | Initialise le générateur `Rng`. Elle fait partie de la partie. |
 | Enregistrement | `GameRecord` (cible) | Configuration + graine + actions : de quoi rejouer une partie |
 | Vue joueur | `PlayerView` (cible) | Ce qu'un joueur a le droit de voir |
@@ -39,11 +43,11 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
 | Plateau | `Board` | Le damier `board_size × board_size` |
-| Case | `Cell` | Le contenu d'une case. Aujourd'hui un enum, demain une structure en couches (T3). |
+| Case | `Cell` | Le contenu d'une case : une structure en couches (pour l'instant, un pion optionnel) |
 | Position | `Position` | Rangée et colonne à partir de 0, affichée « C5 » |
 | Direction | `Direction` | Un pas d'une case parmi les 8 directions |
-| Pion | `Cell::Pion` → `Pawn` (T3) | Un pion posé, appartenant à un joueur |
-| Identité d'un pion | `PawnId` (cible) | Numéro stable d'un pion, pour qu'un effet le suive quand il bouge |
+| Pion | `Pion` | Un pion posé, avec son identité et son propriétaire |
+| Identité d'un pion | `PionId` | Numéro stable d'un pion (affiché « #3 »), pour qu'un effet le suive quand il bouge |
 | Réserve de pions | `reserve_pions` | Les pions qu'un joueur peut encore poser (15 au départ) |
 | Pion lanceur | `launcher` (cible) | Le pion déjà posé depuis lequel une attaque est lancée |
 | Tombe | couche `tomb` de `Cell` (cible) | Ce que laisse un pion tué. Elle ne bloque pas la case. |

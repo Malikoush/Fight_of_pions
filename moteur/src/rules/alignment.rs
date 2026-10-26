@@ -42,12 +42,14 @@ pub fn complete_line(board: &Board, pos: Position, target: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::board::Cell;
+    use crate::{Cell, Pion, PionId};
 
     /// Pose un pion pour un test. Plante si la case est hors du plateau.
-    fn put_pawn(board: &mut Board, row: usize, col: usize, player: Player) {
+    /// L'identité du pion n'a pas d'importance pour l'alignement.
+    fn put_pion(board: &mut Board, row: usize, col: usize, player: Player) {
+        let pion = Pion::new(PionId::FIRST, player);
         board
-            .set(Position { row, col }, Cell::Pion(player))
+            .set(Position { row, col }, Cell::with_pion(pion))
             .unwrap();
     }
 
@@ -55,7 +57,7 @@ mod tests {
     fn horizontal_line_of_six() {
         let mut board = Board::new(10);
         for col in 2..8 {
-            put_pawn(&mut board, 4, col, Player::One);
+            put_pion(&mut board, 4, col, Player::One);
         }
 
         assert_eq!(longest_line(&board, Position { row: 4, col: 4 }), 6);
@@ -65,21 +67,21 @@ mod tests {
     fn diagonal_line_of_six() {
         let mut board = Board::new(10);
         for i in 1..7 {
-            put_pawn(&mut board, i, i, Player::One);
+            put_pion(&mut board, i, i, Player::One);
         }
 
         assert_eq!(longest_line(&board, Position { row: 3, col: 3 }), 6);
     }
 
     #[test]
-    fn opponent_pawn_cuts_the_line() {
+    fn opponent_pion_cuts_the_line() {
         let mut board = Board::new(10);
         for col in 1..4 {
-            put_pawn(&mut board, 4, col, Player::One);
+            put_pion(&mut board, 4, col, Player::One);
         }
-        put_pawn(&mut board, 4, 4, Player::Two);
+        put_pion(&mut board, 4, 4, Player::Two);
         for col in 5..7 {
-            put_pawn(&mut board, 4, col, Player::One);
+            put_pion(&mut board, 4, col, Player::One);
         }
 
         assert_eq!(longest_line(&board, Position { row: 4, col: 2 }), 3);
@@ -89,7 +91,7 @@ mod tests {
     fn line_stops_at_the_edge() {
         let mut board = Board::new(10);
         for col in 5..10 {
-            put_pawn(&mut board, 0, col, Player::One);
+            put_pion(&mut board, 0, col, Player::One);
         }
 
         assert_eq!(longest_line(&board, Position { row: 0, col: 9 }), 5);

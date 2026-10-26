@@ -1,6 +1,6 @@
 mod terminal;
 
-use fight_of_pions::{Event, Game, GameConfig};
+use fight_of_pions::{Event, Game, GameConfig, Outcome};
 use std::io::{self, Write};
 use terminal::Command;
 
@@ -33,13 +33,20 @@ fn main() {
                 Ok(events) => {
                     for event in events {
                         match event {
-                            Event::PawnPlaced { .. } => {}
+                            Event::PionPlaced { .. } => {}
                             Event::TurnEnded { next } => {
                                 println!("Au tour de {}.", terminal::player_name(next));
                             }
-                            Event::GameWon { winner } => {
+                            Event::GameEnded(end) => {
                                 println!("\n{}", terminal::render(&game));
-                                println!("\n{} gagne la partie !", terminal::player_name(winner));
+                                match end.outcome {
+                                    Outcome::Won(winner) => println!(
+                                        "\n{} gagne la partie ({}) !",
+                                        terminal::player_name(winner),
+                                        end.reason
+                                    ),
+                                    Outcome::Draw => println!("\nMatch nul ({}).", end.reason),
+                                }
                             }
                         }
                     }
@@ -50,7 +57,7 @@ fn main() {
         }
 
         // Le break est ici, hors du for : un break dans le for n'arrêterait que le for.
-        if game.winner().is_some() {
+        if game.end().is_some() {
             break;
         }
     }

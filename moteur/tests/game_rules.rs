@@ -1,22 +1,9 @@
-use fight_of_pions::{Action, Event, Game, GameConfig, GameError, Player, Position};
+mod common;
 
-fn place(row: usize, col: usize) -> Action {
-    Action::Place(Position { row, col })
-}
-
-fn new_game() -> Game {
-    Game::new(GameConfig::default()).unwrap()
-}
-
-/// Joue une suite d'actions qui doivent toutes réussir ;
-/// renvoie les événements de la dernière action.
-fn play(game: &mut Game, actions: &[Action]) -> Vec<Event> {
-    let mut last = Vec::new();
-    for &action in actions {
-        last = game.apply(action).unwrap();
-    }
-    last
-}
+use common::{new_game, place, placed_pion, play};
+use fight_of_pions::{
+    Action, EndReason, Event, Game, GameConfig, GameEnd, GameError, Outcome, Player, Position,
+};
 
 #[test]
 fn first_turn_has_one_action_then_two() {
@@ -39,23 +26,69 @@ fn six_in_a_row_wins() {
     play(&mut game, &[place(7, 0), place(7, 2)]);
     let events = play(&mut game, &[place(0, 5)]);
 
-    assert!(events.contains(&Event::GameWon {
-        winner: Player::One
-    }));
+    assert!(events.contains(&Event::GameEnded(GameEnd {
+        outcome: Outcome::Won(Player::One),
+        reason: EndReason::Alignment,
+    })));
+    assert_eq!(game.winner(), Some(Player::One));
     assert_eq!(game.apply(Action::EndTurn), Err(GameError::GameOver));
 }
 
 #[test]
-fn placing_announces_the_pawn() {
+fn placing_announces_the_pion() {
     let mut game = new_game();
     let events = play(&mut game, &[place(4, 4)]);
+    let pion = placed_pion(&events);
+    assert_eq!(pion.owner(), Player::One);
     assert_eq!(
         events[0],
-        Event::PawnPlaced {
-            player: Player::One,
+        Event::PionPlaced {
+            pion,
             at: Position { row: 4, col: 4 }
         }
     );
+}
+
+#[test]
+fn board_holds_the_announced_pion() {
+    let mut game = new_game();
+    let pion = placed_pion(&play(&mut game, &[place(4, 4)]));
+    let cell = game.board().get(Position { row: 4, col: 4 }).unwrap();
+    assert_eq!(cell.pion(), Some(pion));
+}
+
+#[test]
+fn each_pion_gets_its_own_id_in_placement_order() {
+    let mut game = new_game();
+    let first = placed_pion(&play(&mut game, &[place(0, 0)]));
+    let second = placed_pion(&play(&mut game, &[place(5, 5)]));
+    let third = placed_pion(&play(&mut game, &[place(9, 9)]));
+
+    assert_eq!(first.id().to_string(), "#0");
+    assert_eq!(second.owner(), Player::Two);
+    assert!(first.id() < second.id());
+    assert!(second.id() < third.id());
+}
+
+#[test]
+fn same_actions_give_same_ids() {
+    let actions = [place(0, 0), place(5, 5), place(9, 9)];
+    let mut a = new_game();
+    let mut b = new_game();
+    play(&mut a, &actions);
+    play(&mut b, &actions);
+    assert_eq!(a, b);
+}
+
+#[test]
+fn refused_action_does_not_consume_an_id() {
+    let mut with_refusal = new_game();
+    assert!(with_refusal.apply(place(10, 10)).is_err());
+    let after_refusal = placed_pion(&play(&mut with_refusal, &[place(0, 0)]));
+
+    let mut direct = new_game();
+    let direct_pion = placed_pion(&play(&mut direct, &[place(0, 0)]));
+    assert_eq!(after_refusal, direct_pion);
 }
 
 #[test]
@@ -103,12 +136,14 @@ fn refused_action_changes_nothing() {
 #[test]
 fn empty_reserve_forbids_placing() {
     let config = GameConfig {
-        pawns_per_player: 1,
+        pions_per_player: 1,
         ..GameConfig::default()
     };
     let mut game = Game::new(config).unwrap();
     play(&mut game, &[place(0, 0)]);
-    play(&mut game, &[place(9, 9), Action::EndTurn]);
+    // Le joueur 2 garde son pion : sinon les deux réserves seraient vides et la partie
+    // serait figée, donc finie.
+    play(&mut game, &[Action::EndTurn]);
     assert_eq!(game.apply(place(1, 1)), Err(GameError::EmptyReserve));
 }
 

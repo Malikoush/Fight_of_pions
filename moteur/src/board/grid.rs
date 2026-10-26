@@ -16,7 +16,7 @@ impl Board {
     pub(crate) fn new(size: usize) -> Self {
         Self {
             size,
-            cells: vec![Cell::Empty; size * size],
+            cells: vec![Cell::EMPTY; size * size],
         }
     }
     fn index(&self, pos: Position) -> Option<usize> {
@@ -25,6 +25,12 @@ impl Board {
         }
         None
     }
+    /// Toutes les positions du plateau, rangée par rangée, dans un ordre toujours identique.
+    pub fn positions(&self) -> impl Iterator<Item = Position> + use<> {
+        let size = self.size;
+        (0..size).flat_map(move |row| (0..size).map(move |col| Position { row, col }))
+    }
+
     /// Vrai si la position est sur le plateau.
     pub fn contains(&self, pos: Position) -> bool {
         self.index(pos).is_some()
@@ -65,7 +71,7 @@ mod tests {
     #[test]
     fn new_board_is_empty() {
         let board = Board::new(10);
-        assert_eq!(board.get(Position { row: 5, col: 5 }), Some(Cell::Empty));
+        assert_eq!(board.get(Position { row: 5, col: 5 }), Some(Cell::EMPTY));
     }
     #[test]
     fn reading_outside_the_board_gives_nothing() {
