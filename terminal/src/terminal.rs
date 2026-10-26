@@ -1,7 +1,7 @@
 //! Interface texte : traduit du texte en Action, et une Game en texte.
 //! Elle ne décide jamais si un coup est légal : c'est le travail du moteur.
 
-use fight_of_pions::{Action, Game, Player, Position};
+use fight_of_pions::{Action, Game, GameConfig, Player, Position};
 
 /// Ce que le joueur peut taper.
 pub enum Command {
@@ -10,12 +10,18 @@ pub enum Command {
     Quit,
 }
 
-pub const HELP: &str = "\
+/// Le texte d'aide ; les nombres viennent de la configuration de la partie.
+pub fn help(config: &GameConfig) -> String {
+    format!(
+        "\
 Commandes :
   p C5   poser un pion en C5
-  f      finir le tour (les actions restantes sont gardées, 2 maximum)
+  f      finir le tour (les actions restantes sont gardées, {} maximum)
   h      afficher l'aide
-  q      quitter";
+  q      quitter",
+        config.max_banked_actions
+    )
+}
 
 /// Le symbole d'un joueur sur le plateau.
 fn symbol(player: Player) -> char {
@@ -42,7 +48,7 @@ pub fn render(game: &Game) -> String {
     // Ligne des lettres : A B C ...
     out.push_str("    ");
     for col in 0..size {
-        out.push((b'A' + col as u8) as char);
+        out.push(Position::column_letter(col).unwrap_or('?'));
         out.push(' ');
     }
     out.push('\n');

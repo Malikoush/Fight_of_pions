@@ -45,7 +45,7 @@ Ils viennent de la conception initiale, et certains sont précisés par l'analys
 |---|---|---|
 | `moteur/` (paquet `fight_of_pions`) | Toutes les règles. Bibliothèque. | Aucune (`serde` optionnel, cible) |
 | `labo/` | Client de test eframe/egui : panneau, damier cliquable, journal. | `moteur`, `eframe` |
-| `terminal/` (cible, aujourd'hui `moteur/src/main.rs`) | Client texte. | `moteur` |
+| `terminal/` | Client texte. | `moteur` |
 | `bots/` (cible) | Bots et arène de parties automatiques. | `moteur` |
 | `py_bindings/` (cible) | Environnement Python pour l'entraînement ML. | `moteur`, `pyo3` |
 | `godot_bridge/` (cible) | Pont vers Godot. | `moteur`, `godot` |

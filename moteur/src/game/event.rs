@@ -3,7 +3,7 @@ use crate::{Player, Position};
 /// Ce que le moteur annonce après une action acceptée.
 ///
 /// Les clients mettent leur affichage à jour à partir de ces événements.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Event {
     /// Un pion a été posé.
     PawnPlaced {

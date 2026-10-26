@@ -1,5 +1,5 @@
 /// Un des deux camps.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Player {
     /// Le joueur qui commence.
     One,

@@ -11,7 +11,8 @@
         clippy::panic,
         clippy::unreachable,
         clippy::todo,
-        clippy::unimplemented
+        clippy::unimplemented,
+        clippy::cast_possible_truncation
     )
 )]
 #![warn(missing_docs)]
@@ -31,6 +32,6 @@ pub mod rules;
 
 pub use board::{Board, Cell};
 pub use common::{Direction, Player, Position};
-pub use config::GameConfig;
+pub use config::{ConfigError, GameConfig};
 pub use error::GameError;
 pub use game::{Action, Event, Game};

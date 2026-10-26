@@ -5,7 +5,7 @@ use crate::{
 };
 
 /// L'état complet d'une partie, et le seul point d'entrée des actions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Game {
     config: GameConfig,
     board: Board,
@@ -18,6 +18,11 @@ pub struct Game {
 }
 
 impl Game {
+    /// Les réglages de la partie.
+    pub fn config(&self) -> &GameConfig {
+        &self.config
+    }
+
     /// Actions qu'il reste au joueur courant pour ce tour.
     pub fn actions_left(&self) -> u32 {
         self.actions_left
@@ -51,101 +56,44 @@ impl Game {
     /// Une nouvelle partie. Erreur si la configuration est incohérente.
     pub fn new(config: GameConfig) -> Result<Game, GameError> {
         config.validate()?;
-        let board = Board::new(config.board_size);
         let pawns = config.pawns_per_player;
-        let first_actions = config.first_turn_actions;
 
         Ok(Self {
             config,
-            board,
+            board: Board::new(config.board_size),
             current_player: Player::One,
             turn: 1,
-            actions_left: first_actions,
+            actions_left: config.first_turn_actions,
             reserve_pions: [pawns, pawns],
             banked_actions: [0, 0],
             winner: None,
         })
     }
 
-    #[allow(dead_code)]
-    fn ensure_owned(&self, pos: Position) -> Result<(), GameError> {
-        match self.board.get(pos) {
-            None => Err(GameError::OutOfBounds(pos)),
-            Some(cell) if cell.owner() == Some(self.current_player) => Ok(()),
-            Some(_) => Err(GameError::NotYourPawn(pos)),
-        }
+    /// Applique une action du joueur courant et renvoie les événements produits.
+    ///
+    /// Une action refusée renvoie une erreur et ne modifie rien.
+    pub fn apply(&mut self, action: Action) -> Result<Vec<Event>, GameError> {
+        self.validate(action)?; // lit l'état, ne modifie rien
+        Ok(self.execute(action)) // modifie l'état, ne vérifie plus
     }
 
-    fn ensure_empty(&self, pos: Position) -> Result<(), GameError> {
-        match self.board.get(pos) {
-            None => Err(GameError::OutOfBounds(pos)),
-            Some(Cell::Empty) => Ok(()),
-            Some(_) => Err(GameError::CellOccupied(pos)),
-        }
-    }
-
-    fn start_turn(&mut self) {
-        let base = if self.turn == 1 {
-            self.config.first_turn_actions
-        } else {
-            self.config.action_per_turn
-        };
-        let i = self.current_player.index();
-        self.actions_left = base + self.banked_actions[i];
-        self.banked_actions[i] = 0;
-    }
-
-    fn end_turn(&mut self) {
-        let i = self.current_player.index();
-        self.banked_actions[i] = self.actions_left.min(self.config.max_banked_actions);
-        self.current_player = self.current_player.opponent();
-        self.turn += 1;
-        self.start_turn();
-    }
-
-    fn execute(&mut self, action: Action) -> Result<Vec<Event>, GameError> {
-        let mut events = Vec::new();
-        self.actions_left -= action.cost();
+    /// Le nombre d'actions que coûte une décision.
+    fn cost(&self, action: Action) -> u32 {
         match action {
-            Action::Place(pos) => {
-                self.board.set(pos, Pion(self.current_player))?;
-                self.reserve_pions[self.current_player.index()] -= 1;
-                events.push(Event::PawnPlaced {
-                    player: self.current_player,
-                    at: pos,
-                });
-
-                if rules::complete_line(&self.board, pos, self.config.align_to_win) {
-                    self.winner = Some(self.current_player);
-                    events.push(Event::GameWon {
-                        winner: self.current_player,
-                    });
-                    return Ok(events);
-                }
-                if self.actions_left == 0 {
-                    self.end_turn();
-                    events.push(Event::TurnEnded {
-                        next: self.current_player,
-                    });
-                }
-            }
-            Action::EndTurn => {
-                self.end_turn();
-                events.push(Event::TurnEnded {
-                    next: self.current_player,
-                });
-            }
+            Action::Place(_) => self.config.place_cost,
+            Action::EndTurn => 0,
         }
-        Ok(events)
     }
 
     fn validate(&self, action: Action) -> Result<(), GameError> {
         if self.winner.is_some() {
             return Err(GameError::GameOver);
         }
-        if self.actions_left < action.cost() {
+        let needed = self.cost(action);
+        if self.actions_left < needed {
             return Err(GameError::NotEnoughActions {
-                needed: action.cost(),
+                needed,
                 available: self.actions_left,
             });
         }
@@ -163,11 +111,70 @@ impl Game {
         Ok(())
     }
 
-    /// Applique une action du joueur courant et renvoie les événements produits.
-    ///
-    /// Une action refusée renvoie une erreur et ne modifie rien.
-    pub fn apply(&mut self, action: Action) -> Result<Vec<Event>, GameError> {
-        self.validate(action)?; // lit l'état, ne modifie rien
-        self.execute(action) // modifie l'état, ne vérifie plus
+    fn ensure_empty(&self, pos: Position) -> Result<(), GameError> {
+        match self.board.get(pos) {
+            None => Err(GameError::OutOfBounds(pos)),
+            Some(Cell::Empty) => Ok(()),
+            Some(_) => Err(GameError::CellOccupied(pos)),
+        }
+    }
+
+    /// Exécute une action déjà validée. Ne peut pas échouer.
+    fn execute(&mut self, action: Action) -> Vec<Event> {
+        match action {
+            Action::Place(pos) => self.execute_place(pos),
+            Action::EndTurn => {
+                self.end_turn();
+                vec![Event::TurnEnded {
+                    next: self.current_player,
+                }]
+            }
+        }
+    }
+
+    fn execute_place(&mut self, pos: Position) -> Vec<Event> {
+        let player = self.current_player;
+        // La position a été validée. En debug, un écart futur entre `validate` et `execute`
+        // est signalé tout de suite ; en release, le plateau est modifié en premier, donc
+        // si `set` refusait quand même, rien d'autre n'aurait encore changé.
+        debug_assert!(self.board.contains(pos), "pose validée hors du plateau");
+        if self.board.set(pos, Pion(player)).is_err() {
+            return Vec::new();
+        }
+        // Les soustractions ne peuvent pas passer sous zéro : `validate` a vérifié les deux.
+        self.actions_left = self.actions_left.saturating_sub(self.config.place_cost);
+        let reserve = &mut self.reserve_pions[player.index()];
+        *reserve = reserve.saturating_sub(1);
+
+        let mut events = vec![Event::PawnPlaced { player, at: pos }];
+        if rules::complete_line(&self.board, pos, self.config.align_to_win) {
+            self.winner = Some(player);
+            events.push(Event::GameWon { winner: player });
+        } else if self.actions_left == 0 {
+            self.end_turn();
+            events.push(Event::TurnEnded {
+                next: self.current_player,
+            });
+        }
+        events
+    }
+
+    fn end_turn(&mut self) {
+        let i = self.current_player.index();
+        self.banked_actions[i] = self.actions_left.min(self.config.max_banked_actions);
+        self.current_player = self.current_player.opponent();
+        self.turn = self.turn.saturating_add(1);
+        self.start_turn();
+    }
+
+    /// Prépare le tour du nouveau joueur courant. Le tout premier tour de la partie est
+    /// réglé dans [`Game::new`] : ici, c'est toujours un tour ordinaire.
+    fn start_turn(&mut self) {
+        let i = self.current_player.index();
+        self.actions_left = self
+            .config
+            .actions_per_turn
+            .saturating_add(self.banked_actions[i]);
+        self.banked_actions[i] = 0;
     }
 }

@@ -24,7 +24,7 @@ On ne commence jamais la suivante avant. Une tâche bloquée par une question de
 
 ## Phase A · Fondations (aucune nouvelle règle de jeu)
 
-- [ ] **T2 · Hygiène du moteur** (points relevés par la première relecture du gardien)
+- [x] **T2 · Hygiène du moteur** (points relevés par la première relecture du gardien)
   - **Plus aucune panique possible sur une entrée de client :**
     - l'affichage d'une `Position` au-delà de Z déborde (`b'A' + col as u8`) : il faut un affichage sûr pour toute position, avec un test ;
     - `Position::step` doit utiliser une addition vérifiée ;
@@ -56,7 +56,7 @@ On ne commence jamais la suivante avant. Une tâche bloquée par une question de
   - `Pawn { id: PawnId, owner }`, `Cell` en structure (`pawn: Option<Pawn>`).
   - Compteur d'identifiants dans `Game`, déterministe.
   - `Event::PawnPlaced` porte l'identifiant.
-  - `rules/alignement` est inchangé grâce à `board.owner()`.
+  - `rules/alignment` est inchangé grâce à `board.owner()`.
 - [ ] **T4 · Modèle de décision et fin de partie** (attend la réponse à la question « match nul »)
   - `Decision`, `pending_decision()` et `legal_actions()`.
   - `Outcome { Won, Draw }` et `max_turns` dans la configuration.

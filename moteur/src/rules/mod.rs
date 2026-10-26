@@ -1,3 +1,3 @@
-mod alignement;
+mod alignment;
 
-pub use alignement::complete_line;
+pub use alignment::complete_line;

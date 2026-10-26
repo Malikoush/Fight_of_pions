@@ -10,10 +10,20 @@ Ce carnet dit **ce que le moteur implémente réellement**, avec la date de chaq
 - Chaque joueur a `pawns_per_player` pions en réserve (15 par défaut).
 - Aligner au moins `align_to_win` pions (6 par défaut) en ligne droite (horizontale, verticale ou diagonale) **en posant** gagne immédiatement.
 
+### Configuration (2026-10-26)
+
+Une partie refuse de démarrer si ses réglages sont incohérents :
+
+- la taille du plateau doit être comprise entre 2 et 26 (une colonne par lettre, de A à Z) ;
+- l'alignement doit être compris entre 2 et la taille du plateau ;
+- chaque joueur doit avoir au moins un pion ;
+- chaque tour, y compris le premier, doit donner au moins une action ;
+- poser un pion doit coûter au moins une action, sinon toute la réserve partirait en un seul tour.
+
 ### Tour de jeu (2026-10-26)
 
-- Le joueur 1 commence avec `first_turn_actions` action (1 par défaut). Tous les autres tours, y compris le premier du joueur 2, donnent `action_per_turn` actions (2 par défaut ; renommé `actions_per_turn` en T2).
-- Poser un pion coûte 1 action. Finir son tour coûte 0 action.
+- Le joueur 1 commence avec `first_turn_actions` action (1 par défaut). Tous les autres tours, y compris le premier du joueur 2, donnent `actions_per_turn` actions (2 par défaut).
+- Poser un pion coûte `place_cost` actions (1 par défaut). Finir son tour est gratuit.
 - Le tour se termine automatiquement quand il ne reste plus d'action.
 - En finissant son tour, on garde jusqu'à `max_banked_actions` actions non utilisées (2 par défaut). Elles s'ajoutent au tour suivant, soit jusqu'à 4 actions.
 
@@ -41,6 +51,7 @@ Une action est refusée, sans rien modifier, si :
 | Bloque | Question | Proposition par défaut | Réponse |
 |---|---|---|---|
 | T4 | Comment finit une partie où plus personne ne peut aligner (réserves vides, attaques inutiles) ? | Match nul après `max_turns` tours (réglable), en attendant l'Effondrement | |
+| T4 | Une configuration valide peut rendre la partie impossible à finir : pose impossible (`place_cost` > `actions_per_turn` + `max_banked_actions`) ou victoire impossible (`pawns_per_player` < `align_to_win`). Faut-il la refuser ? | Oui : refuser ces configurations dans `validate` | |
 | B1 | Le coût d'une attaque est-il payé quand tous les choix sont faits ? Peut-on annuler gratuitement pendant le ciblage ? | Oui et oui | |
 | B1 | Un pion tué retourne dans la réserve de son propriétaire, et laisse-t-il une tombe dès maintenant ? | Retour en réserve oui ; tombe ajoutée avec le Médecin | |
 | B2 | « Survivre à un tour adverse » : la même ligne, ou n'importe quelle ligne de 6 ? | N'importe quelle ligne de 6 au début du tour suivant du joueur | |
@@ -61,3 +72,4 @@ Une action est refusée, sans rien modifier, si :
 | Date | Changement |
 |---|---|
 | 2026-10-26 | Carnet créé. Correctif : l'événement de fin de tour annonçait le mauvais joueur. |
+| 2026-10-26 | T2 : bornes de configuration vérifiées ; coût de la pose réglable (`place_cost`) ; `action_per_turn` renommé `actions_per_turn`. Aucune règle de jeu modifiée. |

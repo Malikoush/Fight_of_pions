@@ -66,7 +66,7 @@ pub fn show(ui: &mut egui::Ui, game: &Game, demandes: &mut Vec<Demande>) {
                 } else {
                     theme::CASE_FONCEE
                 };
-                painter.rect_filled(rect, 0.0, fond);
+                painter.rect_filled(rect, theme::ARRONDI_CASE, fond);
 
                 if let Some(player) = game.board().owner(pos) {
                     painter.circle(
@@ -91,14 +91,14 @@ pub fn show(ui: &mut egui::Ui, game: &Game, demandes: &mut Vec<Demande>) {
     });
 }
 
-/// Lettres au-dessus, numéros à gauche. Le texte vient du `Display` de `Position`
-/// (« C3 » pour i = 2), pour ne pas dupliquer la façon de nommer les cases.
+/// Lettres au-dessus, numéros à gauche. La lettre vient du moteur
+/// (`Position::column_letter`), pour ne pas dupliquer la façon de nommer les cases.
 fn etiquettes(painter: &egui::Painter, geo: &Geometrie, couleur: Color32) {
     let police = FontId::proportional(theme::TAILLE_ETIQUETTE);
     let decalage = theme::MARGE_PLATEAU / 2.0;
     for i in 0..geo.taille {
-        let nom = Position { row: i, col: i }.to_string();
-        let (lettre, numero) = nom.split_at(1);
+        let lettre = Position::column_letter(i).unwrap_or('?').to_string();
+        let numero = (i + 1).to_string();
 
         let haut = geo.case_vers_rect(Position { row: 0, col: i }).center_top();
         painter.text(
