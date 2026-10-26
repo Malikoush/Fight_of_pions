@@ -1,6 +1,6 @@
 mod common;
 
-use common::{new_game, place, placed_pion, play};
+use common::{SEED, game_with, new_game, place, placed_pion, play};
 use fight_of_pions::{
     Action, EndReason, Event, Game, GameConfig, GameEnd, GameError, Outcome, Player, Position,
 };
@@ -139,7 +139,7 @@ fn empty_reserve_forbids_placing() {
         pions_per_player: 1,
         ..GameConfig::default()
     };
-    let mut game = Game::new(config).unwrap();
+    let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]);
     // Le joueur 2 garde son pion : sinon les deux réserves seraient vides et la partie
     // serait figée, donc finie.
@@ -157,6 +157,73 @@ fn ending_the_turn_is_free_and_keeps_unused_actions() {
     play(&mut game, &[place(0, 1), place(0, 2)]);
     assert_eq!(game.current_player(), Player::Two);
     assert_eq!(game.actions_left(), 4);
+}
+
+#[test]
+fn placing_announces_the_remaining_actions() {
+    let mut game = new_game();
+    play(&mut game, &[place(0, 0)]);
+    let events = play(&mut game, &[place(5, 5)]);
+    assert_eq!(
+        events[1],
+        Event::ActionsChanged {
+            player: Player::Two,
+            actions_left: 1,
+            banked: 0,
+        }
+    );
+}
+
+#[test]
+fn placing_the_last_action_announces_each_counter_once() {
+    let mut game = new_game();
+    let events = play(&mut game, &[place(0, 0)]);
+    let pion = placed_pion(&events);
+    assert_eq!(
+        events,
+        vec![
+            Event::PionPlaced {
+                pion,
+                at: Position { row: 0, col: 0 },
+            },
+            Event::ActionsChanged {
+                player: Player::One,
+                actions_left: 0,
+                banked: 0,
+            },
+            Event::TurnEnded { next: Player::Two },
+            Event::ActionsChanged {
+                player: Player::Two,
+                actions_left: 2,
+                banked: 0,
+            },
+        ]
+    );
+}
+
+#[test]
+fn ending_the_turn_announces_both_players_actions() {
+    let mut game = new_game();
+    play(&mut game, &[place(0, 0)]);
+    // Le joueur 2 finit son tour avec ses 2 actions : il les garde.
+    let events = play(&mut game, &[Action::EndTurn]);
+    assert_eq!(
+        events,
+        vec![
+            Event::ActionsChanged {
+                player: Player::Two,
+                actions_left: 0,
+                banked: 2,
+            },
+            Event::TurnEnded { next: Player::One },
+            Event::ActionsChanged {
+                player: Player::One,
+                actions_left: 2,
+                banked: 0,
+            },
+        ]
+    );
+    assert_eq!(game.banked_actions(Player::Two), 2);
 }
 
 #[test]
@@ -180,7 +247,7 @@ fn placing_costs_the_configured_number_of_actions() {
         place_cost: 2,
         ..GameConfig::default()
     };
-    let mut game = Game::new(config).unwrap();
+    let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]);
     assert_eq!(game.actions_left(), 1);
     assert_eq!(
@@ -199,7 +266,7 @@ fn invalid_config_refuses_to_start() {
         ..GameConfig::default()
     };
     assert!(matches!(
-        Game::new(config),
+        Game::new(config, SEED),
         Err(GameError::InvalidConfig(_))
     ));
 }

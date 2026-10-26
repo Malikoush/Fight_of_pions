@@ -1,6 +1,6 @@
 # Architecture de Fight of Pions
 
-Dernière mise à jour : 2026-10-26.
+Dernière mise à jour : 2026-10-27.
 
 Ce document décrit comment le code est organisé et **pourquoi**. Il sert de référence pour toutes les tâches de la [feuille de route](FEUILLE_DE_ROUTE.md). Ce qui n'existe pas encore est marqué **(cible)**.
 
@@ -31,10 +31,10 @@ Le moteur ne sait pas qui l'utilise. Un client fait toujours la même chose :
 Ils viennent de la conception initiale, et certains sont précisés par l'analyse du GDD v0.2.
 
 1. **Moteur déterministe.** Même configuration, même graine, mêmes actions : même partie, au bit près. Le hasard passe uniquement par le générateur `Rng` du moteur, initialisé avec une graine (`seed`) stockée dans la partie. On n'utilise jamais d'horloge, de `HashMap`/`HashSet` (leur ordre de parcours est aléatoire) ni de flottants dans les règles.
-2. **Une partie = configuration + graine + liste d'actions** (`GameRecord`, cible). Rejouer les actions reconstruit la partie. Cela donne gratuitement la sauvegarde, le replay, l'annulation dans le labo et la reproduction exacte d'un bug.
+2. **Une partie = configuration + graine + liste d'actions** (`GameRecord`). Rejouer les actions reconstruit la partie. Cela donne gratuitement la sauvegarde, le replay, l'annulation dans le labo et la reproduction exacte d'un bug.
 3. **Le jeu piloté par les données.** Tous les réglages chiffrés vivent dans `GameConfig`, validés au démarrage. Plus tard, ils seront chargés depuis un fichier pour équilibrer sans recompiler.
 4. **Des tranches verticales.** Une fonctionnalité est finie quand elle marche de bout en bout : moteur, tests, labo. On ne commence pas la suivante avant.
-5. **Des invariants vérifiés automatiquement.** Le principal : *un miroir du plateau, construit uniquement à partir des `Event`, est toujours égal à `game.board()`*. C'est la garantie qu'un client qui suit les événements ne se désynchronise jamais. Il est vérifié après chaque action de centaines de parties aléatoires.
+5. **Des invariants vérifiés automatiquement.** Le principal : *un miroir construit uniquement à partir des `Event` (plateau, réserves, actions restantes et gardées, joueur courant, fin) est toujours égal à l'état du moteur*. C'est la garantie qu'un client qui suit les événements ne se désynchronise jamais, sans recalculer aucune règle. Il est vérifié après chaque action de centaines de parties aléatoires.
 6. **Abstraire à la deuxième occurrence, pas avant.** La modularité vient des bonnes abstractions de base (les effets primitifs, le modèle de décision, les données), pas d'options prévues pour des besoins imaginaires.
 7. **La vue joueur** (`PlayerView`, cible). Dès qu'il y a de l'information cachée (cache secrète), le moteur fournit une vue restreinte par joueur. Les bots et le jeu en ligne ne voient que celle-ci.
 8. **Les règles avant le code.** Une attaque n'est codée que lorsque sa règle est écrite et datée dans le [carnet de règles](REGLES.md). Les attaques « EN REFONTE » dans le GDD attendent.
@@ -43,8 +43,8 @@ Ils viennent de la conception initiale, et certains sont précisés par l'analys
 
 | Membre | Rôle | Dépendances |
 |---|---|---|
-| `moteur/` (paquet `fight_of_pions`) | Toutes les règles. Bibliothèque. | Aucune (`serde` optionnel, cible) |
-| `labo/` | Client de test eframe/egui : panneau, damier cliquable, journal. | `moteur`, `eframe` |
+| `moteur/` (paquet `fight_of_pions`) | Toutes les règles. Bibliothèque. | Aucune ; feature `serde` optionnelle (sauvegarde JSON d'un `GameRecord`) |
+| `labo/` | Client de test eframe/egui : panneau, damier cliquable avec cases jouables, journal, graine, annuler, coups au hasard, copier/charger une partie. | `moteur` (avec `serde`), `eframe`, `serde_json` |
 | `terminal/` | Client texte. | `moteur` |
 | `bots/` (cible) | Bots et arène de parties automatiques. | `moteur` |
 | `py_bindings/` (cible) | Environnement Python pour l'entraînement ML. | `moteur`, `pyo3` |
@@ -67,9 +67,9 @@ moteur/src/
   error.rs      GameError : toutes les raisons de refus
   common/       Player, Position, Direction
   board/        Board, Cell, Pion, PionId
-  game/         Game, Action, Event
+  game/         Game, Action, Event, Decision, GameEnd, GameRecord
   rules/        règles pures qui lisent le plateau (alignement)
-  rng.rs        (cible) générateur déterministe maison, sans dépendance
+  rng.rs        Rng : générateur déterministe maison (SplitMix64), sans dépendance
   attacks/      (cible) attaques : une famille par fichier
 ```
 
@@ -79,7 +79,7 @@ moteur/src/
 
 ### Chaque changement d'état est annoncé
 
-Tout ce qui change pour un observateur (un pion posé, tué, déplacé, qui change de camp, un tour qui se termine…) produit un `Event`. Le labo, Godot et les bots ne lisent que ces événements pour animer. C'est vérifié par l'invariant du miroir (principe 5).
+Tout ce qui change pour un observateur (un pion posé, tué, déplacé, qui change de camp, des actions dépensées ou gardées, un tour qui se termine…) produit un `Event`. Le labo, Godot et les bots ne lisent que ces événements pour animer. C'est vérifié par l'invariant du miroir (principe 5).
 
 ### Le modèle de décision
 
@@ -98,7 +98,7 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
 ### Les attaques (cible, phase B)
 
 - **Identité par données** : `AttackKind` (la famille) + `Rarity`. Le coût et la recharge viennent de `AttackStats` dans le `AttackCatalog` de `GameConfig`, jamais du code de la famille. Le coût n'est pas lié à la rareté.
-- **Une famille par fichier** dans `attacks/`. Chaque famille implémente un trait interne sans état (les cibles légales, et les effets à produire), appelé via `AttackKind::rules()`. `Game` ne stocke que des données simples : pas de `Box<dyn>`, ce qui garde `Game` clonable, comparable, hachable et sérialisable.
+- **Une famille par fichier** dans `attacks/`. Chaque famille implémente un trait interne sans état (les cibles légales, et les effets à produire), appelé via `AttackKind::rules()`. `Game` ne stocke que des données simples : pas de `Box<dyn>`, ce qui garde `Game` clonable, comparable et hachable ; la sauvegarde passe par `GameRecord`.
 - **Les effets primitifs** (`Effect`) sont le cœur DRY : tuer, déplacer, échanger, poser, changer de camp, ajouter un effet en cours, creuser un trou, gagner des actions. Une famille *décrit* ses effets. **Un résolveur central** les applique, émet les `Event` et déclenche les conséquences : retour en réserve, tombe, vengeance de Meilleurs amis, fenêtres de réaction. Les attaques changent souvent, les primitives rarement.
 - **Les nombres d'une famille** (portée, nombre de cibles, durée) sont des constantes nommées dans son fichier. Ils passeront dans la configuration quand l'équilibrage par bots en aura besoin (principe 6).
 
@@ -124,7 +124,7 @@ Le moteur est conçu dès maintenant pour qu'ils soient simples et rapides :
 - `legal_actions()` donne directement l'espace d'actions ;
 - `PlayerView` donne l'observation d'un joueur, sans triche possible sur l'information cachée ;
 - le membre `bots/` contiendra l'encodage observation → tenseur et action ↔ indice, pour ne pas mettre de code ML dans le moteur ;
-- la mesure du nombre de parties aléatoires par seconde (T5) sert de référence de performance. On n'optimise rien sans elle.
+- la mesure `cargo run --release -p fight_of_pions --example random_games` (parties aléatoires par seconde, notée dans la feuille de route) sert de référence de performance. On n'optimise rien sans elle.
 
 ## 6. Les clients
 

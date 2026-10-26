@@ -14,6 +14,9 @@ unsafe_code = "forbid"
 [workspace.dependencies]
 # Backend glow (OpenGL) : bien plus léger à compiler que wgpu.
 eframe = { version = "0.34", default-features = false, features = ["default_fonts", "glow"] }
+# Sauvegarde des parties en JSON : optionnel dans le moteur, activé par le labo seulement.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 # Les dépendances sont optimisées une fois pour toutes ; notre code reste en opt-level 0
 # pour recompiler le plus vite possible.

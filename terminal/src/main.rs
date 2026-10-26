@@ -2,10 +2,20 @@ mod terminal;
 
 use fight_of_pions::{Event, Game, GameConfig, Outcome};
 use std::io::{self, Write};
+use std::time::{SystemTime, UNIX_EPOCH};
 use terminal::Command;
 
+/// Une graine différente à chaque partie, tirée de l'horloge : le moteur, lui, n'utilise
+/// jamais l'horloge.
+fn seed_from_clock() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() ^ u64::from(elapsed.subsec_nanos()))
+        .unwrap_or(0)
+}
+
 fn main() {
-    let mut game = match Game::new(GameConfig::default()) {
+    let mut game = match Game::new(GameConfig::default(), seed_from_clock()) {
         Ok(game) => game,
         Err(e) => {
             eprintln!("Impossible de lancer la partie : {}", e);
@@ -33,7 +43,8 @@ fn main() {
                 Ok(events) => {
                     for event in events {
                         match event {
-                            Event::PionPlaced { .. } => {}
+                            // Le plateau et les compteurs sont réaffichés à chaque tour.
+                            Event::PionPlaced { .. } | Event::ActionsChanged { .. } => {}
                             Event::TurnEnded { next } => {
                                 println!("Au tour de {}.", terminal::player_name(next));
                             }

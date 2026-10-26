@@ -54,6 +54,15 @@ pub fn show(ui: &mut egui::Ui, game: &Game, demandes: &mut Vec<Demande>) {
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::click());
         let geo = Geometrie::new(response.rect, game.board().size());
         let survol = response.hover_pos().and_then(|p| geo.point_vers_case(p));
+        // Les cases jouables viennent du moteur : le labo ne connaît aucune règle.
+        let jouables: Vec<Position> = game
+            .legal_actions()
+            .into_iter()
+            .filter_map(|action| match action {
+                Action::Place(pos) => Some(pos),
+                Action::EndTurn => None,
+            })
+            .collect();
 
         for row in 0..geo.taille {
             for col in 0..geo.taille {
@@ -67,6 +76,13 @@ pub fn show(ui: &mut egui::Ui, game: &Game, demandes: &mut Vec<Demande>) {
                     theme::CASE_FONCEE
                 };
                 painter.rect_filled(rect, theme::ARRONDI_CASE, fond);
+                if jouables.contains(&pos) {
+                    painter.circle_filled(
+                        rect.center(),
+                        geo.cote * theme::RAYON_MARQUE_JOUABLE,
+                        theme::MARQUE_JOUABLE,
+                    );
+                }
 
                 if let Some(player) = game.board().owner(pos) {
                     painter.circle(

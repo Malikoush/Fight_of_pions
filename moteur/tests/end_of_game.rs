@@ -2,9 +2,9 @@
 
 mod common;
 
-use common::{TestRng, new_game, place, play};
+use common::{game_with, new_game, place, play, random_config};
 use fight_of_pions::{
-    Action, Decision, EndReason, Event, Game, GameConfig, GameEnd, Outcome, Player,
+    Action, Decision, EndReason, Event, Game, GameConfig, GameEnd, Outcome, Player, Rng,
 };
 
 fn draw(reason: EndReason) -> Event {
@@ -14,12 +14,14 @@ fn draw(reason: EndReason) -> Event {
     })
 }
 
-/// Vérifie qu'une réponse est exactement « un pion posé, puis la fin » : aucun
-/// `TurnEnded` ne doit se glisser entre les deux, même si la pose a vidé les actions.
+/// Vérifie qu'une réponse est exactement « un pion posé, ses actions décomptées, puis la
+/// fin » : aucun `TurnEnded` ne doit se glisser avant la fin, même si la pose a vidé les
+/// actions du tour.
 fn assert_placed_then(events: &[Event], end: Event) {
-    assert_eq!(events.len(), 2, "événements inattendus : {events:?}");
+    assert_eq!(events.len(), 3, "événements inattendus : {events:?}");
     assert!(matches!(events[0], Event::PionPlaced { .. }));
-    assert_eq!(events[1], end);
+    assert!(matches!(events[1], Event::ActionsChanged { .. }));
+    assert_eq!(events[2], end);
 }
 
 /// La définition du carnet, écrite indépendamment du moteur : avec les règles actuelles,
@@ -34,33 +36,13 @@ fn frozen_by_the_rules(game: &Game) -> bool {
     board_full || reserves_empty
 }
 
-/// Une configuration valide tirée au hasard, petite pour que les fins arrivent vite.
-/// Elle couvre les cas où il faut économiser ses actions pour pouvoir poser.
-fn random_config(rng: &mut TestRng) -> GameConfig {
-    let board_size = 2 + rng.below(3);
-    let actions_per_turn = 1 + rng.below(2) as u32;
-    let max_banked_actions = rng.below(3) as u32;
-    let config = GameConfig {
-        board_size,
-        align_to_win: 2 + rng.below(board_size - 1),
-        pions_per_player: 1 + rng.below(9) as u32,
-        first_turn_actions: 1 + rng.below(5) as u32,
-        actions_per_turn,
-        max_banked_actions,
-        place_cost: 1 + rng.below((actions_per_turn + max_banked_actions) as usize) as u32,
-        max_turns: 1 + rng.below(60) as u32,
-    };
-    assert_eq!(config.validate(), Ok(()), "{config:?}");
-    config
-}
-
 #[test]
 fn both_reserves_empty_freezes_the_game_into_a_draw() {
     let config = GameConfig {
         pions_per_player: 1,
         ..GameConfig::default()
     };
-    let mut game = Game::new(config).unwrap();
+    let mut game = game_with(config);
 
     play(&mut game, &[place(0, 0)]);
     // Une seule réserve vide : le joueur 2 peut encore poser, la partie continue.
@@ -81,7 +63,7 @@ fn full_board_freezes_the_game_into_a_draw() {
         pions_per_player: 5,
         ..GameConfig::default()
     };
-    let mut game = Game::new(config).unwrap();
+    let mut game = game_with(config);
 
     // Une grille de morpion remplie sans ligne de 3 :
     //   X O X
@@ -104,7 +86,7 @@ fn turn_limit_reached_by_placing_ends_without_starting_a_new_turn() {
         max_turns: 1,
         ..GameConfig::default()
     };
-    let mut game = Game::new(config).unwrap();
+    let mut game = game_with(config);
     // Le premier tour n'a qu'une action : la pose finit le tour, qui était le dernier.
     let events = play(&mut game, &[place(0, 0)]);
 
@@ -115,12 +97,12 @@ fn turn_limit_reached_by_placing_ends_without_starting_a_new_turn() {
 #[test]
 fn random_games_freeze_exactly_when_the_rules_say_so() {
     for seed in 0..400 {
-        let mut rng = TestRng::new(seed);
-        let mut game = Game::new(random_config(&mut rng)).unwrap();
+        let mut rng = Rng::new(seed);
+        let mut game = game_with(random_config(&mut rng));
 
         while game.end().is_none() {
             let legal = game.legal_actions();
-            game.apply(legal[rng.below(legal.len())]).unwrap();
+            game.apply(*rng.pick(&legal).unwrap()).unwrap();
 
             match game.end().map(|end| end.reason) {
                 // Une victoire peut arriver sur une partie qui se fige au même coup.
@@ -149,7 +131,7 @@ fn alignment_wins_even_when_the_game_freezes_at_the_same_time() {
         pions_per_player: 2,
         ..GameConfig::default()
     };
-    let mut game = Game::new(config).unwrap();
+    let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]);
     play(&mut game, &[place(2, 2), place(0, 2)]);
 
@@ -170,7 +152,7 @@ fn turn_limit_ends_the_game_in_a_draw() {
         max_turns: 3,
         ..GameConfig::default()
     };
-    let mut game = Game::new(config).unwrap();
+    let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]); // fin du tour 1
     play(&mut game, &[Action::EndTurn]); // fin du tour 2
 

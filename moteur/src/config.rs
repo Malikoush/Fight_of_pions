@@ -4,6 +4,8 @@ use std::fmt;
 
 /// Tous les réglages chiffrés d'une partie, vérifiés par [`GameConfig::validate`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct GameConfig {
     /// Nombre de cases par côté du plateau, entre [`GameConfig::MIN_BOARD_SIZE`]
     /// et [`GameConfig::MAX_BOARD_SIZE`].

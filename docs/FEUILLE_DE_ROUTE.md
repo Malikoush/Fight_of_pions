@@ -1,6 +1,6 @@
 # Feuille de route
 
-Dernière mise à jour : 2026-10-26.
+Dernière mise à jour : 2026-10-27.
 
 ## Comment on avance
 
@@ -66,20 +66,27 @@ On ne commence jamais la suivante avant. Une tâche bloquée par une question de
     - toute action listée est acceptée, une action non listée est refusée, sur 100 parties aléatoires ;
     - toute partie se termine ;
     - plateau plein, réserves vides et limite de tours donnent un nul ; l'alignement passe avant.
-- [ ] **T5 · Déterminisme, replay et invariants**
-  - `rng.rs` (SplitMix64 maison, testé sur des valeurs connues), graine dans `Game`.
-  - `GameRecord` et sa relecture. Feature `serde` optionnelle.
+- [x] **T5 · Déterminisme, replay et invariants**
+  - `Rng` (SplitMix64 maison, testé sur les valeurs de référence de l'implémentation C d'origine), graine dans `Game` : `Game::new(config, seed)`.
+  - `GameRecord` (hors de `Game`, pour garder l'égalité de position et des copies légères) et `replay()`, avec `ReplayError`.
   - Tests sur des centaines de parties aléatoires :
-    - le miroir d'événements est égal au plateau ;
-    - même graine + mêmes actions = même état ;
+    - le miroir d'événements (plateau, réserves, actions restantes et gardées, joueur courant, fin) est égal au moteur après chaque action ;
+    - même graine + mêmes actions = mêmes événements et même état ;
     - un replay est identique à l'original.
-  - Mesure du nombre de parties aléatoires par seconde, notée dans ce fichier.
-- [ ] **T6 · Labo outillé** (toujours sans aucune règle dans le labo)
+  - `Event::ActionsChanged` : les compteurs d'actions sont annoncés à chaque changement, et jamais quand rien ne change (décision du 2026-10-27, option c), pour qu'aucun client ne recalcule la règle des actions gardées.
+  - Mesure : exemple `random_games`, résultat noté plus bas.
+  - La feature `serde` est reportée à T6, la première tâche qui en a besoin (principe 6) : le moteur reste sans aucune dépendance.
+- [x] **T6 · Labo outillé** (toujours sans aucune règle dans le labo)
   - Affichage de la graine.
-  - « Copier la partie » / « Charger une partie » (JSON dans le presse-papiers), pour reproduire un bug exactement.
-  - Annuler un coup (rejouer le replay moins une action).
-  - Jouer N coups aléatoires.
-  - Surligner les cases légales, lues dans `legal_actions()`.
+  - Feature `serde` optionnelle du moteur (sur `GameRecord`, `GameConfig`, `Action`, `Position`), activée par le labo seulement : `cargo test` à la racine et le moteur seul restent sans dépendance.
+  - « Copier la partie » (JSON dans le presse-papiers) / « Charger la partie » (zone où coller le JSON), pour reproduire un bug exactement. Le format JSON n'est pas figé avant la v1.0 : une partie copiée peut ne plus se charger après un changement du moteur.
+  - Annuler un coup : `partie.rs` rejoue l'enregistrement sans sa dernière action.
+  - Jouer N coups au hasard, avec le `Rng` du moteur initialisé par la graine de la partie.
+  - Un point sur chaque case jouable, lue dans `legal_actions()`.
+  - Un JSON avec un champ inconnu est refusé au lieu d'être ignoré en silence (`deny_unknown_fields`).
+  - Tests du labo (`partie.rs`, graine fixe donc reproductibles) : export puis import, chargement, annulation, coups refusés non enregistrés, coups au hasard jusqu'à la fin ; un chargement refusé (texte illisible, action refusée, configuration invalide, champ inconnu) ne change ni la partie ni l'enregistrement.
+
+**Phase A terminée** : le moteur est déterministe, rejouable, testé par propriétés, et le labo permet de tout essayer à la main.
 
 ## Phase B · Attaques
 
@@ -87,11 +94,11 @@ De la plus stable à la plus floue. Aucune famille « EN REFONTE » avant que sa
 
 - [ ] **B1 · Squelette des attaques + Ours R/É** (tuer un adjacent)
   - Types : `AttackKind`, `Rarity`, `AttackStats`, `AttackCatalog` dans la configuration, `Arsenal` par joueur avec recharge.
-  - Choix : `Action::UseAttack(slot)`, puis `Choose` pour le lanceur et la cible ; annulation.
-  - Résolution : `Effect::Kill`, résolveur central, `Event::PionKilled`, retour en réserve.
-  - Labo : arsenal de test réglable, choix de la carte, clic du lanceur puis de la cible.
+  - Choix : `Action::UseAttack(slot)`, puis `Choose` pour le lanceur et la ou les cibles. **Pas d'action « annuler » dans le moteur** : une attaque commencée va au bout (décision du 2026-10-27).
+  - **Aucune impasse** : une carte, un lanceur ou une cible n'est proposé que s'il mène à au moins une attaque complète. Testé par propriété sur des parties aléatoires.
+  - Résolution d'un bloc au dernier choix : coût payé, carte en recharge, `Effect::Kill`, résolveur central, `Event::PionKilled { pion, at, by }` (`by` servira à Meilleurs amis en B5), retour en réserve. Pas de tombe (B9).
+  - Labo : arsenal de test réglable, choix de la carte, clic du lanceur puis des cibles. La sélection se fait sur une **copie** de la partie (cibles surlignées depuis `legal_actions`), et la suite complète n'est envoyée qu'à la validation : « Annuler » est gratuit pour le joueur.
   - À vérifier : avec les pions tués puis reposés, `PionId` ne doit jamais pouvoir saturer (borné par `max_turns`, T4).
-  - Règle de répétition (même position 3 fois → fin), puisque les kills rendent les cycles possibles. À écrire d'abord dans le carnet.
   - « Partie figée » : un joueur qui a un pion lanceur et une attaque utilisable, même en recharge, peut encore agir. Une réserve vide ne fige donc plus la partie (décision du 2026-10-26).
 - [ ] **B2 · Règle d'or** : victoire en attente, avant la première attaque qui peut créer une ligne.
 - [ ] **B3 · Effets en cours** : `ActiveEffect` et ses échéances ; Beauté fatale C et Saut du loup C (immobiliser).
@@ -99,10 +106,10 @@ De la plus stable à la plus floue. Aucune famille « EN REFONTE » avant que sa
 - [ ] **B5 · Invocation et changement de camp** : Beauté fatale É/L, Familia, Meilleurs amis (vengeance).
 - [ ] **B6 · Économie** : Massacre divin.
 - [ ] **B7 · Terrain** : Coup du taureau (trous).
-- [ ] **Design · Anti-stagnation** : Effondrement et/ou boost d'actions par tour ; nul ou départage. Plusieurs variantes en réglages, essayées au labo, puis comparées par les bots (taux de nul, durée, avantage du premier joueur). « Partie figée » doit tenir compte des effondrements à venir.
+- [ ] **Design · Anti-stagnation** : Effondrement et/ou boost d'actions par tour ; règle de répétition (même position 3 fois → fin, rangée ici le 2026-10-27) ; nul ou départage. Plusieurs variantes en réglages, essayées au labo, puis comparées par les bots (taux de nul, durée, avantage du premier joueur). « Partie figée » doit tenir compte des effondrements à venir.
 - [ ] **B8 · Réactions** : fenêtres de réaction dans le modèle de décision (avant ou après la résolution) ; Feintaille, Sentinelle, Queue du lézard, Perroquet, Hibou.
 - [ ] **B9 · Refontes figées** : Reine, Attila, Médecin (tombes et zombies).
-- [ ] **B10 · Draft et cache secrète** : tirage avec la graine, bans et picks, `PlayerView`, arsenal rempli par le draft.
+- [ ] **B10 · Draft et cache secrète** : tirage avec la graine, bans et picks, `PlayerView`, arsenal rempli par le draft. `Game` devra alors garder l'état courant du `Rng`, pas seulement la graine : une copie de partie prise en cours de route doit continuer la même suite de tirages.
 - [ ] **Jalon v1.0 « version propre »** : tag Git, toute la doc à jour.
 
 ## Phase C · Après la v1.0 (préparée, pas commencée)
@@ -118,3 +125,4 @@ De la plus stable à la plus floue. Aucune famille « EN REFONTE » avant que sa
 |---|---|---|
 | 2026-10-26 | `cargo test` du moteur | ~2 s |
 | 2026-10-26 | Relance du labo après une petite modification | ~2 s |
+| 2026-10-26 | Parties complètes jouées au hasard, release (`random_games`, 20 000 parties de ~30 actions, ~1,3 s) | ~16 000 parties/s, ~480 000 actions/s (varie de ±20 % selon la charge de la machine) |

@@ -2,8 +2,8 @@
 
 mod common;
 
-use common::{TestRng, new_game, place, play};
-use fight_of_pions::{Action, Game, GameConfig};
+use common::{game_with, new_game, place, play};
+use fight_of_pions::{Action, Game, GameConfig, Rng};
 
 /// Toutes les actions qu'un client pourrait tenter : chaque case, des cases hors du
 /// plateau, et finir son tour.
@@ -43,7 +43,7 @@ fn without_pions_only_ending_the_turn_is_legal() {
         pions_per_player: 1,
         ..GameConfig::default()
     };
-    let mut game = Game::new(config).unwrap();
+    let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]);
     play(&mut game, &[Action::EndTurn]);
 
@@ -58,7 +58,7 @@ fn without_enough_actions_only_ending_the_turn_is_legal() {
         place_cost: 2,
         ..GameConfig::default()
     };
-    let game = Game::new(config).unwrap();
+    let game = game_with(config);
     // Premier tour : 1 action, la pose en coûte 2.
     assert_eq!(game.legal_actions(), vec![Action::EndTurn]);
 }
@@ -66,7 +66,7 @@ fn without_enough_actions_only_ending_the_turn_is_legal() {
 #[test]
 fn random_games_agree_with_apply_and_always_end() {
     for seed in 0..100 {
-        let mut rng = TestRng::new(seed);
+        let mut rng = Rng::new(seed);
         let mut game = new_game();
         // Borne large : chaque tour finit au plus après quelques actions.
         let mut steps_left = 10_000;
@@ -74,7 +74,7 @@ fn random_games_agree_with_apply_and_always_end() {
         while game.end().is_none() {
             assert_legal_actions_match_apply(&game);
             let legal = game.legal_actions();
-            let action = legal[rng.below(legal.len())];
+            let action = *rng.pick(&legal).unwrap();
             game.apply(action).unwrap();
 
             steps_left -= 1;
