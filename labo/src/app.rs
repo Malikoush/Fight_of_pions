@@ -16,7 +16,7 @@ impl Labo {
     pub fn new(config: GameConfig) -> Result<Self, GameError> {
         Ok(Self {
             partie: Partie::new(config)?,
-            panneau: Panneau::default(),
+            panneau: Panneau::new(),
         })
     }
 }
@@ -25,7 +25,8 @@ impl eframe::App for Labo {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let mut demandes = Vec::new();
         // Le panneau latéral doit être montré avant le plateau, qui prend la place restante.
-        self.panneau.show(ui, self.partie.game(), &mut demandes);
+        self.panneau
+            .show(ui, self.partie.game(), self.partie.record(), &mut demandes);
         plateau::show(ui, self.partie.game(), &mut demandes);
 
         if demandes.is_empty() {

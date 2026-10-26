@@ -7,6 +7,8 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Game {
     config: GameConfig,
+    /// La graine de la partie. Rien n'est encore tiré au hasard ; le draft s'en servira.
+    seed: u64,
     board: Board,
     current_player: Player,
     turn: u32,
@@ -23,6 +25,12 @@ impl Game {
     /// Les réglages de la partie.
     pub fn config(&self) -> &GameConfig {
         &self.config
+    }
+
+    /// La graine de la partie : avec la configuration et les actions jouées, elle suffit
+    /// à reconstruire la partie (voir [`crate::GameRecord`]).
+    pub fn seed(&self) -> u64 {
+        self.seed
     }
 
     /// Actions qu'il reste au joueur courant pour ce tour.
@@ -43,6 +51,12 @@ impl Game {
     /// Pions qu'un joueur peut encore poser.
     pub fn reserve_pions(&self, player: Player) -> u32 {
         self.reserve_pions[player.index()]
+    }
+
+    /// Actions qu'un joueur a gardées de son dernier tour : elles s'ajouteront à son
+    /// prochain tour. Toujours 0 pour le joueur courant, qui les a déjà reçues.
+    pub fn banked_actions(&self, player: Player) -> u32 {
+        self.banked_actions[player.index()]
     }
 
     /// Numéro du tour en cours, à partir de 1 ; chaque joueur qui joue compte pour un tour.
@@ -85,13 +99,16 @@ impl Game {
             .collect()
     }
 
-    /// Une nouvelle partie. Erreur si la configuration est incohérente.
-    pub fn new(config: GameConfig) -> Result<Game, GameError> {
+    /// Une nouvelle partie avec cette graine. Erreur si la configuration est incohérente.
+    ///
+    /// Même configuration, même graine et mêmes actions donnent toujours la même partie.
+    pub fn new(config: GameConfig, seed: u64) -> Result<Game, GameError> {
         config.validate()?;
         let pions = config.pions_per_player;
 
         Ok(Self {
             config,
+            seed,
             board: Board::new(config.board_size),
             current_player: Player::One,
             turn: 1,
@@ -180,6 +197,7 @@ impl Game {
         let reserve = &mut self.reserve_pions[player.index()];
         *reserve = reserve.saturating_sub(1);
         events.push(Event::PionPlaced { pion, at: pos });
+        events.push(self.actions_changed(player));
 
         if rules::complete_line(&self.board, pos, self.config.align_to_win) {
             self.finish_game(Outcome::Won(player), EndReason::Alignment, events);
@@ -201,14 +219,36 @@ impl Game {
             );
             return;
         }
-        let i = self.current_player.index();
-        self.banked_actions[i] = self.actions_left.min(self.config.max_banked_actions);
-        self.current_player = self.current_player.opponent();
+        let ending = self.current_player;
+        // Les compteurs du joueur sortant ne changent que s'il lui restait des actions :
+        // elles passent alors dans sa réserve. Sinon, ils sont déjà annoncés à (0, 0).
+        let ending_counters_change = self.actions_left > 0;
+        self.banked_actions[ending.index()] = self.actions_left.min(self.config.max_banked_actions);
+        self.current_player = ending.opponent();
         self.turn = self.turn.saturating_add(1);
         self.start_turn();
+        if ending_counters_change {
+            events.push(self.actions_changed(ending));
+        }
         events.push(Event::TurnEnded {
             next: self.current_player,
         });
+        // Le joueur qui commence reçoit toujours au moins une action : son compteur change.
+        events.push(self.actions_changed(self.current_player));
+    }
+
+    /// L'annonce des compteurs d'actions d'un joueur, tels qu'ils sont maintenant.
+    fn actions_changed(&self, player: Player) -> Event {
+        let actions_left = if player == self.current_player {
+            self.actions_left
+        } else {
+            0
+        };
+        Event::ActionsChanged {
+            player,
+            actions_left,
+            banked: self.banked_actions[player.index()],
+        }
     }
 
     /// Prépare le tour du nouveau joueur courant. Le tout premier tour de la partie est

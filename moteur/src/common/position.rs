@@ -5,6 +5,8 @@ use std::str::FromStr;
 ///
 /// Affichée et lue au format « C5 » : lettre de colonne, puis numéro de rangée à partir de 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Position {
     /// Rangée, de haut en bas, à partir de 0.
     pub row: usize,

@@ -4,6 +4,12 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
+serde = { workspace = true, optional = true }
+
+[features]
+# Rend un GameRecord (et sa configuration, ses actions) sérialisable. Désactivée par défaut :
+# le moteur n'a alors aucune dépendance.
+serde = ["dep:serde"]
 
 [lints]
 workspace = true

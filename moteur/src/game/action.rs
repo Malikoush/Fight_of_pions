@@ -4,6 +4,7 @@ use crate::Position;
 ///
 /// Son coût en actions dépend de la configuration de la partie.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Action {
     /// Poser un pion de sa réserve sur une case libre ; coûte
     /// [`crate::GameConfig::place_cost`] actions.

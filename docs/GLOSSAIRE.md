@@ -1,6 +1,6 @@
 # Glossaire
 
-Dernière mise à jour : 2026-10-26.
+Dernière mise à jour : 2026-10-27.
 
 Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de règles et dans le code.
 
@@ -23,8 +23,9 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Coût d'une action | `Game::cost` (privé) | Le nombre d'actions de tour qu'elle consomme, lu dans la configuration |
 | Coût de la pose | `place_cost` | Actions que coûte la pose d'un pion (1 par défaut) |
 | Actions du tour | `actions_left` | Ce qu'il reste à dépenser au joueur courant |
-| Actions en réserve | `banked_actions` | Actions non utilisées gardées pour le tour suivant (jusqu'à `max_banked_actions`, 2 par défaut). **À ne pas confondre avec la réserve de pions.** |
-| Événement | `Event` | Ce que le moteur annonce après une action |
+| Actions en réserve | `banked_actions`, `Game::banked_actions()` | Actions non utilisées gardées pour le tour suivant (jusqu'à `max_banked_actions`, 2 par défaut). **À ne pas confondre avec la réserve de pions.** |
+| Événement | `Event` | Ce que le moteur annonce après une action ; suffit à suivre tout l'état visible |
+| Compteurs d'actions annoncés | `Event::ActionsChanged` | Actions restantes et gardées d'un joueur, émis à chaque changement |
 | Refus | `GameError` | Pourquoi une action ou une configuration est refusée |
 | Configuration incohérente | `ConfigError` | La raison précise du refus d'une configuration (`GameError::InvalidConfig`) |
 | Décision attendue | `Decision`, `pending_decision()` | Qui doit choisir quoi, maintenant (`MainAction` pour l'instant) |
@@ -34,8 +35,10 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Raison de la fin | `EndReason` | `Alignment`, `Frozen` (partie figée) ou `TurnLimit` |
 | Partie figée | `EndReason::Frozen` | Plus personne ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation |
 | Limite de tours | `max_turns` | Le tour après lequel la partie s'arrête en match nul (200 par défaut) : filet de sécurité |
-| Graine | `seed` (cible) | Initialise le générateur `Rng`. Elle fait partie de la partie. |
-| Enregistrement | `GameRecord` (cible) | Configuration + graine + actions : de quoi rejouer une partie |
+| Graine | `seed`, `Game::seed()` | Choisie par le client à la création (`Game::new(config, seed)`). Elle fait partie de la partie et initialise le hasard du jeu. |
+| Générateur | `Rng` | Hasard déterministe (SplitMix64) : même graine, même suite. Tout le hasard passe par lui. |
+| Enregistrement | `GameRecord` | Configuration + graine + actions acceptées : `replay()` reconstruit la partie |
+| Échec de relecture | `ReplayError` | `Start` (configuration invalide) ou `RefusedAction { index, error }` (action refusée) |
 | Vue joueur | `PlayerView` (cible) | Ce qu'un joueur a le droit de voir |
 
 ## Plateau et pions
