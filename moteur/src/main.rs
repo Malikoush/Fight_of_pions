@@ -13,7 +13,7 @@ fn main() {
         }
     };
 
-    println!("Fight of Payon\n{}", terminal::HELP);
+    println!("Fight of Pions\n{}", terminal::HELP);
 
     loop {
         println!("\n{}", terminal::render(&game));
