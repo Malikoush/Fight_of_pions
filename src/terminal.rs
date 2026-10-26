@@ -1,10 +1,7 @@
 //! Interface texte : traduit du texte en Action, et une Game en texte.
 //! Elle ne décide jamais si un coup est légal : c'est le travail du moteur.
 
-use fight_of_pions::action::Action;
-use fight_of_pions::game::Game;
-use fight_of_pions::player::Player;
-use fight_of_pions::position::Position;
+use fight_of_pions::{Action, Game, Player, Position};
 
 /// Ce que le joueur peut taper.
 pub enum Command {
@@ -82,16 +79,29 @@ pub fn parse_position(text: &str) -> Result<Position, String> {
 
     let letter = match chars.next() {
         Some(c) if c.is_ascii_alphabetic() => c.to_ascii_uppercase(),
-        _ => return Err(format!("« {} » : il faut une lettre puis un nombre, par exemple C5", text)),
+        _ => {
+            return Err(format!(
+                "« {} » : il faut une lettre puis un nombre, par exemple C5",
+                text
+            ));
+        }
     };
 
     let number: usize = match chars.as_str().parse() {
         Ok(n) if n >= 1 => n,
-        _ => return Err(format!("« {} » : le nombre après la lettre est invalide", text)),
+        _ => {
+            return Err(format!(
+                "« {} » : le nombre après la lettre est invalide",
+                text
+            ));
+        }
     };
 
     let col = (letter as u8 - b'A') as usize;
-    Ok(Position { row: number - 1, col })
+    Ok(Position {
+        row: number - 1,
+        col,
+    })
 }
 
 /// Transforme une ligne tapée en commande.

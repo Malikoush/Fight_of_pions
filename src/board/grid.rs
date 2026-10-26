@@ -1,22 +1,12 @@
+use crate::{Cell, Direction, GameError, Player, Position};
 
-use crate::{
-    error::GameError,
-    player::Player,
-    position::{Direction, Position},
-};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Cell {
-    Empty,
-    Pion(Player),
-}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Board {
     size: usize,
     cells: Vec<Cell>,
 }
 impl Board {
-pub fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.size
     }
 
@@ -59,18 +49,8 @@ pub fn size(&self) -> usize {
     }
 }
 
-impl Cell {
-    pub fn owner(self) -> Option<Player> {
-        match self {
-            Cell::Empty => None,
-            Cell::Pion(player) => Some(player),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    
 
     use super::*;
 

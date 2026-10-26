@@ -1,4 +1,4 @@
-use crate::{position::Position};
+use crate::Position;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,10 +22,16 @@ impl fmt::Display for GameError {
             }
             GameError::EmptyReserve => write!(f, "votre réserve de pions est vide"),
             GameError::GameOver => write!(f, "La partie est finie"),
-            GameError::InvalidConfig(str) => write!(f, "Config {} est incohérente",str),
-            GameError::OutOfBounds(pos) => write!(f, "La case {} est en dehors des limites",pos),
-            GameError::NotYourPawn(position) => write!(f, "la case {} n'est pas votre pion",position),
-            GameError::NotEnoughActions { needed, available } => write!(f, "Action épuisé nécessite {} action il en reste {}",needed,available),
+            GameError::InvalidConfig(str) => write!(f, "Config {} est incohérente", str),
+            GameError::OutOfBounds(pos) => write!(f, "La case {} est en dehors des limites", pos),
+            GameError::NotYourPawn(position) => {
+                write!(f, "la case {} n'est pas votre pion", position)
+            }
+            GameError::NotEnoughActions { needed, available } => write!(
+                f,
+                "Action épuisé nécessite {} action il en reste {}",
+                needed, available
+            ),
         }
     }
 }

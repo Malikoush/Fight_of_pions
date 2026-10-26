@@ -1,4 +1,4 @@
-use crate::{board::Board, player::Player, position::{Direction, Position}};
+use crate::{Board, Direction, Player, Position};
 
 pub fn line_length(board: &Board, pos: Position, axis: Direction) -> usize {
     match board.owner(pos) {
@@ -10,12 +10,12 @@ pub fn line_length(board: &Board, pos: Position, axis: Direction) -> usize {
     }
 }
 
-pub fn count_in_direction(board:&Board,start:Position,dir:Direction,player:Player)->usize{
+pub fn count_in_direction(board: &Board, start: Position, dir: Direction, player: Player) -> usize {
     let mut count = 0;
-    let mut current=start;
-    while let Some(next) = board.neighbor(current, dir){
-        if board.owner(next) != Some(player){
-            break
+    let mut current = start;
+    while let Some(next) = board.neighbor(current, dir) {
+        if board.owner(next) != Some(player) {
+            break;
         }
         count += 1;
         current = next;
@@ -23,18 +23,18 @@ pub fn count_in_direction(board:&Board,start:Position,dir:Direction,player:Playe
     count
 }
 
-pub fn longest_line(board: &Board,pos: Position)->usize {
+pub fn longest_line(board: &Board, pos: Position) -> usize {
     let mut longest = 0;
-    for axis in Direction::AXES{
+    for axis in Direction::AXES {
         let length = line_length(board, pos, axis);
-        if length>longest{
-            longest=length;
+        if length > longest {
+            longest = length;
         }
     }
     longest
 }
 
-pub fn complete_line(board: &Board,pos: Position,target : usize)->bool {
+pub fn complete_line(board: &Board, pos: Position, target: usize) -> bool {
     longest_line(board, pos) >= target
 }
 
@@ -45,7 +45,9 @@ mod tests {
 
     /// Pose un pion pour un test. Plante si la case est hors du plateau.
     fn pose(board: &mut Board, row: usize, col: usize, player: Player) {
-        board.set(Position { row, col }, Cell::Pion(player)).unwrap();
+        board
+            .set(Position { row, col }, Cell::Pion(player))
+            .unwrap();
     }
 
     #[test]
