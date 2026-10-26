@@ -18,6 +18,8 @@ pub const ERREUR: Color32 = Color32::from_rgb(211, 47, 47);
 /// Place laissée autour du damier pour les lettres et les numéros.
 pub const MARGE_PLATEAU: f32 = 28.0;
 pub const TAILLE_ETIQUETTE: f32 = 14.0;
+/// Arrondi des coins d'une case, en points (0 = coins carrés).
+pub const ARRONDI_CASE: f32 = 0.0;
 /// Rayon d'un pion, en fraction du côté d'une case.
 pub const RAYON_PION: f32 = 0.38;
 pub const EPAISSEUR_CONTOUR_PION: f32 = 1.5;

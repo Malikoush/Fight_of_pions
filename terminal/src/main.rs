@@ -13,7 +13,7 @@ fn main() {
         }
     };
 
-    println!("Fight of Pions\n{}", terminal::HELP);
+    println!("Fight of Pions\n{}", terminal::help(game.config()));
 
     loop {
         println!("\n{}", terminal::render(&game));
@@ -28,7 +28,7 @@ fn main() {
 
         match terminal::parse_command(&line) {
             Ok(Command::Quit) => break,
-            Ok(Command::Help) => println!("{}", terminal::HELP),
+            Ok(Command::Help) => println!("{}", terminal::help(game.config())),
             Ok(Command::Play(action)) => match game.apply(action) {
                 Ok(events) => {
                     for event in events {

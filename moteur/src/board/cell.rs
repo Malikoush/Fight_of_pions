@@ -1,7 +1,7 @@
 use crate::Player;
 
 /// Le contenu d'une case du plateau.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Cell {
     /// Case libre.
     Empty,

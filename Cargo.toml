@@ -1,7 +1,8 @@
 [workspace]
-members = ["moteur", "labo"]
-# `cargo test` et `cargo run` à la racine ne touchent que le moteur.
-default-members = ["moteur"]
+members = ["moteur", "terminal", "labo"]
+# `cargo test` et `cargo run` à la racine ne compilent jamais le labo (eframe) :
+# `cargo run` lance le terminal, `cargo labo` le labo.
+default-members = ["moteur", "terminal"]
 resolver = "3"
 
 [workspace.package]

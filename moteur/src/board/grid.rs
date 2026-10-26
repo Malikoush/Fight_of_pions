@@ -1,7 +1,7 @@
 use crate::{Cell, Direction, GameError, Player, Position};
 
 /// Le damier carré de `size × size` cases.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Board {
     size: usize,
     cells: Vec<Cell>,
@@ -13,7 +13,7 @@ impl Board {
     }
 
     /// Un plateau vide de `size × size` cases.
-    pub fn new(size: usize) -> Self {
+    pub(crate) fn new(size: usize) -> Self {
         Self {
             size,
             cells: vec![Cell::Empty; size * size],
@@ -35,7 +35,7 @@ impl Board {
         Some(self.cells[i])
     }
     /// Remplace le contenu d'une case. Erreur si la position est hors du plateau.
-    pub fn set(&mut self, pos: Position, cell: Cell) -> Result<(), GameError> {
+    pub(crate) fn set(&mut self, pos: Position, cell: Cell) -> Result<(), GameError> {
         let i = self.index(pos).ok_or(GameError::OutOfBounds(pos))?;
 
         self.cells[i] = cell;
@@ -68,12 +68,12 @@ mod tests {
         assert_eq!(board.get(Position { row: 5, col: 5 }), Some(Cell::Empty));
     }
     #[test]
-    fn outside_none() {
+    fn reading_outside_the_board_gives_nothing() {
         let board = Board::new(10);
         assert_eq!(board.get(Position { row: 11, col: 11 }), None);
     }
     #[test]
-    fn coin_3_voisin() {
+    fn corner_cell_has_three_neighbors() {
         let board = Board::new(10);
         let pos = Position { row: 0, col: 0 };
         assert_eq!(

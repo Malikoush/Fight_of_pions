@@ -20,11 +20,13 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Tour | `turn` | Le tour **d'un** joueur. Le compteur avance à chaque fin de tour. |
 | Manche | `round` (cible) | Un tour de chaque joueur (le « Tour 1 » du tableau du GDD) |
 | Action | `Action` | Une décision envoyée au moteur : `Place`, `EndTurn`, puis `UseAttack`, `Choose`, `Pass`… |
-| Coût d'une action | `Action::cost` | Le nombre d'actions de tour qu'elle consomme |
+| Coût d'une action | `Game::cost` (privé) | Le nombre d'actions de tour qu'elle consomme, lu dans la configuration |
+| Coût de la pose | `place_cost` | Actions que coûte la pose d'un pion (1 par défaut) |
 | Actions du tour | `actions_left` | Ce qu'il reste à dépenser au joueur courant |
-| Actions en réserve | `banked_actions` | Actions non utilisées gardées pour le tour suivant (2 max). **À ne pas confondre avec la réserve de pions.** |
+| Actions en réserve | `banked_actions` | Actions non utilisées gardées pour le tour suivant (jusqu'à `max_banked_actions`, 2 par défaut). **À ne pas confondre avec la réserve de pions.** |
 | Événement | `Event` | Ce que le moteur annonce après une action |
 | Refus | `GameError` | Pourquoi une action ou une configuration est refusée |
+| Configuration incohérente | `ConfigError` | La raison précise du refus d'une configuration (`GameError::InvalidConfig`) |
 | Décision attendue | `Decision`, `pending_decision()` (cible) | Qui doit choisir quoi, maintenant |
 | Actions légales | `legal_actions()` (cible) | La liste exacte des actions acceptées maintenant |
 | Issue | `Outcome` (cible) | `Won(Player)` ou `Draw` |

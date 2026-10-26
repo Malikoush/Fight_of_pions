@@ -2018,6 +2018,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "terminal"
+version = "0.1.0"
+dependencies = [
+ "fight_of_pions",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
