@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
@@ -80,5 +81,61 @@ impl Position {
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}{}", (b'A' + self.col as u8) as char, self.row + 1)
+    }
+}
+
+/// « C5 » → Position { row: 4, col: 2 }.
+/// Ne vérifie pas que la case est sur le plateau : le moteur s'en charge.
+impl FromStr for Position {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Position, String> {
+        let mut chars = text.chars();
+
+        let letter = match chars.next() {
+            Some(c) if c.is_ascii_alphabetic() => c.to_ascii_uppercase(),
+            _ => {
+                return Err(format!(
+                    "« {} » : il faut une lettre puis un nombre, par exemple C5",
+                    text
+                ));
+            }
+        };
+
+        let number: usize = match chars.as_str().parse() {
+            Ok(n) if n >= 1 => n,
+            _ => {
+                return Err(format!(
+                    "« {} » : le nombre après la lettre est invalide",
+                    text
+                ));
+            }
+        };
+
+        let col = (letter as u8 - b'A') as usize;
+        Ok(Position {
+            row: number - 1,
+            col,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_positions() {
+        assert_eq!("C5".parse(), Ok(Position { row: 4, col: 2 }));
+        assert_eq!("j10".parse(), Ok(Position { row: 9, col: 9 }));
+        assert!("5C".parse::<Position>().is_err());
+        assert!("A0".parse::<Position>().is_err());
+        assert!("".parse::<Position>().is_err());
+    }
+
+    #[test]
+    fn display_and_parse_agree() {
+        let pos = Position { row: 4, col: 2 };
+        assert_eq!(pos.to_string().parse(), Ok(pos));
     }
 }

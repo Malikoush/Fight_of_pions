@@ -1,0 +1,6 @@
+[package]
+name = "fight_of_pions"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]

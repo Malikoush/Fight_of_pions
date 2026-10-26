@@ -117,14 +117,14 @@ impl Game {
                 if self.actions_left == 0 {
                     self.end_turn();
                     events.push(Event::TurnEnded {
-                        next: self.current_player.opponent(),
+                        next: self.current_player,
                     });
                 }
             }
             Action::EndTurn => {
                 self.end_turn();
                 events.push(Event::TurnEnded {
-                    next: self.current_player.opponent(),
+                    next: self.current_player,
                 });
             }
         }
