@@ -97,7 +97,10 @@ fn etat(ui: &mut egui::Ui, game: &Game) {
             );
         }
         None => {
-            ui.label(format!("Au tour de : {}", theme::nom_joueur(game.current_player())));
+            ui.label(format!(
+                "Au tour de : {}",
+                theme::nom_joueur(game.current_player())
+            ));
         }
     }
     ui.label(format!("Actions restantes : {}", game.actions_left()));

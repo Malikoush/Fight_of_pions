@@ -1,15 +1,36 @@
 use crate::Position;
 use std::fmt;
 
+/// Pourquoi le moteur refuse une configuration ou une action.
+///
+/// Une action refusée ne modifie jamais la partie.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GameError {
+    /// La configuration est incohérente.
     InvalidConfig(&'static str),
+    /// La position est hors du plateau.
     OutOfBounds(Position),
+    /// La case n'est pas libre.
     CellOccupied(Position),
+    /// La case ne contient pas un pion du joueur courant.
     NotYourPawn(Position),
-    IllegalMove { from: Position, to: Position },
+    /// Ce déplacement n'est pas autorisé.
+    IllegalMove {
+        /// Case de départ.
+        from: Position,
+        /// Case d'arrivée demandée.
+        to: Position,
+    },
+    /// Le joueur n'a plus de pion en réserve.
     EmptyReserve,
-    NotEnoughActions { needed: u32, available: u32 },
+    /// Il ne reste pas assez d'actions ce tour.
+    NotEnoughActions {
+        /// Coût de l'action demandée.
+        needed: u32,
+        /// Actions qu'il reste ce tour.
+        available: u32,
+    },
+    /// La partie est terminée.
     GameOver,
 }
 

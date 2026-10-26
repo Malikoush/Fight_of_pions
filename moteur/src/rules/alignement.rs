@@ -34,6 +34,7 @@ pub fn longest_line(board: &Board, pos: Position) -> usize {
     longest
 }
 
+/// Vrai si le pion en `pos` fait partie d'une ligne d'au moins `target` pions du même joueur.
 pub fn complete_line(board: &Board, pos: Position, target: usize) -> bool {
     longest_line(board, pos) >= target
 }

@@ -1,42 +1,59 @@
 use std::fmt;
 use std::str::FromStr;
 
+/// Une case repérée par sa rangée et sa colonne, à partir de 0.
+///
+/// Affichée et lue au format « C5 » : lettre de colonne, puis numéro de rangée à partir de 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
+    /// Rangée, de haut en bas, à partir de 0.
     pub row: usize,
+    /// Colonne, de gauche à droite, à partir de 0.
     pub col: usize,
 }
+/// Un pas d'une case dans l'une des 8 directions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Direction {
+    /// Variation de rangée : -1, 0 ou 1.
     pub d_row: isize,
+    /// Variation de colonne : -1, 0 ou 1.
     pub d_col: isize,
 }
 
 impl Direction {
+    /// Vers le haut.
     pub const N: Direction = Direction {
         d_row: -1,
         d_col: 0,
     };
+    /// Vers le haut à droite.
     pub const NE: Direction = Direction {
         d_row: -1,
         d_col: 1,
     };
+    /// Vers la droite.
     pub const E: Direction = Direction { d_row: 0, d_col: 1 };
+    /// Vers le bas à droite.
     pub const SE: Direction = Direction { d_row: 1, d_col: 1 };
+    /// Vers le bas.
     pub const S: Direction = Direction { d_row: 1, d_col: 0 };
+    /// Vers le bas à gauche.
     pub const SW: Direction = Direction {
         d_row: 1,
         d_col: -1,
     };
+    /// Vers la gauche.
     pub const W: Direction = Direction {
         d_row: 0,
         d_col: -1,
     };
+    /// Vers le haut à gauche.
     pub const NW: Direction = Direction {
         d_row: -1,
         d_col: -1,
     };
 
+    /// Les 8 directions.
     pub const ALL: [Direction; 8] = [
         Direction::E,
         Direction::N,
@@ -47,8 +64,10 @@ impl Direction {
         Direction::SW,
         Direction::W,
     ];
+    /// Une direction par axe d'alignement : horizontal, vertical et les deux diagonales.
     pub const AXES: [Direction; 4] = [Direction::E, Direction::S, Direction::SE, Direction::SW];
 
+    /// La direction inverse.
     pub fn opposite(self) -> Direction {
         Direction {
             d_row: -self.d_row,
@@ -58,6 +77,8 @@ impl Direction {
 }
 
 impl Position {
+    /// La position un pas plus loin, ou `None` si elle passe sous 0.
+    /// Ne connaît pas la taille du plateau : voir [`crate::Board::neighbor`].
     pub fn step(self, dir: Direction) -> Option<Position> {
         let row = self.row as isize + dir.d_row;
         let col = self.col as isize + dir.d_col;
@@ -70,6 +91,7 @@ impl Position {
 
         None
     }
+    /// Vrai si les deux cases se touchent, diagonales comprises.
     pub fn isadjacent(self, other: Position) -> bool {
         let ecart_l = self.row.abs_diff(other.row);
         let ecart_c = self.col.abs_diff(other.col);
