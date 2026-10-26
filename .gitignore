@@ -1,1 +1,5 @@
 /target
+
+# Fichiers propres à Claude Code (instructions, agents) : non versionnés pour le moment.
+/CLAUDE.md
+/.claude/

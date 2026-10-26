@@ -22,7 +22,11 @@ impl Geometrie {
         let disponible = (zone.width().min(zone.height()) - 2.0 * theme::MARGE_PLATEAU).max(0.0);
         let cote = disponible / taille as f32;
         let origine = zone.center() - Vec2::splat(cote * taille as f32 / 2.0);
-        Self { origine, cote, taille }
+        Self {
+            origine,
+            cote,
+            taille,
+        }
     }
 
     /// La seule conversion Position → écran.
@@ -78,7 +82,9 @@ pub fn show(ui: &mut egui::Ui, game: &Game, demandes: &mut Vec<Demande>) {
         etiquettes(&painter, &geo, ui.visuals().text_color());
 
         if response.clicked()
-            && let Some(pos) = response.interact_pointer_pos().and_then(|p| geo.point_vers_case(p))
+            && let Some(pos) = response
+                .interact_pointer_pos()
+                .and_then(|p| geo.point_vers_case(p))
         {
             demandes.push(Demande::Agir(Action::Place(pos)));
         }
@@ -95,9 +101,23 @@ fn etiquettes(painter: &egui::Painter, geo: &Geometrie, couleur: Color32) {
         let (lettre, numero) = nom.split_at(1);
 
         let haut = geo.case_vers_rect(Position { row: 0, col: i }).center_top();
-        painter.text(haut - Vec2::new(0.0, decalage), Align2::CENTER_CENTER, lettre, police.clone(), couleur);
+        painter.text(
+            haut - Vec2::new(0.0, decalage),
+            Align2::CENTER_CENTER,
+            lettre,
+            police.clone(),
+            couleur,
+        );
 
-        let gauche = geo.case_vers_rect(Position { row: i, col: 0 }).left_center();
-        painter.text(gauche - Vec2::new(decalage, 0.0), Align2::CENTER_CENTER, numero, police.clone(), couleur);
+        let gauche = geo
+            .case_vers_rect(Position { row: i, col: 0 })
+            .left_center();
+        painter.text(
+            gauche - Vec2::new(decalage, 0.0),
+            Align2::CENTER_CENTER,
+            numero,
+            police.clone(),
+            couleur,
+        );
     }
 }

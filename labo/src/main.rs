@@ -12,8 +12,12 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default().with_inner_size(theme::TAILLE_FENETRE),
         ..Default::default()
     };
-    eframe::run_native(theme::TITRE, options, Box::new(|_| {
-        let labo = app::Labo::new(GameConfig::default()).map_err(|e| e.to_string())?;
-        Ok(Box::new(labo))
-    }))
+    eframe::run_native(
+        theme::TITRE,
+        options,
+        Box::new(|_| {
+            let labo = app::Labo::new(GameConfig::default()).map_err(|e| e.to_string())?;
+            Ok(Box::new(labo))
+        }),
+    )
 }

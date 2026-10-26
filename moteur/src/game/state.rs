@@ -4,6 +4,7 @@ use crate::{
     Event, GameConfig, GameError, Player, Position, rules,
 };
 
+/// L'état complet d'une partie, et le seul point d'entrée des actions.
 #[derive(Debug, Clone)]
 pub struct Game {
     config: GameConfig,
@@ -17,30 +18,37 @@ pub struct Game {
 }
 
 impl Game {
+    /// Actions qu'il reste au joueur courant pour ce tour.
     pub fn actions_left(&self) -> u32 {
         self.actions_left
     }
 
+    /// Le joueur qui doit jouer.
     pub fn current_player(&self) -> Player {
         self.current_player
     }
 
+    /// Le plateau, en lecture seule.
     pub fn board(&self) -> &Board {
         &self.board
     }
 
+    /// Pions qu'un joueur peut encore poser.
     pub fn reserve_pions(&self, player: Player) -> u32 {
         self.reserve_pions[player.index()]
     }
 
+    /// Numéro du tour en cours, à partir de 1 ; chaque joueur qui joue compte pour un tour.
     pub fn turn(&self) -> u32 {
         self.turn
     }
 
+    /// Le vainqueur, si la partie est finie.
     pub fn winner(&self) -> Option<Player> {
         self.winner
     }
 
+    /// Une nouvelle partie. Erreur si la configuration est incohérente.
     pub fn new(config: GameConfig) -> Result<Game, GameError> {
         config.validate()?;
         let board = Board::new(config.board_size);
@@ -155,6 +163,9 @@ impl Game {
         Ok(())
     }
 
+    /// Applique une action du joueur courant et renvoie les événements produits.
+    ///
+    /// Une action refusée renvoie une erreur et ne modifie rien.
     pub fn apply(&mut self, action: Action) -> Result<Vec<Event>, GameError> {
         self.validate(action)?; // lit l'état, ne modifie rien
         self.execute(action) // modifie l'état, ne vérifie plus

@@ -6,3 +6,6 @@ edition.workspace = true
 [dependencies]
 fight_of_pions = { path = "../moteur" }
 eframe = { workspace = true }
+
+[lints]
+workspace = true

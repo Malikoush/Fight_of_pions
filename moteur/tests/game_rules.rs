@@ -39,7 +39,9 @@ fn six_in_a_row_wins() {
     play(&mut game, &[place(7, 0), place(7, 2)]);
     let events = play(&mut game, &[place(0, 5)]);
 
-    assert!(events.contains(&Event::GameWon { winner: Player::One }));
+    assert!(events.contains(&Event::GameWon {
+        winner: Player::One
+    }));
     assert_eq!(game.apply(Action::EndTurn), Err(GameError::GameOver));
 }
 
@@ -49,7 +51,10 @@ fn placing_announces_the_pawn() {
     let events = play(&mut game, &[place(4, 4)]);
     assert_eq!(
         events[0],
-        Event::PawnPlaced { player: Player::One, at: Position { row: 4, col: 4 } }
+        Event::PawnPlaced {
+            player: Player::One,
+            at: Position { row: 4, col: 4 }
+        }
     );
 }
 
@@ -73,7 +78,10 @@ fn refused_action_changes_nothing() {
 
 #[test]
 fn empty_reserve_forbids_placing() {
-    let config = GameConfig { pawns_per_player: 1, ..GameConfig::default() };
+    let config = GameConfig {
+        pawns_per_player: 1,
+        ..GameConfig::default()
+    };
     let mut game = Game::new(config).unwrap();
     play(&mut game, &[place(0, 0)]);
     play(&mut game, &[place(9, 9), Action::EndTurn]);
