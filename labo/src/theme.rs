@@ -16,6 +16,27 @@ pub const COUPS_AU_HASARD_MAX: u32 = 500;
 /// Hauteur, en lignes, de la zone où l'on colle une partie à charger.
 pub const LIGNES_ZONE_CHARGEMENT: usize = 4;
 pub const INDICE_CHARGEMENT: &str = "Coller ici une partie copiée";
+/// Hauteur maximale du journal, en points : au-delà, il défile.
+pub const HAUTEUR_JOURNAL: f32 = 220.0;
+
+/// Les deux écrans du labo.
+pub const ECRAN_PARTIE: &str = "Partie";
+pub const ECRAN_ARENE: &str = "Arène";
+/// Ce qui contrôle un joueur quand ce n'est pas un bot.
+pub const HUMAIN: &str = "humain";
+/// Attente entre deux coups d'un bot en lecture automatique, en millisecondes : bornes
+/// et valeur proposée.
+pub const ATTENTE_BOT_MIN_MS: u64 = 0;
+pub const ATTENTE_BOT_DEFAUT_MS: u64 = 400;
+pub const ATTENTE_BOT_MAX_MS: u64 = 2000;
+/// Parties par paire de bots dans l'écran Arène : bornes et valeur proposée. Moteur et
+/// bots sont optimisés même en debug : 50 parties par paire prennent ~15 s par
+/// configuration, et donnent des fourchettes de ±13 points au plus.
+pub const PARTIES_ARENE_MIN: u64 = 1;
+pub const PARTIES_ARENE_DEFAUT: u64 = 50;
+pub const PARTIES_ARENE_MAX: u64 = 500;
+/// Toutes les combien de millisecondes l'écran Arène regarde si le calcul est fini.
+pub const INTERVALLE_CALCUL_MS: u64 = 200;
 
 pub const CASE_CLAIRE: Color32 = Color32::from_rgb(252, 228, 236);
 pub const CASE_FONCEE: Color32 = Color32::from_rgb(244, 143, 177);

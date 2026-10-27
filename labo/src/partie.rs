@@ -1,25 +1,35 @@
 //! Le seul pont entre l'interface et le moteur : c'est ici, et seulement ici, qu'on
-//! appelle `game.apply`. La partie tient aussi son enregistrement (configuration, graine,
-//! actions acceptées), qui sert à copier, charger et annuler un coup.
+//! appelle `game.apply`, que le coup vienne d'un clic ou d'un bot. La partie tient aussi
+//! son enregistrement (configuration, graine, actions acceptées), qui sert à copier,
+//! charger et annuler un coup.
 
-use fight_of_pions::{
-    Action, Attack, Decision, Event, Game, GameConfig, GameError, GameRecord, Rng,
-};
+use bots::{Bot, BotKind, RandomBot, current_rules, start_game};
+use fight_of_pions::{Action, Decision, Event, Game, GameConfig, GameError, GameRecord, Rng};
+use std::iter;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Ce que l'interface (et plus tard un bot) demande à la partie.
+/// Ce que l'interface demande à la partie.
 pub enum Demande {
     Agir(Action),
     /// Jouer cette suite d'actions d'un bloc (une attaque entière, choisie dans
     /// l'interface) : si l'une est refusée, rien n'est joué.
     Jouer(Vec<Action>),
-    /// Recommencer, chaque joueur avec ces attaques au départ.
+    /// Recommencer avec cette configuration, et cette graine ou, à défaut, une graine
+    /// tirée de l'horloge. Avec la graine d'une partie de l'arène et les mêmes bots, on
+    /// revoit cette partie à l'identique.
     NouvellePartie {
-        attaques: [Vec<Attack>; 2],
+        config: GameConfig,
+        graine: Option<u64>,
     },
-    AnnulerCoup,
-    /// Jouer ce nombre de coups tirés au hasard parmi les actions légales. Une attaque
-    /// commencée est toujours menée au bout dans le même coup.
+    /// Annuler le dernier coup. Face à un bot, on remonte jusqu'au dernier coup d'un
+    /// humain : sinon le bot rejouerait aussitôt ce qu'on vient d'annuler.
+    AnnulerCoup {
+        /// Quels joueurs sont humains (indice : `Player::index`).
+        humains: [bool; 2],
+    },
+    /// Faire jouer un coup à ce bot pour le joueur qui doit décider.
+    CoupDuBot(BotKind),
+    /// Jouer ce nombre de coups du bot aléatoire.
     CoupsAuHasard(u32),
     /// Remplacer la partie par celle décrite dans ce texte JSON.
     Charger(String),
@@ -38,8 +48,12 @@ pub enum Nouvelle {
 pub struct Partie {
     game: Game,
     record: GameRecord,
-    /// Le hasard des coups joués au hasard, initialisé avec la graine de la partie.
+    /// Le hasard des bots (coups au hasard compris), initialisé avec la graine de la
+    /// partie, comme dans l'arène.
     hasard: Rng,
+    /// L'état du hasard avant chaque action de l'enregistrement (autant que d'actions) :
+    /// annuler le remet tel qu'il était, pour que les bots rejouent la même partie.
+    hasard_avant: Vec<Rng>,
 }
 
 impl Partie {
@@ -48,12 +62,15 @@ impl Partie {
         Self::avec_graine(config, graine_du_moment())
     }
 
-    /// Une partie avec cette graine : sert aux tests, pour qu'ils soient reproductibles.
+    /// Une partie avec cette graine, commencée comme dans l'arène : avec les mêmes bots,
+    /// on revoit exactement une partie de l'arène. Sert aussi aux tests reproductibles.
     pub fn avec_graine(config: GameConfig, graine: u64) -> Result<Self, GameError> {
+        let (game, hasard) = start_game(&config, graine)?;
         Ok(Self {
-            game: Game::new(config.clone(), graine)?,
+            game,
             record: GameRecord::new(config, graine),
-            hasard: Rng::new(graine),
+            hasard,
+            hasard_avant: Vec::new(),
         })
     }
 
@@ -81,18 +98,21 @@ impl Partie {
     /// Une erreur du moteur devient une `Nouvelle`, jamais un plantage.
     pub fn traiter(&mut self, demande: Demande) -> Vec<Nouvelle> {
         match demande {
-            Demande::Agir(action) => self.jouer(vec![action]),
-            Demande::Jouer(actions) => self.jouer(actions),
-            Demande::NouvellePartie { attaques } => self.recommencer(attaques),
-            Demande::AnnulerCoup => self.annuler_coup(),
+            // Un humain ne consomme pas de hasard : il est le même avant chaque action.
+            Demande::Agir(action) => self.jouer(vec![action], &self.hasard.clone()),
+            Demande::Jouer(actions) => self.jouer(actions, &self.hasard.clone()),
+            Demande::NouvellePartie { config, graine } => self.recommencer(config, graine),
+            Demande::AnnulerCoup { humains } => self.annuler_coup(humains),
+            Demande::CoupDuBot(sorte) => self.coup_du_bot(sorte.bot()),
             Demande::CoupsAuHasard(nombre) => self.coups_au_hasard(nombre),
             Demande::Charger(texte) => self.charger(&texte),
         }
     }
 
     /// Joue ces actions d'un bloc, sur une copie d'abord : si l'une est refusée, la
-    /// partie et son enregistrement ne changent pas.
-    fn jouer(&mut self, actions: Vec<Action>) -> Vec<Nouvelle> {
+    /// partie et son enregistrement ne changent pas. `hasard_avant` est l'état du hasard
+    /// avant ces actions.
+    fn jouer(&mut self, actions: Vec<Action>, hasard_avant: &Rng) -> Vec<Nouvelle> {
         let mut copie = self.game.clone();
         let mut nouvelles = Vec::new();
         for &action in &actions {
@@ -102,16 +122,14 @@ impl Partie {
             }
         }
         self.game = copie;
+        self.hasard_avant
+            .extend(iter::repeat_n(hasard_avant.clone(), actions.len()));
         self.record.actions.extend(actions);
         nouvelles
     }
 
-    fn recommencer(&mut self, attaques: [Vec<Attack>; 2]) -> Vec<Nouvelle> {
-        let config = GameConfig {
-            starting_attacks: attaques,
-            ..self.record.config.clone()
-        };
-        match Partie::new(config) {
+    fn recommencer(&mut self, config: GameConfig, graine: Option<u64>) -> Vec<Nouvelle> {
+        match Partie::avec_graine(config, graine.unwrap_or_else(graine_du_moment)) {
             Ok(neuve) => {
                 *self = neuve;
                 vec![Nouvelle::PartieNeuve]
@@ -122,59 +140,111 @@ impl Partie {
 
     /// Rejoue la partie sans son dernier coup : le moteur n'a pas besoin de savoir
     /// « défaire », puisqu'il est déterministe. Une attaque compte pour un seul coup :
-    /// on retire ses choix jusqu'à revenir avant elle.
-    fn annuler_coup(&mut self) -> Vec<Nouvelle> {
+    /// on retire ses choix jusqu'à revenir avant elle. Face à un bot, on continue jusqu'à
+    /// revenir au tour d'un humain ; s'il n'y en a aucun avant (le bot a commencé et
+    /// l'humain n'a pas encore joué), rien n'est annulé. Le hasard reprend son état
+    /// d'alors : les bots rejouent les mêmes coups.
+    fn annuler_coup(&mut self, humains: [bool; 2]) -> Vec<Nouvelle> {
+        let face_a_un_bot = humains.contains(&true) && humains.contains(&false);
         let mut precedent = self.record.clone();
-        loop {
-            if precedent.actions.pop().is_none() {
-                return Vec::new();
-            }
-            match precedent.replay() {
-                Ok(game) if en_plein_choix(&game) => continue,
-                _ => break,
-            }
-        }
-        self.remplacer(precedent, Nouvelle::CoupAnnule)
-    }
-
-    fn coups_au_hasard(&mut self, nombre: u32) -> Vec<Nouvelle> {
-        let mut nouvelles = Vec::new();
-        for _ in 0..nombre {
-            // Plus aucune action légale : la partie est finie.
-            let Some(&action) = self.hasard.pick(&self.game.legal_actions()) else {
+        let mut arret_trouve = false;
+        while precedent.actions.pop().is_some() {
+            let Ok(game) = precedent.replay() else {
                 break;
             };
-            nouvelles.extend(self.jouer(vec![action]));
-            // Une attaque commencée va au bout dans le même coup.
-            while en_plein_choix(&self.game) {
-                let Some(&choix) = self.hasard.pick(&self.game.legal_actions()) else {
-                    break;
-                };
-                nouvelles.extend(self.jouer(vec![choix]));
+            let tour_humain = game
+                .pending_decision()
+                .is_some_and(|decision| humains[decision.player().index()]);
+            if !en_plein_choix(&game) && (tour_humain || !face_a_un_bot) {
+                arret_trouve = true;
+                break;
+            }
+        }
+        if !arret_trouve {
+            return Vec::new();
+        }
+        let gardees = precedent.actions.len();
+        let hasard = self
+            .hasard_avant
+            .get(gardees)
+            .cloned()
+            .unwrap_or_else(|| Rng::new(precedent.seed));
+        let mut hasard_avant = self.hasard_avant.clone();
+        hasard_avant.truncate(gardees);
+        self.remplacer(precedent, hasard_avant, hasard, Nouvelle::CoupAnnule)
+    }
+
+    /// Un coup du bot pour le joueur qui doit décider : une action, et toute la suite si
+    /// c'est une attaque, qui va donc au bout dans le même coup. S'arrête au premier refus,
+    /// qui serait un bug du bot, affiché comme tout refus.
+    fn coup_du_bot(&mut self, bot: &dyn Bot) -> Vec<Nouvelle> {
+        let mut nouvelles = Vec::new();
+        loop {
+            let avant = self.hasard.clone();
+            // `None` : la partie est finie.
+            let Some(action) = bot.choose(&self.game, &mut self.hasard) else {
+                break;
+            };
+            let jouees = self.jouer(vec![action], &avant);
+            let refus = jouees.iter().any(|n| matches!(n, Nouvelle::Refus(_)));
+            nouvelles.extend(jouees);
+            if refus {
+                // Le coup n'est pas joué : son hasard non plus.
+                self.hasard = avant;
+                break;
+            }
+            if !en_plein_choix(&self.game) {
+                break;
             }
         }
         nouvelles
     }
 
+    fn coups_au_hasard(&mut self, nombre: u32) -> Vec<Nouvelle> {
+        let mut nouvelles = Vec::new();
+        for _ in 0..nombre {
+            if self.game.end().is_some() {
+                break;
+            }
+            nouvelles.extend(self.coup_du_bot(&RandomBot));
+        }
+        nouvelles
+    }
+
+    /// Une partie chargée ne dit rien du hasard de ses bots : il repart de la graine. La
+    /// suite de leurs coups n'est donc pas reprise, mais l'enregistrement reste exact.
     fn charger(&mut self, texte: &str) -> Vec<Nouvelle> {
         match importer(texte) {
             Ok(record) => {
                 let coups = record.actions.len();
-                self.remplacer(record, Nouvelle::PartieChargee { coups })
+                let graine = Rng::new(record.seed);
+                let hasard_avant = vec![graine.clone(); coups];
+                self.remplacer(
+                    record,
+                    hasard_avant,
+                    graine,
+                    Nouvelle::PartieChargee { coups },
+                )
             }
             Err(message) => vec![Nouvelle::ChargementRefuse(message)],
         }
     }
 
-    /// Remplace la partie par la relecture de cet enregistrement, si elle réussit ; sinon
-    /// rien ne change. Le hasard des « coups au hasard » repart de la graine : la suite de
-    /// ces coups n'est pas reprise, mais l'enregistrement, lui, reste exact.
-    fn remplacer(&mut self, record: GameRecord, succes: Nouvelle) -> Vec<Nouvelle> {
+    /// Remplace la partie par la relecture de cet enregistrement, avec cet état du hasard,
+    /// si elle réussit ; sinon rien ne change.
+    fn remplacer(
+        &mut self,
+        record: GameRecord,
+        hasard_avant: Vec<Rng>,
+        hasard: Rng,
+        succes: Nouvelle,
+    ) -> Vec<Nouvelle> {
         match record.replay() {
             Ok(game) => {
-                self.hasard = Rng::new(record.seed);
                 self.game = game;
                 self.record = record;
+                self.hasard = hasard;
+                self.hasard_avant = hasard_avant;
                 vec![succes]
             }
             Err(e) => vec![Nouvelle::ChargementRefuse(e.to_string())],
@@ -182,15 +252,10 @@ impl Partie {
     }
 }
 
-/// La configuration avec laquelle le labo démarre : chaque joueur a toutes les attaques
-/// jouables du catalogue, en attendant le draft.
+/// La configuration avec laquelle le labo démarre : la règle actuelle, première des
+/// variantes proposées.
 pub fn config_initiale() -> GameConfig {
-    GameConfig::default().with_full_arsenals()
-}
-
-/// Les attaques de départ du labo, proposées pour la prochaine partie.
-pub fn attaques_initiales() -> [Vec<Attack>; 2] {
-    config_initiale().starting_attacks
+    current_rules()
 }
 
 /// Vrai si la partie attend le lanceur ou une cible d'une attaque commencée.
@@ -224,13 +289,119 @@ fn graine_du_moment() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fight_of_pions::Position;
+    use fight_of_pions::{Player, Position};
 
     /// Une graine fixe : un test qui échoue rejoue exactement la même partie.
     const GRAINE: u64 = 42;
+    /// Deux humains : annuler retire un seul coup.
+    const DEUX_HUMAINS: [bool; 2] = [true, true];
 
     fn partie() -> Partie {
         Partie::avec_graine(config_initiale(), GRAINE).unwrap()
+    }
+
+    /// Fait jouer ces bots (joueur 1, joueur 2) jusqu'à la fin de la partie.
+    fn jouer_jusqu_au_bout(partie: &mut Partie, bots: [BotKind; 2]) {
+        while let Some(decision) = partie.game().pending_decision() {
+            partie.traiter(Demande::CoupDuBot(bots[decision.player().index()]));
+        }
+    }
+
+    /// La partie que l'arène joue avec cette configuration, cette graine et ces bots.
+    fn partie_de_l_arene(config: &GameConfig, graine: u64, bots: [BotKind; 2]) -> GameRecord {
+        bots::record_game(config, graine, [bots[0].bot(), bots[1].bot()]).unwrap()
+    }
+
+    #[test]
+    fn une_partie_de_l_arene_se_revoit_a_l_identique() {
+        // L'aléatoire consomme du hasard à chaque choix, le glouton seulement en se
+        // développant ; la deuxième configuration n'est pas celle par défaut.
+        let configs = [config_initiale(), bots::variants()[2].config.clone()];
+        let paires = [
+            [BotKind::Banker, BotKind::Greedy],
+            [BotKind::Random, BotKind::Greedy],
+        ];
+        for config in &configs {
+            for bots in paires {
+                for graine in 0..2 {
+                    let mut partie = Partie::avec_graine(config.clone(), graine).unwrap();
+                    jouer_jusqu_au_bout(&mut partie, bots);
+                    let attendue = partie_de_l_arene(config, graine, bots);
+                    assert_eq!(partie.record(), &attendue, "graine {graine}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn annuler_pendant_qu_on_revoit_une_partie_ne_la_change_pas() {
+        let bots = [BotKind::Random, BotKind::Greedy];
+        for graine in 0..5 {
+            let mut partie = Partie::avec_graine(config_initiale(), graine).unwrap();
+            for _ in 0..5 {
+                if let Some(decision) = partie.game().pending_decision() {
+                    partie.traiter(Demande::CoupDuBot(bots[decision.player().index()]));
+                }
+            }
+            partie.traiter(Demande::AnnulerCoup {
+                humains: [false, false],
+            });
+            jouer_jusqu_au_bout(&mut partie, bots);
+            let attendue = partie_de_l_arene(&config_initiale(), graine, bots);
+            assert_eq!(partie.record(), &attendue, "graine {graine}");
+        }
+    }
+
+    #[test]
+    fn entre_deux_bots_annuler_retire_un_seul_coup() {
+        let mut partie = partie();
+        for _ in 0..3 {
+            partie.traiter(Demande::CoupDuBot(BotKind::Greedy)); // des poses, une par coup
+        }
+        partie.traiter(Demande::AnnulerCoup {
+            humains: [false, false],
+        });
+        assert_eq!(partie.record().actions.len(), 2);
+    }
+
+    #[test]
+    fn face_a_un_bot_qui_commence_annuler_avant_tout_coup_humain_ne_fait_rien() {
+        let mut partie = partie();
+        partie.traiter(Demande::CoupDuBot(BotKind::Greedy)); // le joueur 1, un bot
+        let avant = partie.record().clone();
+        let nouvelles = partie.traiter(Demande::AnnulerCoup {
+            humains: [false, true],
+        });
+        assert!(nouvelles.is_empty());
+        assert_eq!(partie.record(), &avant);
+    }
+
+    #[test]
+    fn un_coup_du_bot_ne_laisse_jamais_une_attaque_a_moitie() {
+        let mut partie = partie();
+        while partie.game().end().is_none() && partie.record().actions.len() < 200 {
+            partie.traiter(Demande::CoupDuBot(BotKind::Banker));
+            assert!(!en_plein_choix(partie.game()));
+        }
+    }
+
+    #[test]
+    fn face_a_un_bot_annuler_revient_au_tour_de_l_humain() {
+        let humains = [true, false];
+        let mut partie = partie();
+        poser(&mut partie, 4, 4); // le joueur 1, humain : son premier tour n'a qu'une action
+        while partie.game().current_player() == Player::Two {
+            partie.traiter(Demande::CoupDuBot(BotKind::Greedy));
+        }
+        let apres_le_tour_du_bot = partie.game().clone();
+        poser(&mut partie, 0, 0);
+
+        // Le dernier coup est humain : un seul coup est annulé.
+        partie.traiter(Demande::AnnulerCoup { humains });
+        assert_eq!(partie.game(), &apres_le_tour_du_bot);
+        // Ensuite, tout le tour du bot part avec la pose humaine qui l'a précédé.
+        partie.traiter(Demande::AnnulerCoup { humains });
+        assert!(partie.record().actions.is_empty());
     }
 
     fn place(row: usize, col: usize) -> Action {
@@ -294,7 +465,9 @@ mod tests {
         let mut partie = avant_une_attaque();
         let avant = partie.game().clone();
         partie.traiter(Demande::Jouer(attaque_complete()));
-        partie.traiter(Demande::AnnulerCoup);
+        partie.traiter(Demande::AnnulerCoup {
+            humains: DEUX_HUMAINS,
+        });
         assert_eq!(partie.game(), &avant);
         assert!(!en_plein_choix(partie.game()));
     }
@@ -383,7 +556,9 @@ mod tests {
         poser(&mut partie, 4, 4);
         let avant = partie.game().clone();
         poser(&mut partie, 5, 5);
-        partie.traiter(Demande::AnnulerCoup);
+        partie.traiter(Demande::AnnulerCoup {
+            humains: DEUX_HUMAINS,
+        });
         assert_eq!(partie.game(), &avant);
         assert_eq!(partie.record().actions.len(), 1);
     }
@@ -391,7 +566,13 @@ mod tests {
     #[test]
     fn annuler_sans_coup_ne_fait_rien() {
         let mut partie = partie();
-        assert!(partie.traiter(Demande::AnnulerCoup).is_empty());
+        assert!(
+            partie
+                .traiter(Demande::AnnulerCoup {
+                    humains: DEUX_HUMAINS
+                })
+                .is_empty()
+        );
     }
 
     #[test]

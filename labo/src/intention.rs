@@ -3,7 +3,8 @@
 //! complète est envoyée à la partie.
 
 use crate::partie::Demande;
-use fight_of_pions::Position;
+use bots::BotKind;
+use fight_of_pions::{GameConfig, Position};
 
 pub enum Intention {
     /// Une demande à transmettre telle quelle à la partie.
@@ -14,4 +15,11 @@ pub enum Intention {
     ChoisirCase(Position),
     /// Abandonner l'attaque en cours de choix (rien n'a encore été joué).
     AnnulerSelection,
+    /// Revoir dans l'écran Partie une partie de l'arène : même configuration, même
+    /// graine, mêmes bots (joueur 1, joueur 2).
+    Revoir {
+        config: GameConfig,
+        graine: u64,
+        bots: [BotKind; 2],
+    },
 }

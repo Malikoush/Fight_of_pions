@@ -15,7 +15,7 @@ Un **moteur de règles indépendant**, sur lequel se branchent tous les clients 
 ```
                  ┌────────────┐
    terminal ───▶ │            │
-   labo     ───▶ │   moteur   │  ◀── bots (aléatoire, glouton, ML)   (cible)
+   labo     ───▶ │   moteur   │  ◀── bots (aléatoire, glouton ; ML en cible)
    Godot    ───▶ │ (sans dép.)│  ◀── py_bindings pour l'entraînement (cible)
    (cible)       └────────────┘
 ```
@@ -44,17 +44,18 @@ Ils viennent de la conception initiale, et certains sont précisés par l'analys
 | Membre | Rôle | Dépendances |
 |---|---|---|
 | `moteur/` (paquet `fight_of_pions`) | Toutes les règles. Bibliothèque. | Aucune ; feature `serde` optionnelle (sauvegarde JSON d'un `GameRecord`) |
-| `labo/` | Client de test eframe/egui : panneau, damier cliquable avec cases jouables, journal, graine, annuler, coups au hasard, copier/charger une partie. | `moteur` (avec `serde`), `eframe`, `serde_json` |
+| `labo/` | Client de test eframe/egui, en deux écrans. **Partie** : panneau, damier cliquable avec cases jouables, journal, graine, annuler, coups au hasard, copier/charger une partie, chaque joueur humain ou bot, configuration de la prochaine partie réglable. **Arène** : simuler des parties entre bots sur une configuration réglable, et en revoir une. **Arène** : simuler des parties entre bots et en revoir une. | `moteur` (avec `serde`), `bots`, `eframe`, `serde_json` |
 | `terminal/` | Client texte. | `moteur` |
-| `bots/` (cible) | Bots et arène de parties automatiques. | `moteur` |
+| `bots/` | Bots (aléatoire, glouton) et arène de parties automatiques. Bibliothèque ; l'arène est l'exemple `arene`. | `moteur` |
 | `py_bindings/` (cible) | Environnement Python pour l'entraînement ML. | `moteur`, `pyo3` |
 | `godot_bridge/` (cible) | Pont vers Godot. | `moteur`, `godot` |
 
 Commandes :
 
-- `cargo test` : tests du moteur, sans jamais compiler eframe ;
+- `cargo test` : tests du moteur, du terminal et des bots, sans jamais compiler eframe ;
 - `cargo run` : le terminal ;
-- `cargo labo` : le labo.
+- `cargo labo` : le labo ;
+- `cargo arene` (ou `cargo arene 2000`) : l'arène des bots, en release.
 
 ## 4. Le moteur
 
@@ -118,9 +119,22 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
 - Trois choses sont séparées pour rester modifiables : le **déclencheur** (`EndReason`, utile aux statistiques), le **résultat** (`Outcome`, calculé à un seul endroit : nul pour l'instant, départage possible plus tard) et la **limite** (réglage).
 - « Figée » veut dire *plus personne ne peut agir et rien de programmé ne peut changer la situation*. Une future mécanique anti-stagnation (Effondrement) devra être prise en compte dans ce test.
 
-## 5. Bots et machine learning (préparé, construit après la v1.0)
+## 5. Bots et machine learning
 
-Le moteur est conçu dès maintenant pour qu'ils soient simples et rapides :
+Les bots de base et l'arène existent depuis le 2026-10-27. Ils ont été avancés avant B2 pour mesurer chaque réglage au lieu de le deviner. Le machine learning reste prévu après la v1.0.
+
+### Les bots, des clients comme les autres
+
+- **Aucune règle recopiée** : un bot choisit parmi `legal_actions()`. Pour savoir ce que donne une attaque, il la joue jusqu'au bout sur une **copie** de la partie (`AttackPlan`) ; pour connaître les actions du prochain tour adverse, il finit son tour sur une copie. Une nouvelle famille d'attaques, ou un changement du début de tour, est donc pris en compte sans rien changer dans `bots/`. Seule lecture de règle : poser coûte `place_cost` actions et un pion de la réserve.
+- **Sans état** : tout vient de la partie, et le hasard du générateur que l'arène passe au bot, initialisé avec la graine de la partie. Une partie entre bots se rejoue à l'identique, et le même appel de l'arène donne toujours le même bilan.
+- **Lecture en fenêtres** (`Windows`) : la géométrie vient du moteur (`Direction::AXES`, `Board::neighbor`) et la longueur de `align_to_win`. Aucune taille n'est écrite en dur.
+- **L'arène** (`bots::run`) joue N parties entre deux bots et rend un `Report` ; `run_pairs` fait de même pour plusieurs paires en parallèle, et `record_game` rend une partie précise sous forme de `GameRecord`. Une action refusée par le moteur abandonne la partie et apparaît dans le bilan (« refus ») : c'est toujours un bug.
+- **Une partie de l'arène = configuration + graine + deux bots.** `start_game` initialise le moteur et le hasard des bots avec la même graine ; le labo commence ses parties par lui, et revoit donc exactement les parties de l'arène. Un test du labo le vérifie, y compris après une annulation.
+- **Les réglages prêts à comparer** vivent dans `bots::presets` : les bots disponibles (`BotKind`), les paires de l'arène (`STANDARD_PAIRS`) et les variantes (`variants()`). L'exemple `arene` et le labo lisent les mêmes listes : une variante ajoutée là apparaît partout. Une règle qui n'est pas encore un réglage (départage, fin sur passes répétées…) doit d'abord devenir une option de la configuration pour être mesurée.
+
+### Préparé pour la suite
+
+Le moteur est conçu dès maintenant pour que les bots soient simples et rapides :
 
 - `Game` est `Clone` et petit : un bot de recherche peut copier l'état pour essayer un coup ;
 - tout est déterministe, et une partie se rejoue depuis son `GameRecord` ;
@@ -138,3 +152,12 @@ Règles communes à tous les clients :
 - l'affichage du journal vient des `Event`, pas d'une relecture de l'état ;
 - une seule conversion position ↔ écran (dans le labo : `plateau.rs`) ;
 - aucun nombre en dur : la taille vient de `GameConfig`, l'apparence d'un fichier de thème.
+
+### Le labo
+
+Le labo réunit tout ce qu'on veut voir à l'écran, en deux écrans, sans contenir ni règle ni logique de bot :
+
+- **Partie** : jouer, seul ou contre un bot, ou regarder deux bots. Chaque joueur est contrôlé par un humain ou un bot (`BotKind`) ; les bots jouent seuls (lecture automatique, attente réglable) ou coup par coup. Un coup de bot passe par `partie.rs`, comme un clic. Au tour d'un bot, les boutons de jeu sont désactivés (et `app.rs` refuse quand même tout geste de jeu). Face à un bot, « Annuler le coup » remonte jusqu'au dernier coup d'un humain, et `partie.rs` remet le hasard des bots tel qu'il était : ils rejouent les mêmes coups. La section « Prochaine partie » règle la configuration de la prochaine partie (voir le réglage de partie, plus bas). Le panneau défile en entier. Les bots jouent dans le fil de l'interface : sur un très grand plateau, la fenêtre répond mal pendant la lecture automatique.
+- **Arène** : régler la configuration simulée, choisir des paires et un nombre de parties, lancer `bots::run_pairs` dans un fil à part (la fenêtre ne se fige pas) et lire les bilans, affichés comme par `cargo arene`. « Revoir » ouvre une partie précise dans l'écran Partie, avec sa graine et ses bots, pour la regarder se jouer.
+- **Réglage de partie** (`reglage.rs`) : un seul éditeur de configuration, utilisé par les deux écrans (la prochaine partie, la configuration simulée). On part d'une variante ou de la partie en cours, puis on retouche chaque réglage ; le labo ne vérifie rien lui-même, il affiche le verdict de `GameConfig::validate` et ne lance pas une configuration incohérente.
+- Le labo tourne en debug, mais le moteur et les bots sont optimisés dans le profil dev (`Cargo.toml`) : l'écran Arène simule à la vitesse de `cargo arene`. Chaque bilan affiche ses fourchettes à 95 % : deux bilans dont les fourchettes se chevauchent largement ne permettent pas de conclure.

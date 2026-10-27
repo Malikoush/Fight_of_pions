@@ -1,8 +1,10 @@
 mod app;
+mod arene;
 mod intention;
 mod panneau;
 mod partie;
 mod plateau;
+mod reglage;
 mod theme;
 
 use eframe::egui;
