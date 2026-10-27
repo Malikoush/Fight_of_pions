@@ -165,7 +165,7 @@ fn placing_announces_the_remaining_actions() {
     play(&mut game, &[place(0, 0)]);
     let events = play(&mut game, &[place(5, 5)]);
     assert_eq!(
-        events[1],
+        events[2],
         Event::ActionsChanged {
             player: Player::Two,
             actions_left: 1,
@@ -185,6 +185,10 @@ fn placing_the_last_action_announces_each_counter_once() {
             Event::PionPlaced {
                 pion,
                 at: Position { row: 0, col: 0 },
+            },
+            Event::ReserveChanged {
+                player: Player::One,
+                pions: 14,
             },
             Event::ActionsChanged {
                 player: Player::One,

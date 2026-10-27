@@ -15,7 +15,9 @@ fn seed_from_clock() -> u64 {
 }
 
 fn main() {
-    let mut game = match Game::new(GameConfig::default(), seed_from_clock()) {
+    // Chaque joueur a toutes les attaques jouables, en attendant le draft.
+    let config = GameConfig::default().with_full_arsenals();
+    let mut game = match Game::new(config, seed_from_clock()) {
         Ok(game) => game,
         Err(e) => {
             eprintln!("Impossible de lancer la partie : {}", e);
@@ -44,7 +46,26 @@ fn main() {
                     for event in events {
                         match event {
                             // Le plateau et les compteurs sont réaffichés à chaque tour.
-                            Event::PionPlaced { .. } | Event::ActionsChanged { .. } => {}
+                            Event::PionPlaced { .. }
+                            | Event::ActionsChanged { .. }
+                            | Event::ReserveChanged { .. }
+                            | Event::CooldownChanged { .. } => {}
+                            Event::AttackUsed {
+                                player,
+                                attack,
+                                launcher,
+                            } => println!(
+                                "{} lance {} depuis {}.",
+                                terminal::player_name(player),
+                                attack,
+                                launcher
+                            ),
+                            Event::PionKilled { pion, at, .. } => println!(
+                                "Le pion {} de {} est tué en {}.",
+                                pion.id(),
+                                terminal::player_name(pion.owner()),
+                                at
+                            ),
                             Event::TurnEnded { next } => {
                                 println!("Au tour de {}.", terminal::player_name(next));
                             }

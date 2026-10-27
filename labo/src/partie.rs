@@ -2,15 +2,24 @@
 //! appelle `game.apply`. La partie tient aussi son enregistrement (configuration, graine,
 //! actions acceptées), qui sert à copier, charger et annuler un coup.
 
-use fight_of_pions::{Action, Event, Game, GameConfig, GameError, GameRecord, Rng};
+use fight_of_pions::{
+    Action, Attack, Decision, Event, Game, GameConfig, GameError, GameRecord, Rng,
+};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Ce que l'interface (et plus tard un bot) demande à la partie.
 pub enum Demande {
     Agir(Action),
-    NouvellePartie,
+    /// Jouer cette suite d'actions d'un bloc (une attaque entière, choisie dans
+    /// l'interface) : si l'une est refusée, rien n'est joué.
+    Jouer(Vec<Action>),
+    /// Recommencer, chaque joueur avec ces attaques au départ.
+    NouvellePartie {
+        attaques: [Vec<Attack>; 2],
+    },
     AnnulerCoup,
-    /// Jouer ce nombre de coups tirés au hasard parmi les actions légales.
+    /// Jouer ce nombre de coups tirés au hasard parmi les actions légales. Une attaque
+    /// commencée est toujours menée au bout dans le même coup.
     CoupsAuHasard(u32),
     /// Remplacer la partie par celle décrite dans ce texte JSON.
     Charger(String),
@@ -42,7 +51,7 @@ impl Partie {
     /// Une partie avec cette graine : sert aux tests, pour qu'ils soient reproductibles.
     pub fn avec_graine(config: GameConfig, graine: u64) -> Result<Self, GameError> {
         Ok(Self {
-            game: Game::new(config, graine)?,
+            game: Game::new(config.clone(), graine)?,
             record: GameRecord::new(config, graine),
             hasard: Rng::new(graine),
         })
@@ -58,29 +67,50 @@ impl Partie {
         &self.record
     }
 
+    /// La partie telle qu'elle serait après ces actions, sans rien jouer pour de vrai :
+    /// sert à choisir une attaque dans l'interface, sur une copie. Annuler ce choix est
+    /// donc gratuit, alors que le moteur, lui, n'a pas d'« annuler ».
+    pub fn apercu(&self, actions: &[Action]) -> Result<Game, GameError> {
+        let mut copie = self.game.clone();
+        for &action in actions {
+            copie.apply(action)?;
+        }
+        Ok(copie)
+    }
+
     /// Une erreur du moteur devient une `Nouvelle`, jamais un plantage.
     pub fn traiter(&mut self, demande: Demande) -> Vec<Nouvelle> {
         match demande {
-            Demande::Agir(action) => self.agir(action),
-            Demande::NouvellePartie => self.recommencer(),
+            Demande::Agir(action) => self.jouer(vec![action]),
+            Demande::Jouer(actions) => self.jouer(actions),
+            Demande::NouvellePartie { attaques } => self.recommencer(attaques),
             Demande::AnnulerCoup => self.annuler_coup(),
             Demande::CoupsAuHasard(nombre) => self.coups_au_hasard(nombre),
             Demande::Charger(texte) => self.charger(&texte),
         }
     }
 
-    fn agir(&mut self, action: Action) -> Vec<Nouvelle> {
-        match self.game.apply(action) {
-            Ok(events) => {
-                self.record.actions.push(action);
-                events.into_iter().map(Nouvelle::Moteur).collect()
+    /// Joue ces actions d'un bloc, sur une copie d'abord : si l'une est refusée, la
+    /// partie et son enregistrement ne changent pas.
+    fn jouer(&mut self, actions: Vec<Action>) -> Vec<Nouvelle> {
+        let mut copie = self.game.clone();
+        let mut nouvelles = Vec::new();
+        for &action in &actions {
+            match copie.apply(action) {
+                Ok(events) => nouvelles.extend(events.into_iter().map(Nouvelle::Moteur)),
+                Err(e) => return vec![Nouvelle::Refus(e)],
             }
-            Err(e) => vec![Nouvelle::Refus(e)],
         }
+        self.game = copie;
+        self.record.actions.extend(actions);
+        nouvelles
     }
 
-    fn recommencer(&mut self) -> Vec<Nouvelle> {
-        let config = self.record.config;
+    fn recommencer(&mut self, attaques: [Vec<Attack>; 2]) -> Vec<Nouvelle> {
+        let config = GameConfig {
+            starting_attacks: attaques,
+            ..self.record.config.clone()
+        };
         match Partie::new(config) {
             Ok(neuve) => {
                 *self = neuve;
@@ -90,12 +120,19 @@ impl Partie {
         }
     }
 
-    /// Rejoue la partie sans sa dernière action : le moteur n'a pas besoin de savoir
-    /// « défaire », puisqu'il est déterministe.
+    /// Rejoue la partie sans son dernier coup : le moteur n'a pas besoin de savoir
+    /// « défaire », puisqu'il est déterministe. Une attaque compte pour un seul coup :
+    /// on retire ses choix jusqu'à revenir avant elle.
     fn annuler_coup(&mut self) -> Vec<Nouvelle> {
         let mut precedent = self.record.clone();
-        if precedent.actions.pop().is_none() {
-            return Vec::new();
+        loop {
+            if precedent.actions.pop().is_none() {
+                return Vec::new();
+            }
+            match precedent.replay() {
+                Ok(game) if en_plein_choix(&game) => continue,
+                _ => break,
+            }
         }
         self.remplacer(precedent, Nouvelle::CoupAnnule)
     }
@@ -107,7 +144,14 @@ impl Partie {
             let Some(&action) = self.hasard.pick(&self.game.legal_actions()) else {
                 break;
             };
-            nouvelles.extend(self.agir(action));
+            nouvelles.extend(self.jouer(vec![action]));
+            // Une attaque commencée va au bout dans le même coup.
+            while en_plein_choix(&self.game) {
+                let Some(&choix) = self.hasard.pick(&self.game.legal_actions()) else {
+                    break;
+                };
+                nouvelles.extend(self.jouer(vec![choix]));
+            }
         }
         nouvelles
     }
@@ -136,6 +180,25 @@ impl Partie {
             Err(e) => vec![Nouvelle::ChargementRefuse(e.to_string())],
         }
     }
+}
+
+/// La configuration avec laquelle le labo démarre : chaque joueur a toutes les attaques
+/// jouables du catalogue, en attendant le draft.
+pub fn config_initiale() -> GameConfig {
+    GameConfig::default().with_full_arsenals()
+}
+
+/// Les attaques de départ du labo, proposées pour la prochaine partie.
+pub fn attaques_initiales() -> [Vec<Attack>; 2] {
+    config_initiale().starting_attacks
+}
+
+/// Vrai si la partie attend le lanceur ou une cible d'une attaque commencée.
+pub fn en_plein_choix(game: &Game) -> bool {
+    matches!(
+        game.pending_decision(),
+        Some(Decision::ChooseLauncher { .. } | Decision::ChooseTarget { .. })
+    )
 }
 
 /// La partie en JSON lisible, à coller ailleurs ou à joindre à un rapport de bug.
@@ -167,15 +230,84 @@ mod tests {
     const GRAINE: u64 = 42;
 
     fn partie() -> Partie {
-        Partie::avec_graine(GameConfig::default(), GRAINE).unwrap()
+        Partie::avec_graine(config_initiale(), GRAINE).unwrap()
     }
 
     fn place(row: usize, col: usize) -> Action {
         Action::Place(Position { row, col })
     }
 
+    fn choisir(row: usize, col: usize) -> Action {
+        Action::Choose(Position { row, col })
+    }
+
     fn poser(partie: &mut Partie, row: usize, col: usize) {
         partie.traiter(Demande::Agir(place(row, col)));
+    }
+
+    /// Le joueur 1 pose en E5, le joueur 2 en F5 et F6 : le joueur 1 peut attaquer.
+    fn avant_une_attaque() -> Partie {
+        let mut partie = partie();
+        poser(&mut partie, 4, 4);
+        poser(&mut partie, 4, 5);
+        poser(&mut partie, 5, 5);
+        partie
+    }
+
+    /// L'Ours Rare (emplacement 0) depuis E5 sur F5.
+    fn attaque_complete() -> Vec<Action> {
+        vec![Action::UseAttack(0), choisir(4, 4), choisir(4, 5)]
+    }
+
+    #[test]
+    fn une_attaque_choisie_sur_une_copie_se_joue_d_un_bloc() {
+        let mut partie = avant_une_attaque();
+        let apercu = partie.apercu(&attaque_complete()[..2]).unwrap();
+        assert!(en_plein_choix(&apercu));
+        assert!(!en_plein_choix(partie.game())); // la vraie partie n'a pas bougé
+
+        partie.traiter(Demande::Jouer(attaque_complete()));
+        assert_eq!(
+            partie.game().board().owner(Position { row: 4, col: 5 }),
+            None
+        );
+        assert_eq!(partie.record().replay().as_ref(), Ok(partie.game()));
+    }
+
+    #[test]
+    fn une_suite_refusee_ne_change_rien() {
+        let mut partie = avant_une_attaque();
+        let (game_avant, record_avant) = (partie.game().clone(), partie.record().clone());
+        // La cible J10 n'est pas à côté du lanceur : toute la suite est refusée.
+        let nouvelles = partie.traiter(Demande::Jouer(vec![
+            Action::UseAttack(0),
+            choisir(4, 4),
+            choisir(9, 9),
+        ]));
+        assert!(matches!(nouvelles[..], [Nouvelle::Refus(_)]));
+        assert_eq!(partie.game(), &game_avant);
+        assert_eq!(partie.record(), &record_avant);
+    }
+
+    #[test]
+    fn annuler_retire_toute_l_attaque() {
+        let mut partie = avant_une_attaque();
+        let avant = partie.game().clone();
+        partie.traiter(Demande::Jouer(attaque_complete()));
+        partie.traiter(Demande::AnnulerCoup);
+        assert_eq!(partie.game(), &avant);
+        assert!(!en_plein_choix(partie.game()));
+    }
+
+    #[test]
+    fn les_coups_au_hasard_ne_laissent_jamais_une_attaque_a_moitie() {
+        for graine in 0..30 {
+            let mut partie = Partie::avec_graine(config_initiale(), graine).unwrap();
+            for _ in 0..20 {
+                partie.traiter(Demande::CoupsAuHasard(1));
+                assert!(!en_plein_choix(partie.game()), "graine {graine}");
+            }
+        }
     }
 
     /// Charge ce texte et vérifie qu'il est refusé sans rien changer : ni la partie,

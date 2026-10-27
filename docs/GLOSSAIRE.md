@@ -15,20 +15,20 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
 | Partie | `Game` | L'état complet et le seul point d'entrée des actions |
-| Configuration | `GameConfig` | Tous les réglages chiffrés, validés au démarrage |
+| Configuration | `GameConfig` | Tous les réglages (nombres, catalogue des attaques, attaques de départ), validés au démarrage |
 | Joueur | `Player` | Les deux camps : `One` (commence) et `Two` |
 | Tour | `turn` | Le tour **d'un** joueur. Le compteur avance à chaque fin de tour. |
 | Manche | `round` (cible) | Un tour de chaque joueur (le « Tour 1 » du tableau du GDD) |
-| Action | `Action` | Une décision envoyée au moteur : `Place`, `EndTurn`, puis `UseAttack`, `Choose`, `Pass`… |
-| Coût d'une action | `Game::cost` (privé) | Le nombre d'actions de tour qu'elle consomme, lu dans la configuration |
+| Action | `Action` | Une décision envoyée au moteur : `Place`, `UseAttack`, `Choose`, `EndTurn` (plus tard `Pass` pour les réactions…) |
 | Coût de la pose | `place_cost` | Actions que coûte la pose d'un pion (1 par défaut) |
 | Actions du tour | `actions_left` | Ce qu'il reste à dépenser au joueur courant |
 | Actions en réserve | `banked_actions`, `Game::banked_actions()` | Actions non utilisées gardées pour le tour suivant (jusqu'à `max_banked_actions`, 2 par défaut). **À ne pas confondre avec la réserve de pions.** |
 | Événement | `Event` | Ce que le moteur annonce après une action ; suffit à suivre tout l'état visible |
 | Compteurs d'actions annoncés | `Event::ActionsChanged` | Actions restantes et gardées d'un joueur, émis à chaque changement |
+| Réserve annoncée | `Event::ReserveChanged` | Pions en réserve d'un joueur, émis à chaque changement (pose, kill…) |
 | Refus | `GameError` | Pourquoi une action ou une configuration est refusée |
 | Configuration incohérente | `ConfigError` | La raison précise du refus d'une configuration (`GameError::InvalidConfig`) |
-| Décision attendue | `Decision`, `pending_decision()` | Qui doit choisir quoi, maintenant (`MainAction` pour l'instant) |
+| Décision attendue | `Decision`, `pending_decision()` | Qui doit choisir quoi, maintenant : `MainAction`, `ChooseLauncher`, `ChooseTarget` |
 | Actions légales | `legal_actions()` | La liste exacte des actions acceptées maintenant |
 | Fin de partie | `GameEnd`, `Event::GameEnded` | Le résultat et la raison de la fin |
 | Résultat | `Outcome` | `Won(Player)` ou `Draw` (match nul) |
@@ -50,9 +50,10 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Position | `Position` | Rangée et colonne à partir de 0, affichée « C5 » |
 | Direction | `Direction` | Un pas d'une case parmi les 8 directions |
 | Pion | `Pion` | Un pion posé, avec son identité et son propriétaire |
+| Pion tué | `Event::PionKilled { pion, at, by }` | Un pion retiré du plateau ; `by` est l'identité du tueur. Il retourne dans la réserve de son propriétaire. |
 | Identité d'un pion | `PionId` | Numéro stable d'un pion (affiché « #3 »), pour qu'un effet le suive quand il bouge |
 | Réserve de pions | `reserve_pions` | Les pions qu'un joueur peut encore poser (15 au départ) |
-| Pion lanceur | `launcher` (cible) | Le pion déjà posé depuis lequel une attaque est lancée |
+| Pion lanceur | `launcher` | Le pion du joueur depuis lequel une attaque est lancée, choisi par `Action::Choose` |
 | Tombe | couche `tomb` de `Cell` (cible) | Ce que laisse un pion tué. Elle ne bloque pas la case. |
 | Trou | couche terrain de `Cell` (cible) | Case détruite par le Coup du taureau, injouable |
 | Zombie | type de pion (cible) | Pion ressuscité par le Médecin |
@@ -64,16 +65,19 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
-| Attaque | `Attack` (cible) | Une carte qu'on déclenche en dépensant des actions |
-| Famille d'attaque | `AttackKind` (cible) | Ours, Lièvre, Beauté fatale… Une famille par fichier dans `attacks/`. |
-| Rareté | `Rarity` (cible) | `Common`, `Rare`, `Epic`, `Legendary` : la variante de l'attaque et sa place dans le draft, **sans lien imposé avec le coût** |
-| Caractéristiques | `AttackStats` (cible) | Coût et recharge d'une variante (famille + rareté) |
-| Catalogue | `AttackCatalog` (cible) | Les caractéristiques de toutes les variantes, dans `GameConfig` |
-| Arsenal | `Arsenal` (cible) | Les attaques d'un joueur pendant la partie et leur recharge |
-| Utiliser une attaque | `Action::UseAttack` (cible) | Choisir une attaque de son arsenal ; les choix suivants passent par `Choose` |
-| Recharge | `cooldown` (cible) | Nombre de tours avant de pouvoir réutiliser une attaque |
-| Cible | `Target` (cible) | Où s'applique une attaque |
-| Effet primitif | `Effect` (cible) | Opération de base produite par une attaque : tuer, déplacer, poser, changer de camp… |
+| Attaque | `Attack` | Une carte : une famille dans une rareté (« Ours (Rare) ») |
+| Famille d'attaque | `AttackKind` | Ours, et plus tard Lièvre, Beauté fatale… Une famille par fichier dans `attacks/`. |
+| Rareté | `Rarity` | `Common`, `Rare`, `Epic`, `Legendary` : la variante de l'attaque et sa place dans le draft, **sans lien imposé avec le coût** |
+| Caractéristiques | `AttackStats` | Coût et recharge d'une attaque |
+| Catalogue | `attack_catalog`, `CatalogEntry` | Dans `GameConfig` : les attaques jouables et leurs caractéristiques |
+| Attaques de départ | `starting_attacks` | Dans `GameConfig` : l'arsenal de chaque joueur au début (plus tard, sa cache secrète) |
+| Arsenal | `Game::arsenal(player)`, `ArsenalSlot` | Les attaques d'un joueur pendant la partie, chacune avec sa recharge en cours |
+| Utiliser une attaque | `Action::UseAttack(slot)` | Commencer l'attaque d'un emplacement de son arsenal ; le lanceur et les cibles se choisissent ensuite |
+| Choisir une case | `Action::Choose(pos)` | Le lanceur, puis chaque cible de l'attaque en cours |
+| Recharge | `cooldown`, `cooldown_left`, `Event::CooldownChanged` | Tours du propriétaire avant de pouvoir relancer une attaque (1 = une fois par tour) |
+| Cible | case choisie | Une case visée par l'attaque en cours, proposée par la famille |
+| Attaque lancée | `Event::AttackUsed` | Annonce d'une attaque résolue ; ses effets suivent |
+| Effet primitif | `Effect` (interne au moteur) | Opération de base produite par une famille : tuer, et plus tard déplacer, poser, changer de camp… Seul le résolveur l'applique. |
 | Effet en cours | `ActiveEffect` (cible) | Un effet qui dure plusieurs tours (immobilisé, protégé…) |
 | Réaction | attaque avec déclencheur (cible) | Attaque jouée pendant le tour adverse, payée avec les actions en réserve |
 | Axe d'attaque | aucun (documentation seulement) | Crowd control, Mouvement, Kill, Invocation, Buff, Spécial : sert à l'équilibrage, pas au code. Toujours dire « axe d'attaque », pour ne pas confondre avec l'axe d'alignement. |

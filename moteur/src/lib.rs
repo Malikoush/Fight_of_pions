@@ -20,11 +20,13 @@
 )]
 #![warn(missing_docs)]
 
+/// Les attaques : familles, raretés, caractéristiques, et leurs règles.
+pub mod attacks;
 /// Le plateau et le contenu de ses cases.
 pub mod board;
 /// Types de base partagés : joueurs, positions, directions.
 pub mod common;
-/// Les réglages chiffrés d'une partie.
+/// Les réglages d'une partie.
 pub mod config;
 /// Les raisons pour lesquelles une action est refusée.
 pub mod error;
@@ -35,11 +37,13 @@ pub mod rng;
 /// Les règles pures, qui lisent le plateau sans le modifier.
 pub mod rules;
 
+pub use attacks::{Attack, AttackKind, AttackStats, CatalogEntry, Rarity};
 pub use board::{Board, Cell, Pion, PionId};
 pub use common::{Direction, Player, Position};
 pub use config::{ConfigError, GameConfig};
 pub use error::GameError;
 pub use game::{
-    Action, Decision, EndReason, Event, Game, GameEnd, GameRecord, Outcome, ReplayError,
+    Action, ArsenalSlot, Decision, EndReason, Event, Game, GameEnd, GameRecord, Outcome,
+    ReplayError,
 };
 pub use rng::Rng;

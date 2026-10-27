@@ -4,7 +4,8 @@ mod common;
 
 use common::{game_with, new_game, place, play, random_config};
 use fight_of_pions::{
-    Action, Decision, EndReason, Event, Game, GameConfig, GameEnd, Outcome, Player, Rng,
+    Action, Attack, Decision, Direction, EndReason, Event, Game, GameConfig, GameEnd, Outcome,
+    Player, Rarity, Rng,
 };
 
 fn draw(reason: EndReason) -> Event {
@@ -14,26 +15,55 @@ fn draw(reason: EndReason) -> Event {
     })
 }
 
-/// Vérifie qu'une réponse est exactement « un pion posé, ses actions décomptées, puis la
-/// fin » : aucun `TurnEnded` ne doit se glisser avant la fin, même si la pose a vidé les
-/// actions du tour.
+/// Vérifie qu'une réponse est exactement « un pion posé, sa réserve et ses actions
+/// décomptées, puis la fin » : aucun `TurnEnded` ne doit se glisser avant la fin, même si
+/// la pose a vidé les actions du tour.
 fn assert_placed_then(events: &[Event], end: Event) {
-    assert_eq!(events.len(), 3, "événements inattendus : {events:?}");
+    assert_eq!(events.len(), 4, "événements inattendus : {events:?}");
     assert!(matches!(events[0], Event::PionPlaced { .. }));
-    assert!(matches!(events[1], Event::ActionsChanged { .. }));
-    assert_eq!(events[2], end);
+    assert!(matches!(events[1], Event::ReserveChanged { .. }));
+    assert!(matches!(events[2], Event::ActionsChanged { .. }));
+    assert_eq!(events[3], end);
 }
 
-/// La définition du carnet, écrite indépendamment du moteur : avec les règles actuelles,
-/// une partie est figée quand le plateau est plein ou que les deux réserves sont vides.
+/// La définition du carnet, écrite indépendamment du moteur : une partie est figée quand
+/// aucun des deux joueurs ne peut plus ni poser (plateau plein ou réserve vide), ni lancer
+/// une attaque qui a une cible.
 fn frozen_by_the_rules(game: &Game) -> bool {
     let board_full = game
         .board()
         .positions()
         .all(|pos| game.board().owner(pos).is_some());
-    let reserves_empty =
-        game.reserve_pions(Player::One) == 0 && game.reserve_pions(Player::Two) == 0;
-    board_full || reserves_empty
+    let can_act = |player: Player| {
+        let can_place = !board_full && game.reserve_pions(player) > 0;
+        can_place
+            || game
+                .arsenal(player)
+                .iter()
+                .any(|slot| ours_has_a_target(game, player, slot.attack()))
+    };
+    !can_act(Player::One) && !can_act(Player::Two)
+}
+
+/// L'Ours a une cible si l'un des pions du joueur a assez d'ennemis sur ses 8 cases voisines
+/// (1 pour la Rare, 2 pour l'Épique). Écrit sans réutiliser le moteur.
+fn ours_has_a_target(game: &Game, player: Player, attack: Attack) -> bool {
+    let needed = match attack.rarity {
+        Rarity::Epic => 2,
+        _ => 1,
+    };
+    let board = game.board();
+    board
+        .positions()
+        .filter(|&pos| board.owner(pos) == Some(player))
+        .any(|launcher| {
+            let enemies = Direction::ALL
+                .iter()
+                .filter_map(|&dir| board.neighbor(launcher, dir))
+                .filter(|&pos| board.owner(pos) == Some(player.opponent()))
+                .count();
+            enemies >= needed
+        })
 }
 
 #[test]

@@ -2,17 +2,25 @@
 
 mod common;
 
-use common::{game_with, new_game, place, play};
-use fight_of_pions::{Action, Game, GameConfig, Rng};
+use common::{game_with, new_game, place, play, random_config};
+use fight_of_pions::{Action, Game, GameConfig, Position, Rng};
 
-/// Toutes les actions qu'un client pourrait tenter : chaque case, des cases hors du
-/// plateau, et finir son tour.
+/// Toutes les actions qu'un client pourrait tenter : poser ou choisir chaque case, des
+/// cases hors du plateau, chaque emplacement d'attaque et un de trop, finir son tour.
 fn candidates(game: &Game) -> Vec<Action> {
     let size = game.board().size();
-    game.board()
-        .positions()
-        .map(Action::Place)
-        .chain([place(size, 0), place(0, size), Action::EndTurn])
+    let outside = [
+        Position { row: size, col: 0 },
+        Position { row: 0, col: size },
+    ];
+    let cells: Vec<Position> = game.board().positions().chain(outside).collect();
+    let slots = 0..=game.arsenal(game.current_player()).len();
+    cells
+        .iter()
+        .map(|&pos| Action::Place(pos))
+        .chain(cells.iter().map(|&pos| Action::Choose(pos)))
+        .chain(slots.map(Action::UseAttack))
+        .chain([Action::EndTurn])
         .collect()
 }
 
@@ -64,18 +72,28 @@ fn without_enough_actions_only_ending_the_turn_is_legal() {
 }
 
 #[test]
-fn random_games_agree_with_apply_and_always_end() {
-    for seed in 0..100 {
+fn random_games_agree_with_apply_never_dead_end_and_always_end() {
+    for seed in 0..200 {
         let mut rng = Rng::new(seed);
-        let mut game = new_game();
+        let mut game = if seed % 2 == 0 {
+            new_game()
+        } else {
+            game_with(random_config(&mut rng))
+        };
         // Borne large : chaque tour finit au plus après quelques actions.
         let mut steps_left = 10_000;
 
         while game.end().is_none() {
             assert_legal_actions_match_apply(&game);
+            // Aucune impasse : tant que la partie dure, même au milieu d'une attaque, il
+            // reste au moins une action permise.
             let legal = game.legal_actions();
-            let action = *rng.pick(&legal).unwrap();
-            game.apply(action).unwrap();
+            assert!(
+                !legal.is_empty(),
+                "partie {seed} bloquée : {:?}",
+                game.pending_decision()
+            );
+            game.apply(*rng.pick(&legal).unwrap()).unwrap();
 
             steps_left -= 1;
             assert!(steps_left > 0, "la partie {seed} ne se termine pas");

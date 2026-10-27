@@ -34,7 +34,7 @@ Ils viennent de la conception initiale, et certains sont précisés par l'analys
 2. **Une partie = configuration + graine + liste d'actions** (`GameRecord`). Rejouer les actions reconstruit la partie. Cela donne gratuitement la sauvegarde, le replay, l'annulation dans le labo et la reproduction exacte d'un bug.
 3. **Le jeu piloté par les données.** Tous les réglages chiffrés vivent dans `GameConfig`, validés au démarrage. Plus tard, ils seront chargés depuis un fichier pour équilibrer sans recompiler.
 4. **Des tranches verticales.** Une fonctionnalité est finie quand elle marche de bout en bout : moteur, tests, labo. On ne commence pas la suivante avant.
-5. **Des invariants vérifiés automatiquement.** Le principal : *un miroir construit uniquement à partir des `Event` (plateau, réserves, actions restantes et gardées, joueur courant, fin) est toujours égal à l'état du moteur*. C'est la garantie qu'un client qui suit les événements ne se désynchronise jamais, sans recalculer aucune règle. Il est vérifié après chaque action de centaines de parties aléatoires.
+5. **Des invariants vérifiés automatiquement.** Le principal : *un miroir construit uniquement à partir des `Event` (plateau, réserves, actions restantes et gardées, recharges des attaques, joueur courant, fin) est toujours égal à l'état du moteur*. C'est la garantie qu'un client qui suit les événements ne se désynchronise jamais, sans recalculer aucune règle. Il est vérifié après chaque action de centaines de parties aléatoires.
 6. **Abstraire à la deuxième occurrence, pas avant.** La modularité vient des bonnes abstractions de base (les effets primitifs, le modèle de décision, les données), pas d'options prévues pour des besoins imaginaires.
 7. **La vue joueur** (`PlayerView`, cible). Dès qu'il y a de l'information cachée (cache secrète), le moteur fournit une vue restreinte par joueur. Les bots et le jeu en ligne ne voient que celle-ci.
 8. **Les règles avant le code.** Une attaque n'est codée que lorsque sa règle est écrite et datée dans le [carnet de règles](REGLES.md). Les attaques « EN REFONTE » dans le GDD attendent.
@@ -67,10 +67,12 @@ moteur/src/
   error.rs      GameError : toutes les raisons de refus
   common/       Player, Position, Direction
   board/        Board, Cell, Pion, PionId
-  game/         Game, Action, Event, Decision, GameEnd, GameRecord
+  game/         Game (state.rs), déroulement des attaques (attack_flow.rs), ArsenalSlot,
+                Action, Event, Decision, GameEnd, GameRecord
   rules/        règles pures qui lisent le plateau (alignement)
   rng.rs        Rng : générateur déterministe maison (SplitMix64), sans dépendance
-  attacks/      (cible) attaques : une famille par fichier
+  attacks/      attaques : données (Attack, AttackKind, Rarity, AttackStats), trait AttackRules,
+                Effect, et une famille par fichier (ours.rs)
 ```
 
 ### Le contrat d'une action : valider, puis exécuter
@@ -85,19 +87,20 @@ Tout ce qui change pour un observateur (un pion posé, tué, déplacé, qui chan
 
 Les attaques demandent plusieurs choix (carte, pion lanceur, cible, sauts enchaînés). Les réactions se jouent pendant le tour adverse, et le draft est une suite de choix. Au lieu d'une `Action` géante qui contiendrait tout, **le moteur expose à tout moment qui doit choisir quoi** :
 
-- `pending_decision()` : la décision attendue et le joueur concerné. Aujourd'hui seulement `MainAction` ; viendront le choix du lanceur, d'une cible, la fenêtre de réaction, le draft…
+- `pending_decision()` : la décision attendue et le joueur concerné. Aujourd'hui `MainAction`, `ChooseLauncher` et `ChooseTarget` ; viendront la fenêtre de réaction et le draft.
 - `legal_actions()` : la liste exacte des actions acceptées maintenant, dans un ordre fixe. Elle est construite en passant chaque candidate par la validation elle-même : elle ne peut pas contredire `apply`. Un test le vérifie sur des parties aléatoires.
 
-Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(pos)`, `Pass`, `EndTurn`…). Avantages :
+Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(pos)`, `EndTurn`, plus tard `Pass`…). Il n'y a **pas d'action « annuler »** : une attaque commencée va au bout, et le moteur ne propose jamais un choix qui mène à une impasse. Les clients font la sélection sur une **copie** de la partie et n'envoient la suite qu'une fois complète : annuler reste gratuit pour le joueur, et aucun bot ne peut boucler. Avantages :
 
 - le labo surligne les cases jouables sans connaître aucune règle ;
 - les bots jouent en piochant dans `legal_actions()` ;
 - pour le ML, l'espace d'actions est petit et fixe : environ 100 cases plus quelques boutons ;
 - le replay reste une simple liste d'actions.
 
-### Les attaques (cible, phase B)
+### Les attaques
 
-- **Identité par données** : `AttackKind` (la famille) + `Rarity`. Le coût et la recharge viennent de `AttackStats` dans le `AttackCatalog` de `GameConfig`, jamais du code de la famille. Le coût n'est pas lié à la rareté.
+- **Identité par données** : une `Attack` est une famille (`AttackKind`) dans une rareté (`Rarity`). Le coût et la recharge viennent du catalogue `attack_catalog` de `GameConfig`, jamais du code de la famille. Le coût n'est pas lié à la rareté. Les attaques de départ de chaque joueur (`starting_attacks`) sont aussi dans la configuration, en attendant le draft.
+- **Le déroulement est commun à toutes les familles** (`game/attack_flow.rs`) : validation de la carte (recharge, coût, au moins une attaque complète), du lanceur et de chaque cible, puis résolution d'un bloc au dernier choix (coût payé, carte en recharge, effets appliqués). Une famille ne fournit que ses raretés jouables, son nombre de cibles, ses cibles possibles et ses effets.
 - **Une famille par fichier** dans `attacks/`. Chaque famille implémente un trait interne sans état (les cibles légales, et les effets à produire), appelé via `AttackKind::rules()`. `Game` ne stocke que des données simples : pas de `Box<dyn>`, ce qui garde `Game` clonable, comparable et hachable ; la sauvegarde passe par `GameRecord`.
 - **Les effets primitifs** (`Effect`) sont le cœur DRY : tuer, déplacer, échanger, poser, changer de camp, ajouter un effet en cours, creuser un trou, gagner des actions. Une famille *décrit* ses effets. **Un résolveur central** les applique, émet les `Event` et déclenche les conséquences : retour en réserve, tombe, vengeance de Meilleurs amis, fenêtres de réaction. Les attaques changent souvent, les primitives rarement.
 - **Les nombres d'une famille** (portée, nombre de cibles, durée) sont des constantes nommées dans son fichier. Ils passeront dans la configuration quand l'équilibrage par bots en aura besoin (principe 6).

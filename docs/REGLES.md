@@ -20,7 +20,9 @@ Une partie refuse de démarrer si ses réglages sont incohérents :
 - chaque tour, y compris le premier, doit donner au moins une action ;
 - poser un pion doit coûter au moins une action, sinon toute la réserve partirait en un seul tour ;
 - poser un pion doit être possible en économisant : `place_cost` ≤ `actions_per_turn` + `max_banked_actions` ;
-- la limite de tours `max_turns` doit valoir au moins 1.
+- la limite de tours `max_turns` doit valoir au moins 1 ;
+- (2026-10-27) chaque attaque du catalogue doit être jouable par le moteur, n'y figurer qu'une fois, coûter au moins une action et au plus ce qu'on peut avoir en économisant, et avoir une recharge d'au moins 1 tour ;
+- (2026-10-27) chaque attaque de départ d'un joueur doit être dans le catalogue.
 
 Une configuration où la victoire semble impossible (moins de pions que l'alignement demandé) est **acceptée** : elle sert aux tests, et les invocations pourraient la rendre jouable (à revoir en B5).
 
@@ -31,30 +33,51 @@ Une configuration où la victoire semble impossible (moins de pions que l'aligne
 - Le tour se termine automatiquement quand il ne reste plus d'action.
 - En finissant son tour, on garde jusqu'à `max_banked_actions` actions non utilisées (2 par défaut). Elles s'ajoutent au tour suivant, soit jusqu'à 4 actions.
 
-### Refus (2026-10-26)
+### Refus (2026-10-26, complété le 2026-10-27)
 
 Une action est refusée, sans rien modifier, si :
 
 - la partie est finie ;
+- elle ne répond pas à la décision attendue (par exemple poser un pion pendant le choix d'une cible) ;
 - il ne reste pas assez d'actions ;
 - la case est hors du plateau ou occupée ;
-- la réserve de pions est vide.
+- la réserve de pions est vide ;
+- l'attaque n'existe pas dans l'arsenal, est en recharge, ou n'a aucune cible possible ;
+- le lanceur ou la cible choisie n'est pas permis.
+
+### Attaques (2026-10-27)
+
+- Chaque joueur commence avec des attaques (son **arsenal**). En attendant le draft, elles sont fixées par la configuration (`starting_attacks`).
+- Le **coût** et la **recharge** de chaque attaque viennent du catalogue de la configuration. Par défaut : Ours Rare 2 actions, Ours Épique 3 actions, recharge d'un tour, c'est-à-dire une fois par tour.
+- Lancer une attaque se fait en plusieurs choix : la carte, puis le **pion lanceur** (un de ses pions sur le plateau), puis chaque **cible**. Une attaque n'est proposée que si au moins une attaque complète est possible, et chaque choix proposé mène à une attaque complète.
+- Une attaque commencée va **toujours au bout** ; pendant les choix, aucune autre action n'est possible. L'annulation se fait dans l'interface, avant d'envoyer les choix au moteur.
+- Le **coût est payé** et la carte part **en recharge** au dernier choix, quand l'attaque est résolue. Elle redevient prête au début du tour de son propriétaire, une fois sa recharge écoulée.
+- Un pion **tué** quitte le plateau et retourne dans la réserve de son propriétaire. Il ne laisse pas de tombe (pas avant le Médecin).
+- Une attaque qui dépense les dernières actions du tour termine le tour, comme une pose.
+
+### Ours (2026-10-27)
+
+Attaque de corps à corps sur les 8 cases autour du lanceur, diagonales comprises.
+
+- **Rare** : élimine 1 ennemi adjacent au lanceur.
+- **Épique** : élimine 2 ennemis adjacents au même lanceur, deux pions différents.
+- La Commune et la Légendaire (qui repoussent) ne sont pas encore jouables (B4).
 
 ### Fin de partie (2026-10-26)
 
 Une partie se termine dans l'un de ces trois cas, vérifiés dans cet ordre :
 
 1. **Alignement** : le joueur qui aligne en posant gagne immédiatement.
-2. **Partie figée** : plus aucun joueur ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation. Avec les règles actuelles, c'est le cas quand le plateau est plein, ou quand les deux réserves sont vides. Résultat : **match nul**.
-   Le jeu étant centré sur les attaques, **une réserve vide ne figera plus la partie dès B1** : un joueur qui a un pion lanceur et une attaque utilisable, même en recharge, peut encore agir. Le blocage complet deviendra rare ; le risque principal sera alors la partie sans fin, traité par la limite de tours, la règle de répétition (B1) et l'anti-stagnation.
+2. **Partie figée** : plus aucun joueur ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation. Un joueur peut encore agir s'il peut poser (un pion en réserve et une case libre) ou lancer une attaque qui a une cible, même si elle est en recharge ou qu'il doit économiser pour la payer (2026-10-27). Résultat : **match nul**.
+   Une réserve vide ne fige donc plus la partie tant qu'un contact entre ennemis permet d'attaquer. Le risque principal devient la partie sans fin, traité par la limite de tours et l'anti-stagnation.
 3. **Limite de tours** : à la fin du tour numéro `max_turns` (200 par défaut). Chaque tour d'un joueur compte : 200 tours font 100 tours par joueur. C'est un filet de sécurité pour les bots ; il n'est pas censé arriver dans une vraie partie. Résultat : **match nul**.
 
 Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors alignement est pour l'instant toujours le nul ; un départage pourra le remplacer sans toucher au reste.
 
 ## Pas encore implémenté
 
-- Les attaques et les réactions.
-- La règle d'or.
+- Les autres attaques que l'Ours Rare et Épique, et les réactions.
+- La règle d'or (aucune attaque actuelle ne peut créer une ligne : tuer n'en complète jamais).
 - Le draft et la cache secrète.
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
 
@@ -94,3 +117,4 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 | 2026-10-26 | T5 : chaque partie a une graine choisie à sa création ; une partie se rejoue depuis sa configuration, sa graine et ses actions. Aucune règle de jeu modifiée. |
 | 2026-10-27 | T5 : les compteurs d'actions (restantes et gardées) sont annoncés par un événement à chaque changement. Aucune règle de jeu modifiée. |
 | 2026-10-27 | T6 : le labo affiche la graine, copie et charge une partie en JSON, annule un coup, joue au hasard et montre les cases jouables. Aucune règle de jeu modifiée. |
+| 2026-10-27 | B1 : attaques (arsenal, coût, recharge, choix du lanceur et des cibles, résolution au dernier choix, kill avec retour en réserve) et Ours Rare et Épique. « Partie figée » tient compte des attaques. |
