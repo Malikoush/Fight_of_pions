@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 fight_of_pions = { path = "../moteur", features = ["serde"] }
+bots = { path = "../bots" }
 eframe = { workspace = true }
 serde_json = { workspace = true }
 

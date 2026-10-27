@@ -4,9 +4,14 @@
 
 use crate::intention::Intention;
 use crate::partie::{self, Demande, Nouvelle};
+use crate::reglage::ReglageDePartie;
 use crate::theme;
+use bots::BotKind;
 use eframe::egui;
-use fight_of_pions::{Action, Attack, Event, Game, GameEnd, GameRecord, Outcome, Player, Position};
+use fight_of_pions::{
+    Action, Event, Game, GameConfig, GameEnd, GameRecord, Outcome, Player, Position,
+};
+use std::time::Duration;
 
 pub struct Panneau {
     saisie: String,
@@ -14,8 +19,13 @@ pub struct Panneau {
     journal: Vec<String>,
     coups_au_hasard: u32,
     texte_a_charger: String,
-    /// Les attaques que chaque joueur aura à la prochaine nouvelle partie.
-    attaques_de_test: [Vec<Attack>; 2],
+    /// La configuration que lancera « Nouvelle partie ».
+    prochaine: ReglageDePartie,
+    /// Qui joue chaque joueur : un bot, ou un humain (`None`).
+    controleurs: [Option<BotKind>; 2],
+    /// Les bots jouent-ils seuls, avec cette attente entre deux coups ?
+    lecture_auto: bool,
+    attente_ms: u64,
 }
 
 impl Panneau {
@@ -26,8 +36,53 @@ impl Panneau {
             journal: Vec::new(),
             coups_au_hasard: theme::COUPS_AU_HASARD_DEFAUT,
             texte_a_charger: String::new(),
-            attaques_de_test: partie::attaques_initiales(),
+            prochaine: ReglageDePartie::new("Prochaine partie"),
+            controleurs: [None, None],
+            lecture_auto: true,
+            attente_ms: theme::ATTENTE_BOT_DEFAUT_MS,
         }
+    }
+
+    /// Le bot qui joue ce joueur, ou `None` pour un humain.
+    pub fn controleur(&self, player: Player) -> Option<BotKind> {
+        self.controleurs[player.index()]
+    }
+
+    /// Confie les deux joueurs à ces contrôleurs, et lance la lecture automatique.
+    pub fn confier(&mut self, controleurs: [Option<BotKind>; 2]) {
+        self.controleurs = controleurs;
+        self.lecture_auto = true;
+    }
+
+    /// L'attente entre deux coups d'un bot, ou `None` si les bots ne jouent pas seuls.
+    pub fn attente_des_bots(&self) -> Option<Duration> {
+        self.lecture_auto
+            .then(|| Duration::from_millis(self.attente_ms))
+    }
+
+    /// Arrête la lecture automatique ; les bots ne jouent plus qu'avec « Coup du bot ».
+    pub fn arreter_la_lecture(&mut self) {
+        self.lecture_auto = false;
+    }
+
+    /// La prochaine « Nouvelle partie » repartira de cette configuration.
+    pub fn preparer_la_prochaine(&mut self, config: &GameConfig) {
+        self.prochaine.reprendre(config);
+    }
+
+    /// Affiche un message d'erreur venu de l'interface, pas du moteur.
+    pub fn signaler(&mut self, message: &str) {
+        self.derniere_erreur = Some(message.to_string());
+    }
+
+    fn humains(&self) -> [bool; 2] {
+        self.controleurs.map(|controleur| controleur.is_none())
+    }
+
+    /// Vrai si c'est à un humain de décider : les boutons de jeu ne servent qu'à lui.
+    fn tour_humain(&self, game: &Game) -> bool {
+        game.pending_decision()
+            .is_some_and(|decision| self.controleur(decision.player()).is_none())
     }
 
     pub fn recevoir(&mut self, nouvelle: &Nouvelle) {
@@ -74,32 +129,58 @@ impl Panneau {
         egui::Panel::left("panneau")
             .default_size(theme::LARGEUR_PANNEAU)
             .show_inside(ui, |ui| {
-                ui.heading(theme::TITRE);
-                ui.separator();
-                etat(ui, game);
-                ui.separator();
-                self.commandes(ui, intentions);
-                if let Some(erreur) = &self.derniere_erreur {
-                    ui.colored_label(theme::ERREUR, erreur);
-                }
-                ui.separator();
-                attaques(ui, game, selection_en_cours, intentions);
-                ui.separator();
-                self.outils(ui, game, record, intentions);
-                ui.separator();
-                ui.label("Journal");
+                // Tout le panneau défile : rien ne sort de l'écran, même configuration
+                // dépliée.
                 egui::ScrollArea::vertical()
-                    .stick_to_bottom(true)
+                    .id_salt("panneau_defilant")
                     .auto_shrink(false)
                     .show(ui, |ui| {
-                        for ligne in &self.journal {
-                            ui.label(ligne);
-                        }
+                        self.contenu(ui, game, record, selection_en_cours, intentions);
                     });
             });
     }
 
-    fn commandes(&mut self, ui: &mut egui::Ui, intentions: &mut Vec<Intention>) {
+    fn contenu(
+        &mut self,
+        ui: &mut egui::Ui,
+        game: &Game,
+        record: &GameRecord,
+        selection_en_cours: bool,
+        intentions: &mut Vec<Intention>,
+    ) {
+        ui.heading(theme::TITRE);
+        ui.separator();
+        etat(ui, game);
+        ui.separator();
+        let tour_humain = self.tour_humain(game);
+        self.commandes(ui, tour_humain, intentions);
+        if let Some(erreur) = &self.derniere_erreur {
+            ui.colored_label(theme::ERREUR, erreur);
+        }
+        self.prochaine.show(ui, game.config());
+        ui.separator();
+        self.joueurs(ui, game, intentions);
+        ui.separator();
+        attaques(ui, game, selection_en_cours, tour_humain, intentions);
+        ui.separator();
+        self.outils(ui, record, intentions);
+        ui.separator();
+        ui.label("Journal");
+        egui::ScrollArea::vertical()
+            .id_salt("journal")
+            .stick_to_bottom(true)
+            .max_height(theme::HAUTEUR_JOURNAL)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                for ligne in &self.journal {
+                    ui.label(ligne);
+                }
+            });
+    }
+
+    /// Poser et finir le tour ne servent qu'au tour d'un humain ; une nouvelle partie se
+    /// lance à tout moment.
+    fn commandes(&mut self, ui: &mut egui::Ui, tour_humain: bool, intentions: &mut Vec<Intention>) {
         ui.horizontal(|ui| {
             let champ = ui.add(
                 egui::TextEdit::singleline(&mut self.saisie)
@@ -107,7 +188,10 @@ impl Panneau {
                     .desired_width(theme::LARGEUR_SAISIE),
             );
             let entree = champ.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            if ui.button("Poser").clicked() || entree {
+            let poser = ui
+                .add_enabled(tour_humain, egui::Button::new("Poser"))
+                .clicked();
+            if poser || (entree && tour_humain) {
                 match self.saisie.trim().parse::<Position>() {
                     Ok(pos) => {
                         intentions.push(Intention::Demande(Demande::Agir(Action::Place(pos))));
@@ -119,27 +203,66 @@ impl Panneau {
                 champ.request_focus();
             }
         });
-        ui.horizontal(|ui| {
-            if ui.button("Finir le tour").clicked() {
-                intentions.push(Intention::Demande(Demande::Agir(Action::EndTurn)));
-            }
-            if ui.button("Nouvelle partie").clicked() {
-                intentions.push(Intention::Demande(Demande::NouvellePartie {
-                    attaques: self.attaques_de_test.clone(),
-                }));
-            }
-        });
+        if ui
+            .add_enabled(tour_humain, egui::Button::new("Finir le tour"))
+            .clicked()
+        {
+            intentions.push(Intention::Demande(Demande::Agir(Action::EndTurn)));
+        }
+        // La configuration vient de « Prochaine partie » ; incohérente, elle ne se lance pas.
+        let config = self.prochaine.config();
+        if ui
+            .add_enabled(config.is_ok(), egui::Button::new("Nouvelle partie"))
+            .on_disabled_hover_text("La configuration de la prochaine partie est incohérente.")
+            .clicked()
+            && let Ok(config) = config
+        {
+            intentions.push(Intention::Demande(Demande::NouvellePartie {
+                config: config.clone(),
+                graine: None,
+            }));
+        }
     }
 
-    /// Les outils de test : annuler, jouer au hasard, copier et charger une partie,
-    /// choisir les attaques de la prochaine partie.
-    fn outils(
-        &mut self,
-        ui: &mut egui::Ui,
-        game: &Game,
-        record: &GameRecord,
-        intentions: &mut Vec<Intention>,
-    ) {
+    /// Qui joue chaque joueur, et comment les bots jouent : seuls, avec une attente
+    /// réglable, ou coup par coup.
+    fn joueurs(&mut self, ui: &mut egui::Ui, game: &Game, intentions: &mut Vec<Intention>) {
+        ui.label("Joueurs");
+        for player in [Player::One, Player::Two] {
+            let controleur = &mut self.controleurs[player.index()];
+            egui::ComboBox::from_label(theme::nom_joueur(player))
+                .selected_text(nom_controleur(*controleur))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(controleur, None, theme::HUMAIN);
+                    for sorte in BotKind::ALL {
+                        ui.selectable_value(controleur, Some(sorte), sorte.name());
+                    }
+                });
+        }
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut self.lecture_auto, "Lecture automatique");
+            ui.add(
+                egui::Slider::new(
+                    &mut self.attente_ms,
+                    theme::ATTENTE_BOT_MIN_MS..=theme::ATTENTE_BOT_MAX_MS,
+                )
+                .suffix(" ms"),
+            );
+        });
+        let bot = game
+            .pending_decision()
+            .and_then(|decision| self.controleur(decision.player()));
+        if ui
+            .add_enabled(bot.is_some(), egui::Button::new("Coup du bot"))
+            .clicked()
+            && let Some(sorte) = bot
+        {
+            intentions.push(Intention::Demande(Demande::CoupDuBot(sorte)));
+        }
+    }
+
+    /// Les outils de test : annuler, jouer au hasard, copier et charger une partie.
+    fn outils(&mut self, ui: &mut egui::Ui, record: &GameRecord, intentions: &mut Vec<Intention>) {
         ui.label("Outils");
         ui.horizontal(|ui| {
             let peut_annuler = !record.actions.is_empty();
@@ -147,7 +270,9 @@ impl Panneau {
                 .add_enabled(peut_annuler, egui::Button::new("Annuler le coup"))
                 .clicked()
             {
-                intentions.push(Intention::Demande(Demande::AnnulerCoup));
+                intentions.push(Intention::Demande(Demande::AnnulerCoup {
+                    humains: self.humains(),
+                }));
             }
             if ui.button("Copier la partie").clicked() {
                 match partie::exporter(record) {
@@ -187,40 +312,16 @@ impl Panneau {
                 self.texte_a_charger.clone(),
             )));
         }
-        self.arsenal_de_test(ui, game);
-    }
-
-    /// Les attaques de chaque joueur pour la prochaine « Nouvelle partie », parmi celles
-    /// du catalogue.
-    fn arsenal_de_test(&mut self, ui: &mut egui::Ui, game: &Game) {
-        egui::CollapsingHeader::new("Arsenal de la prochaine partie").show(ui, |ui| {
-            for player in [Player::One, Player::Two] {
-                ui.label(theme::nom_joueur(player));
-                let choisies = &mut self.attaques_de_test[player.index()];
-                for entree in &game.config().attack_catalog {
-                    let mut presente = choisies.contains(&entree.attack);
-                    if ui
-                        .checkbox(&mut presente, entree.attack.to_string())
-                        .changed()
-                    {
-                        if presente {
-                            choisies.push(entree.attack);
-                        } else {
-                            choisies.retain(|attaque| *attaque != entree.attack);
-                        }
-                    }
-                }
-            }
-        });
     }
 }
 
 /// L'arsenal du joueur courant : chaque attaque, son coût, sa recharge, et un bouton
-/// « Lancer » activé seulement si le moteur l'autorise.
+/// « Lancer » activé seulement si le moteur l'autorise et que c'est à un humain de jouer.
 fn attaques(
     ui: &mut egui::Ui,
     game: &Game,
     selection_en_cours: bool,
+    tour_humain: bool,
     intentions: &mut Vec<Intention>,
 ) {
     ui.label("Attaques");
@@ -241,7 +342,8 @@ fn attaques(
             tours => format!(", recharge {tours} tours"),
         };
         ui.horizontal(|ui| {
-            let permise = !selection_en_cours && legales.contains(&Action::UseAttack(slot));
+            let permise =
+                tour_humain && !selection_en_cours && legales.contains(&Action::UseAttack(slot));
             if ui
                 .add_enabled(permise, egui::Button::new("Lancer"))
                 .clicked()
@@ -285,6 +387,10 @@ fn etat(ui: &mut egui::Ui, game: &Game) {
             game.banked_actions(player)
         ));
     }
+}
+
+fn nom_controleur(controleur: Option<BotKind>) -> &'static str {
+    controleur.map_or(theme::HUMAIN, BotKind::name)
 }
 
 /// La ligne de journal d'un événement, ou `None` pour ceux qui le rendraient illisible

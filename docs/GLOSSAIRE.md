@@ -4,7 +4,7 @@ Dernière mise à jour : 2026-10-27.
 
 Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de règles et dans le code.
 
-- **Code du moteur** : les noms sont en anglais, sauf « Pion », qui est le nom même du jeu et s'écrit ainsi partout : `Pion`, `PionId`, `PionPlaced`, `pions_per_player`, `reserve_pions`. Jamais « pawn ». Les commentaires et la doc sont en français. Le labo, outil interne, est entièrement en français.
+- **Code du moteur** : les noms sont en anglais, sauf « Pion », qui est le nom même du jeu et s'écrit ainsi partout : `Pion`, `PionId`, `PionPlaced`, `pions_per_player`, `reserve_pions`. Jamais « pawn ». Les commentaires et la doc sont en français. Le labo, outil interne, est entièrement en français. Les bots suivent la convention du moteur : c'est une bibliothèque, que les futurs `py_bindings` réutiliseront.
 - **Joueur** : le texte affiché est en français, via `Display` ou le thème du client.
 - **Vocabulaire du GDD** : en cas de doute, c'est lui qui gagne (« attaque », pas « pouvoir »).
 
@@ -81,6 +81,47 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Effet en cours | `ActiveEffect` (cible) | Un effet qui dure plusieurs tours (immobilisé, protégé…) |
 | Réaction | attaque avec déclencheur (cible) | Attaque jouée pendant le tour adverse, payée avec les actions en réserve |
 | Axe d'attaque | aucun (documentation seulement) | Crowd control, Mouvement, Kill, Invocation, Buff, Spécial : sert à l'équilibrage, pas au code. Toujours dire « axe d'attaque », pour ne pas confondre avec l'axe d'alignement. |
+
+## Bots et arène
+
+| Terme du jeu | Nom dans le code | Rôle |
+|---|---|---|
+| Bot | `Bot` (membre `bots/`) | Un joueur automatique, sans état : il choisit parmi `legal_actions()` et ne contient aucune règle |
+| Bot aléatoire | `RandomBot` | Joue une action légale au hasard : l'étalon |
+| Bot glouton | `GreedyBot` | Gagne s'il peut, bloque les menaces, puis pose sur une des meilleures cases selon les fenêtres |
+| Glouton, banquier | `Banking::SpendAll`, `Banking::KeepMax` | Le glouton dépense toutes ses actions ; le banquier garde le maximum permis, sauf pour gagner ou se défendre |
+| Fenêtre | `Windows`, `WindowContent` | Une suite de `align_to_win` cases consécutives sur un axe d'alignement. Sans pion adverse, c'est une ligne encore possible. |
+| Menace | `threats` (interne aux bots) | Une fenêtre que l'adversaire peut finir en posant à son prochain tour |
+| Poses possibles | `placement_budget` (interne) | Combien de pions un joueur peut poser dans son tour (en cours, ou le prochain lu sur une copie) : actions, coût de la pose et réserve |
+| Plan d'attaque | `AttackPlan` (interne) | Une attaque jouée jusqu'au bout sur une copie de la partie, pour voir son effet sans connaître sa règle |
+| Arène | `bots::run`, `bots::run_pairs`, `cargo arene` | Joue N parties entre deux bots (graines 0 à N−1) et en fait le bilan ; `run_pairs` le fait pour plusieurs paires en parallèle |
+| Bots disponibles | `BotKind` | La liste des bots proposés par l'arène et le labo : aléatoire, glouton, banquier |
+| Paires de l'arène | `STANDARD_PAIRS` | Les paires (joueur 1, joueur 2) jouées par défaut |
+| Règle actuelle | `current_rules()` | La configuration par défaut où chaque joueur a toutes les attaques : la première variante, et la partie de départ du labo |
+| Variante | `Variant`, `variants()` | Une configuration nommée, comparée à la règle actuelle ; la liste est partagée par l'arène et le labo |
+| Début d'une partie de l'arène | `start_game` | La partie et le hasard de ses bots, initialisés avec la même graine ; le labo commence ainsi ses parties |
+| Partie enregistrée | `record_game` | Une partie précise de l'arène (configuration, graine, deux bots) sous forme de `GameRecord` : la référence qui vérifie que le labo revoit la même partie |
+| Bilan | `Report` | Victoires par place, nuls par raison, durée, attaques par carte, pions tués, tours où l'on garde des actions, passes, refus |
+| Passe | `Report::passes` | Un tour fini sans aucune action |
+| Tour où l'on garde | `Report::turns_keeping_actions` | Un tour fini après avoir agi, avec des actions gardées pour le suivant (jamais compté aussi comme passe) |
+| Fourchette à 95 % | `Report` (affichage), `wilson_interval` | Les valeurs plausibles d'un pourcentage du bilan (victoires, nuls), vu le nombre de parties : intervalle de Wilson à 95 %. Avec 10 parties, 70 % de victoires donne une fourchette d'environ 40 à 89 % ; deux bilans dont les fourchettes se chevauchent largement ne permettent pas de conclure. |
+| Refus | `Report::refused` | Une partie abandonnée parce qu'un bot a proposé une action refusée, ou aucune : toujours un bug. Elle ne laisse que ce refus dans le bilan. |
+
+## Labo
+
+Le labo est entièrement en français, noms du code compris.
+
+| Terme | Nom dans le code | Rôle |
+|---|---|---|
+| Écran | `Ecran::Partie`, `Ecran::Arene` | Les deux écrans du labo : jouer ou regarder une partie, simuler des parties entre bots |
+| Contrôleur | `Panneau::controleur` | Qui joue un joueur : un humain (`None`) ou un bot (`BotKind`) |
+| Lecture automatique | `Panneau::attente_des_bots` | Les bots jouent seuls, avec une attente réglable entre deux coups ; elle s'arrête si le coup d'un bot est refusé |
+| Coup du bot | `Demande::CoupDuBot` | Un coup joué par un bot via `partie.rs` : une action, et toute la suite si c'est une attaque |
+| Revoir | `Intention::Revoir` | Ouvrir dans l'écran Partie une partie de l'arène (configuration, graine, bots), qui se rejoue à l'identique, même après une annulation |
+| Hasard avant chaque action | `Partie::hasard_avant` | L'état du hasard des bots avant chaque action enregistrée : annuler le remet, pour que les bots rejouent les mêmes coups |
+| Simulation | `Simulation` (écran Arène) | Ce qui est demandé à l'arène : configuration (et d'où elle vient), paires, nombre de parties |
+| Réglage de partie | `ReglageDePartie` | Une configuration qu'on règle à l'écran : on part d'une variante ou de la partie en cours, puis on retouche chaque réglage (plateau, pions, actions, catalogue, arsenaux). `GameConfig::validate` décide si elle se lance. Il y en a un par écran : la **prochaine partie** (que lance « Nouvelle partie ») et la **configuration simulée** (sur laquelle l'arène fait jouer les bots). |
+| Retouchée | `ReglageDePartie::retouchee` | La configuration réglée n'est plus exactement celle dont on est parti (variante ou partie en cours) |
 
 ## Cartes avant la partie (cible, B10)
 

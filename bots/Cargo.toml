@@ -1,0 +1,10 @@
+[package]
+name = "bots"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+fight_of_pions = { path = "../moteur" }
+
+[lints]
+workspace = true

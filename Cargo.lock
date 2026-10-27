@@ -123,6 +123,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bots"
+version = "0.1.0"
+dependencies = [
+ "fight_of_pions",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1046,6 +1053,7 @@ dependencies = [
 name = "labo"
 version = "0.1.0"
 dependencies = [
+ "bots",
  "eframe",
  "fight_of_pions",
  "serde_json",
