@@ -1,11 +1,11 @@
 mod app;
+mod intention;
 mod panneau;
 mod partie;
 mod plateau;
 mod theme;
 
 use eframe::egui;
-use fight_of_pions::GameConfig;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -16,7 +16,7 @@ fn main() -> eframe::Result {
         theme::TITRE,
         options,
         Box::new(|_| {
-            let labo = app::Labo::new(GameConfig::default()).map_err(|e| e.to_string())?;
+            let labo = app::Labo::new(partie::config_initiale()).map_err(|e| e.to_string())?;
             Ok(Box::new(labo))
         }),
     )

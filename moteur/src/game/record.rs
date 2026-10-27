@@ -60,7 +60,7 @@ impl GameRecord {
     /// Erreur si la configuration est invalide ou si une action est refusée :
     /// l'enregistrement ne vient alors pas de cette version du moteur, ou a été modifié.
     pub fn replay(&self) -> Result<Game, ReplayError> {
-        let mut game = Game::new(self.config, self.seed).map_err(ReplayError::Start)?;
+        let mut game = Game::new(self.config.clone(), self.seed).map_err(ReplayError::Start)?;
         for (index, &action) in self.actions.iter().enumerate() {
             game.apply(action)
                 .map_err(|error| ReplayError::RefusedAction { index, error })?;

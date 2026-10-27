@@ -35,6 +35,13 @@ pub const CONTOUR_PION: Color32 = Color32::from_rgb(60, 30, 50);
 pub const MARQUE_JOUABLE: Color32 = Color32::from_rgb(194, 24, 91);
 /// Rayon de ce point, en fraction du côté d'une case.
 pub const RAYON_MARQUE_JOUABLE: f32 = 0.07;
+/// Anneau sur les cases qu'on peut choisir pendant une attaque (lanceur ou cible).
+pub const ANNEAU_CHOIX: Color32 = Color32::from_rgb(211, 47, 47);
+/// Anneau sur le pion lanceur déjà choisi.
+pub const ANNEAU_LANCEUR: Color32 = Color32::from_rgb(255, 160, 0);
+/// Rayon de ces anneaux, en fraction du côté d'une case, et leur épaisseur en points.
+pub const RAYON_ANNEAU: f32 = 0.46;
+pub const EPAISSEUR_ANNEAU: f32 = 3.0;
 
 pub fn couleur_joueur(player: Player) -> Color32 {
     match player {

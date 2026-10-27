@@ -1,23 +1,34 @@
-//! Mesure combien de parties complètes, jouées au hasard, le moteur enchaîne par seconde.
-//! C'est la référence de performance pour les bots : on n'optimise rien sans elle.
+//! Mesure combien de parties complètes, jouées au hasard, le moteur enchaîne par seconde,
+//! et comment elles se terminent. C'est la référence de performance pour les bots (on
+//! n'optimise rien sans elle), et un premier indicateur pour l'équilibrage.
 //!
 //! Lancer : `cargo run --release -p fight_of_pions --example random_games`
 
-use fight_of_pions::{Game, GameConfig, Rng};
+use fight_of_pions::{EndReason, Game, GameConfig, Rng};
 use std::time::Instant;
 
-/// Assez de parties pour une mesure d'environ une seconde, donc stable.
-const GAMES: u64 = 20_000;
-
 fn main() {
-    let config = GameConfig::default();
+    measure("sans attaque", GameConfig::default(), 20_000);
+
+    // Chaque joueur a toutes les attaques jouables du catalogue. Les parties sont bien
+    // plus longues : moins de parties, même durée.
+    measure(
+        "avec attaques",
+        GameConfig::default().with_full_arsenals(),
+        2_000,
+    );
+}
+
+fn measure(label: &str, config: GameConfig, games: u64) {
     let start = Instant::now();
     let mut actions = 0_u64;
+    // Fins par alignement, partie figée, limite de tours.
+    let mut ends = [0_u64; 3];
 
-    for seed in 0..GAMES {
+    for seed in 0..games {
         let mut rng = Rng::new(seed);
-        let Ok(mut game) = Game::new(config, seed) else {
-            eprintln!("configuration invalide");
+        let Ok(mut game) = Game::new(config.clone(), seed) else {
+            eprintln!("{label} : configuration invalide");
             return;
         };
         while game.end().is_none() {
@@ -27,18 +38,32 @@ fn main() {
             };
             // Une action listée par `legal_actions` et refusée serait un bug du moteur.
             if let Err(error) = game.apply(action) {
-                eprintln!("partie {seed} : action légale refusée ({action:?}) : {error}");
+                eprintln!("{label}, partie {seed} : action légale refusée ({action:?}) : {error}");
                 return;
             }
             actions += 1;
         }
+        match game.end().map(|end| end.reason) {
+            Some(EndReason::Alignment) => ends[0] += 1,
+            Some(EndReason::Frozen) => ends[1] += 1,
+            Some(EndReason::TurnLimit) => ends[2] += 1,
+            None => {}
+        }
     }
 
     let seconds = start.elapsed().as_secs_f64();
-    println!("{GAMES} parties, {actions} actions en {seconds:.2} s");
+    let percent = |count: u64| 100.0 * count as f64 / games as f64;
     println!(
-        "{:.0} parties/s, {:.0} actions/s",
-        GAMES as f64 / seconds,
-        actions as f64 / seconds
+        "{label} : {games} parties en {seconds:.2} s — {:.0} parties/s, {:.0} actions/s, \
+         {:.0} actions par partie",
+        games as f64 / seconds,
+        actions as f64 / seconds,
+        actions as f64 / games as f64
+    );
+    println!(
+        "    fins : alignement {:.0} %, figée {:.0} %, limite de tours {:.0} %",
+        percent(ends[0]),
+        percent(ends[1]),
+        percent(ends[2])
     );
 }

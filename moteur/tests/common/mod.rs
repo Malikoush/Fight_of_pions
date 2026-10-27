@@ -1,7 +1,31 @@
 //! Outils partagés par les tests d'intégration du moteur.
 #![allow(dead_code)] // chaque fichier de tests n'utilise qu'une partie de ces outils
 
-use fight_of_pions::{Action, Event, Game, GameConfig, Pion, Position, Rng};
+use fight_of_pions::{
+    Action, Attack, AttackKind, AttackStats, CatalogEntry, Event, Game, GameConfig, Pion, Position,
+    Rarity, Rng,
+};
+
+/// L'Ours dans cette rareté.
+pub fn ours(rarity: Rarity) -> Attack {
+    Attack {
+        kind: AttackKind::Ours,
+        rarity,
+    }
+}
+
+/// La configuration par défaut, où chaque joueur commence avec ces attaques.
+pub fn config_with_attacks(player_one: Vec<Attack>, player_two: Vec<Attack>) -> GameConfig {
+    GameConfig {
+        starting_attacks: [player_one, player_two],
+        ..GameConfig::default()
+    }
+}
+
+/// L'action « choisir la case » (rangée, colonne) : lanceur ou cible d'une attaque.
+pub fn choose(row: usize, col: usize) -> Action {
+    Action::Choose(Position { row, col })
+}
 
 /// L'action « poser un pion » sur la case (rangée, colonne).
 pub fn place(row: usize, col: usize) -> Action {
@@ -46,11 +70,31 @@ pub fn random_below(rng: &mut Rng, len: usize) -> usize {
 }
 
 /// Une configuration valide tirée au hasard, petite pour que les fins arrivent vite.
-/// Elle couvre les cas où il faut économiser ses actions pour pouvoir poser.
+/// Elle couvre les cas où il faut économiser ses actions pour poser ou attaquer, et donne
+/// souvent des attaques aux joueurs (parfois deux fois la même carte).
 pub fn random_config(rng: &mut Rng) -> GameConfig {
-    let board_size = 2 + random_below(rng, 3);
+    let board_size = 2 + random_below(rng, 4);
     let actions_per_turn = 1 + random_below(rng, 2) as u32;
     let max_banked_actions = random_below(rng, 3) as u32;
+    let max_actions = (actions_per_turn + max_banked_actions) as usize;
+    let attacks = [ours(Rarity::Rare), ours(Rarity::Epic)];
+    let attack_catalog = attacks
+        .iter()
+        .map(|&attack| CatalogEntry {
+            attack,
+            stats: AttackStats {
+                cost: 1 + random_below(rng, max_actions) as u32,
+                cooldown: 1 + random_below(rng, 2) as u32,
+            },
+        })
+        .collect();
+    let mut random_arsenal = || -> Vec<Attack> {
+        (0..random_below(rng, 4))
+            .map(|_| attacks[random_below(rng, attacks.len())])
+            .collect()
+    };
+    let starting_attacks = [random_arsenal(), random_arsenal()];
+
     let config = GameConfig {
         board_size,
         align_to_win: 2 + random_below(rng, board_size - 1),
@@ -58,8 +102,10 @@ pub fn random_config(rng: &mut Rng) -> GameConfig {
         first_turn_actions: 1 + random_below(rng, 5) as u32,
         actions_per_turn,
         max_banked_actions,
-        place_cost: 1 + random_below(rng, (actions_per_turn + max_banked_actions) as usize) as u32,
+        place_cost: 1 + random_below(rng, max_actions) as u32,
         max_turns: 1 + random_below(rng, 60) as u32,
+        attack_catalog,
+        starting_attacks,
     };
     assert_eq!(config.validate(), Ok(()), "{config:?}");
     config

@@ -1,9 +1,9 @@
-use crate::Position;
 use crate::error::GameError;
+use crate::{Attack, AttackKind, AttackStats, CatalogEntry, Position, Rarity};
 use std::fmt;
 
-/// Tous les réglages chiffrés d'une partie, vérifiés par [`GameConfig::validate`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Tous les réglages d'une partie, vérifiés par [`GameConfig::validate`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct GameConfig {
@@ -27,6 +27,12 @@ pub struct GameConfig {
     /// La partie s'arrête (match nul) à la fin de ce tour, au moins 1. Filet de sécurité
     /// pour les bots : une vraie partie ne doit pas l'atteindre.
     pub max_turns: u32,
+    /// Le catalogue des attaques : le coût et la recharge de chaque variante jouable.
+    pub attack_catalog: Vec<CatalogEntry>,
+    /// Les attaques de chaque joueur au début de la partie (indice : `Player::index`).
+    /// En attendant le draft (B10), c'est ici qu'on les choisit ; plus tard, ce sera la
+    /// cache secrète de chaque joueur.
+    pub starting_attacks: [Vec<Attack>; 2],
 }
 
 impl Default for GameConfig {
@@ -40,8 +46,23 @@ impl Default for GameConfig {
             max_banked_actions: 2,
             place_cost: 1,
             max_turns: 200,
+            attack_catalog: default_attack_catalog(),
+            starting_attacks: [Vec::new(), Vec::new()],
         }
     }
+}
+
+/// Les variantes que le moteur sait jouer, avec les coûts indicatifs du GDD v0.2
+/// (Rare 2 actions, Épique 3) et une recharge d'un tour (« une fois par tour »).
+fn default_attack_catalog() -> Vec<CatalogEntry> {
+    let entry = |kind, rarity, cost| CatalogEntry {
+        attack: Attack { kind, rarity },
+        stats: AttackStats { cost, cooldown: 1 },
+    };
+    vec![
+        entry(AttackKind::Ours, Rarity::Rare, 2),
+        entry(AttackKind::Ours, Rarity::Epic, 3),
+    ]
 }
 
 /// Ce qui rend une configuration incohérente.
@@ -63,6 +84,18 @@ pub enum ConfigError {
     PlacementUnreachable,
     /// La limite de tours vaudrait 0 : la partie finirait avant de commencer.
     NoTurnLimit,
+    /// Cette attaque du catalogue n'est pas (encore) jouable par le moteur.
+    AttackNotImplemented(Attack),
+    /// Cette attaque apparaît deux fois dans le catalogue.
+    AttackListedTwice(Attack),
+    /// Cette attaque ne coûterait rien.
+    FreeAttack(Attack),
+    /// Cette attaque coûterait plus que le maximum d'actions d'un tour, même en économisant.
+    AttackUnreachable(Attack),
+    /// Cette attaque n'aurait pas de recharge : elle pourrait servir plusieurs fois par tour.
+    NoCooldown(Attack),
+    /// Un joueur commencerait avec une attaque absente du catalogue.
+    AttackNotInCatalog(Attack),
 }
 
 impl fmt::Display for ConfigError {
@@ -94,6 +127,30 @@ impl fmt::Display for ConfigError {
                 "poser un pion coûte plus que le maximum d'actions d'un tour, même en économisant"
             ),
             ConfigError::NoTurnLimit => write!(f, "la limite de tours doit valoir au moins 1"),
+            ConfigError::AttackNotImplemented(attack) => {
+                write!(f, "l'attaque {} n'est pas encore jouable", attack)
+            }
+            ConfigError::AttackListedTwice(attack) => {
+                write!(f, "l'attaque {} est deux fois dans le catalogue", attack)
+            }
+            ConfigError::FreeAttack(attack) => {
+                write!(f, "l'attaque {} doit coûter au moins une action", attack)
+            }
+            ConfigError::AttackUnreachable(attack) => write!(
+                f,
+                "l'attaque {} coûte plus que le maximum d'actions d'un tour, même en économisant",
+                attack
+            ),
+            ConfigError::NoCooldown(attack) => {
+                write!(
+                    f,
+                    "l'attaque {} doit avoir une recharge d'au moins 1 tour",
+                    attack
+                )
+            }
+            ConfigError::AttackNotInCatalog(attack) => {
+                write!(f, "l'attaque {} n'est pas dans le catalogue", attack)
+            }
         }
     }
 }
@@ -105,6 +162,32 @@ impl GameConfig {
     pub const MAX_BOARD_SIZE: usize = Position::NAMED_COLUMNS;
     /// La plus courte ligne gagnante acceptée.
     pub const MIN_ALIGN_TO_WIN: usize = 2;
+
+    /// Toutes les attaques du catalogue, dans son ordre.
+    pub fn catalog_attacks(&self) -> Vec<Attack> {
+        self.attack_catalog
+            .iter()
+            .map(|entry| entry.attack)
+            .collect()
+    }
+
+    /// Cette configuration, où chaque joueur commence avec toutes les attaques du
+    /// catalogue : pratique pour essayer les attaques en attendant le draft.
+    pub fn with_full_arsenals(self) -> GameConfig {
+        let all = self.catalog_attacks();
+        GameConfig {
+            starting_attacks: [all.clone(), all],
+            ..self
+        }
+    }
+
+    /// Le coût et la recharge d'une attaque, si elle est dans le catalogue.
+    pub fn attack_stats(&self, attack: Attack) -> Option<AttackStats> {
+        self.attack_catalog
+            .iter()
+            .find(|entry| entry.attack == attack)
+            .map(|entry| entry.stats)
+    }
 
     /// Vérifie que les réglages sont cohérents entre eux.
     pub fn validate(&self) -> Result<(), GameError> {
@@ -137,7 +220,36 @@ impl GameConfig {
         if self.max_turns == 0 {
             return Some(ConfigError::NoTurnLimit);
         }
-        None
+        self.find_attack_problem()
+    }
+
+    fn find_attack_problem(&self) -> Option<ConfigError> {
+        for (index, entry) in self.attack_catalog.iter().enumerate() {
+            let attack = entry.attack;
+            if !attack.is_implemented() {
+                return Some(ConfigError::AttackNotImplemented(attack));
+            }
+            if self.attack_catalog[..index]
+                .iter()
+                .any(|earlier| earlier.attack == attack)
+            {
+                return Some(ConfigError::AttackListedTwice(attack));
+            }
+            if entry.stats.cost == 0 {
+                return Some(ConfigError::FreeAttack(attack));
+            }
+            if entry.stats.cost > self.max_actions_in_a_turn() {
+                return Some(ConfigError::AttackUnreachable(attack));
+            }
+            if entry.stats.cooldown == 0 {
+                return Some(ConfigError::NoCooldown(attack));
+            }
+        }
+        self.starting_attacks
+            .iter()
+            .flatten()
+            .find(|attack| self.attack_stats(**attack).is_none())
+            .map(|attack| ConfigError::AttackNotInCatalog(*attack))
     }
 
     /// Le plus d'actions qu'un joueur peut avoir en un tour ordinaire, en ayant économisé.
@@ -259,6 +371,92 @@ mod tests {
             ..GameConfig::default()
         };
         assert_eq!(problem(config), Some(ConfigError::NoTurnLimit));
+    }
+
+    fn ours(rarity: Rarity) -> Attack {
+        Attack {
+            kind: AttackKind::Ours,
+            rarity,
+        }
+    }
+
+    fn with_catalog(attack: Attack, cost: u32, cooldown: u32) -> GameConfig {
+        GameConfig {
+            attack_catalog: vec![CatalogEntry {
+                attack,
+                stats: AttackStats { cost, cooldown },
+            }],
+            ..GameConfig::default()
+        }
+    }
+
+    #[test]
+    fn default_catalog_holds_the_playable_ours() {
+        let config = GameConfig::default();
+        assert_eq!(
+            config.attack_stats(ours(Rarity::Rare)),
+            Some(AttackStats {
+                cost: 2,
+                cooldown: 1
+            })
+        );
+        assert!(config.attack_stats(ours(Rarity::Common)).is_none());
+    }
+
+    #[test]
+    fn catalog_only_holds_attacks_the_engine_can_play() {
+        let attack = ours(Rarity::Common);
+        assert_eq!(
+            problem(with_catalog(attack, 1, 1)),
+            Some(ConfigError::AttackNotImplemented(attack))
+        );
+    }
+
+    #[test]
+    fn an_attack_cannot_be_listed_twice() {
+        let mut config = GameConfig::default();
+        config.attack_catalog.push(config.attack_catalog[0]);
+        assert_eq!(
+            problem(config),
+            Some(ConfigError::AttackListedTwice(ours(Rarity::Rare)))
+        );
+    }
+
+    #[test]
+    fn an_attack_costs_at_least_one_reachable_action() {
+        let attack = ours(Rarity::Rare);
+        assert_eq!(
+            problem(with_catalog(attack, 0, 1)),
+            Some(ConfigError::FreeAttack(attack))
+        );
+        // 2 actions par tour + 2 gardées = 4 au plus.
+        assert_eq!(problem(with_catalog(attack, 4, 1)), None);
+        assert_eq!(
+            problem(with_catalog(attack, 5, 1)),
+            Some(ConfigError::AttackUnreachable(attack))
+        );
+    }
+
+    #[test]
+    fn an_attack_recharges_for_at_least_one_turn() {
+        let attack = ours(Rarity::Rare);
+        assert_eq!(
+            problem(with_catalog(attack, 2, 0)),
+            Some(ConfigError::NoCooldown(attack))
+        );
+    }
+
+    #[test]
+    fn starting_attacks_must_be_in_the_catalog() {
+        let config = GameConfig {
+            attack_catalog: Vec::new(),
+            starting_attacks: [vec![ours(Rarity::Rare)], Vec::new()],
+            ..GameConfig::default()
+        };
+        assert_eq!(
+            problem(config),
+            Some(ConfigError::AttackNotInCatalog(ours(Rarity::Rare)))
+        );
     }
 
     #[test]

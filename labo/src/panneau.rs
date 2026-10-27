@@ -2,10 +2,11 @@
 //! journal. Les lignes de jeu du journal viennent uniquement des `Nouvelle` reçues ; seules
 //! les actions propres au labo (copier la partie) y ajoutent leur propre ligne.
 
+use crate::intention::Intention;
 use crate::partie::{self, Demande, Nouvelle};
 use crate::theme;
 use eframe::egui;
-use fight_of_pions::{Action, Event, Game, GameEnd, GameRecord, Outcome, Player, Position};
+use fight_of_pions::{Action, Attack, Event, Game, GameEnd, GameRecord, Outcome, Player, Position};
 
 pub struct Panneau {
     saisie: String,
@@ -13,6 +14,8 @@ pub struct Panneau {
     journal: Vec<String>,
     coups_au_hasard: u32,
     texte_a_charger: String,
+    /// Les attaques que chaque joueur aura à la prochaine nouvelle partie.
+    attaques_de_test: [Vec<Attack>; 2],
 }
 
 impl Panneau {
@@ -23,6 +26,7 @@ impl Panneau {
             journal: Vec::new(),
             coups_au_hasard: theme::COUPS_AU_HASARD_DEFAUT,
             texte_a_charger: String::new(),
+            attaques_de_test: partie::attaques_initiales(),
         }
     }
 
@@ -64,7 +68,8 @@ impl Panneau {
         ui: &mut egui::Ui,
         game: &Game,
         record: &GameRecord,
-        demandes: &mut Vec<Demande>,
+        selection_en_cours: bool,
+        intentions: &mut Vec<Intention>,
     ) {
         egui::Panel::left("panneau")
             .default_size(theme::LARGEUR_PANNEAU)
@@ -73,12 +78,14 @@ impl Panneau {
                 ui.separator();
                 etat(ui, game);
                 ui.separator();
-                self.commandes(ui, demandes);
+                self.commandes(ui, intentions);
                 if let Some(erreur) = &self.derniere_erreur {
                     ui.colored_label(theme::ERREUR, erreur);
                 }
                 ui.separator();
-                self.outils(ui, record, demandes);
+                attaques(ui, game, selection_en_cours, intentions);
+                ui.separator();
+                self.outils(ui, game, record, intentions);
                 ui.separator();
                 ui.label("Journal");
                 egui::ScrollArea::vertical()
@@ -92,7 +99,7 @@ impl Panneau {
             });
     }
 
-    fn commandes(&mut self, ui: &mut egui::Ui, demandes: &mut Vec<Demande>) {
+    fn commandes(&mut self, ui: &mut egui::Ui, intentions: &mut Vec<Intention>) {
         ui.horizontal(|ui| {
             let champ = ui.add(
                 egui::TextEdit::singleline(&mut self.saisie)
@@ -103,7 +110,7 @@ impl Panneau {
             if ui.button("Poser").clicked() || entree {
                 match self.saisie.trim().parse::<Position>() {
                     Ok(pos) => {
-                        demandes.push(Demande::Agir(Action::Place(pos)));
+                        intentions.push(Intention::Demande(Demande::Agir(Action::Place(pos))));
                         self.saisie.clear();
                     }
                     Err(message) => self.derniere_erreur = Some(message),
@@ -114,16 +121,25 @@ impl Panneau {
         });
         ui.horizontal(|ui| {
             if ui.button("Finir le tour").clicked() {
-                demandes.push(Demande::Agir(Action::EndTurn));
+                intentions.push(Intention::Demande(Demande::Agir(Action::EndTurn)));
             }
             if ui.button("Nouvelle partie").clicked() {
-                demandes.push(Demande::NouvellePartie);
+                intentions.push(Intention::Demande(Demande::NouvellePartie {
+                    attaques: self.attaques_de_test.clone(),
+                }));
             }
         });
     }
 
-    /// Les outils de test : annuler, jouer au hasard, copier et charger une partie.
-    fn outils(&mut self, ui: &mut egui::Ui, record: &GameRecord, demandes: &mut Vec<Demande>) {
+    /// Les outils de test : annuler, jouer au hasard, copier et charger une partie,
+    /// choisir les attaques de la prochaine partie.
+    fn outils(
+        &mut self,
+        ui: &mut egui::Ui,
+        game: &Game,
+        record: &GameRecord,
+        intentions: &mut Vec<Intention>,
+    ) {
         ui.label("Outils");
         ui.horizontal(|ui| {
             let peut_annuler = !record.actions.is_empty();
@@ -131,7 +147,7 @@ impl Panneau {
                 .add_enabled(peut_annuler, egui::Button::new("Annuler le coup"))
                 .clicked()
             {
-                demandes.push(Demande::AnnulerCoup);
+                intentions.push(Intention::Demande(Demande::AnnulerCoup));
             }
             if ui.button("Copier la partie").clicked() {
                 match partie::exporter(record) {
@@ -150,7 +166,9 @@ impl Panneau {
                     .range(theme::COUPS_AU_HASARD_MIN..=theme::COUPS_AU_HASARD_MAX),
             );
             if ui.button("coups au hasard").clicked() {
-                demandes.push(Demande::CoupsAuHasard(self.coups_au_hasard));
+                intentions.push(Intention::Demande(Demande::CoupsAuHasard(
+                    self.coups_au_hasard,
+                )));
             }
         });
         ui.add(
@@ -165,7 +183,78 @@ impl Panneau {
             )
             .clicked()
         {
-            demandes.push(Demande::Charger(self.texte_a_charger.clone()));
+            intentions.push(Intention::Demande(Demande::Charger(
+                self.texte_a_charger.clone(),
+            )));
+        }
+        self.arsenal_de_test(ui, game);
+    }
+
+    /// Les attaques de chaque joueur pour la prochaine « Nouvelle partie », parmi celles
+    /// du catalogue.
+    fn arsenal_de_test(&mut self, ui: &mut egui::Ui, game: &Game) {
+        egui::CollapsingHeader::new("Arsenal de la prochaine partie").show(ui, |ui| {
+            for player in [Player::One, Player::Two] {
+                ui.label(theme::nom_joueur(player));
+                let choisies = &mut self.attaques_de_test[player.index()];
+                for entree in &game.config().attack_catalog {
+                    let mut presente = choisies.contains(&entree.attack);
+                    if ui
+                        .checkbox(&mut presente, entree.attack.to_string())
+                        .changed()
+                    {
+                        if presente {
+                            choisies.push(entree.attack);
+                        } else {
+                            choisies.retain(|attaque| *attaque != entree.attack);
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+/// L'arsenal du joueur courant : chaque attaque, son coût, sa recharge, et un bouton
+/// « Lancer » activé seulement si le moteur l'autorise.
+fn attaques(
+    ui: &mut egui::Ui,
+    game: &Game,
+    selection_en_cours: bool,
+    intentions: &mut Vec<Intention>,
+) {
+    ui.label("Attaques");
+    let player = game.current_player();
+    if game.arsenal(player).is_empty() {
+        ui.label("(aucune)");
+    }
+    let legales = game.legal_actions();
+    for (slot, emplacement) in game.arsenal(player).iter().enumerate() {
+        let attaque = emplacement.attack();
+        let cout = game
+            .config()
+            .attack_stats(attaque)
+            .map_or(String::new(), |stats| format!(", coût {}", stats.cost));
+        let etat = match emplacement.cooldown_left() {
+            0 => String::new(),
+            1 => ", recharge 1 tour".to_string(),
+            tours => format!(", recharge {tours} tours"),
+        };
+        ui.horizontal(|ui| {
+            let permise = !selection_en_cours && legales.contains(&Action::UseAttack(slot));
+            if ui
+                .add_enabled(permise, egui::Button::new("Lancer"))
+                .clicked()
+            {
+                intentions.push(Intention::CommencerAttaque(slot));
+            }
+            ui.label(format!("{attaque}{cout}{etat}"));
+        });
+    }
+    if selection_en_cours {
+        ui.label("Clique le pion lanceur, puis la ou les cibles.");
+        if ui.button("Annuler l'attaque").clicked() {
+            intentions.push(Intention::AnnulerSelection);
         }
     }
 }
@@ -199,7 +288,7 @@ fn etat(ui: &mut egui::Ui, game: &Game) {
 }
 
 /// La ligne de journal d'un événement, ou `None` pour ceux qui le rendraient illisible
-/// (les compteurs d'actions sont déjà affichés en haut du panneau).
+/// (compteurs d'actions, réserves et recharges sont déjà affichés dans le panneau).
 fn decrire(event: &Event) -> Option<String> {
     match event {
         Event::PionPlaced { pion, at } => Some(format!(
@@ -208,7 +297,25 @@ fn decrire(event: &Event) -> Option<String> {
             pion.id(),
             at
         )),
-        Event::ActionsChanged { .. } => None,
+        Event::AttackUsed {
+            player,
+            attack,
+            launcher,
+        } => Some(format!(
+            "{} lance {} depuis {}",
+            theme::nom_joueur(*player),
+            attack,
+            launcher
+        )),
+        Event::PionKilled { pion, at, .. } => Some(format!(
+            "Le pion {} de {} est tué en {}",
+            pion.id(),
+            theme::nom_joueur(pion.owner()),
+            at
+        )),
+        Event::ActionsChanged { .. }
+        | Event::ReserveChanged { .. }
+        | Event::CooldownChanged { .. } => None,
         Event::TurnEnded { next } => Some(format!("Au tour de {}", theme::nom_joueur(*next))),
         Event::GameEnded(fin) => Some(texte_fin(*fin)),
     }

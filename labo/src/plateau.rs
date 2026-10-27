@@ -1,11 +1,12 @@
-//! Le damier : dessine la partie et transforme un clic en demande.
+//! Le damier : dessine la partie et signale la case cliquée.
 //! Les pions sont lus dans `game.board()` à chaque image : un pion n'apparaît
 //! que si le moteur l'a accepté, et le plateau ne peut pas contredire le panneau.
+//! Les cases à marquer viennent de `legal_actions` : le plateau ne connaît aucune règle.
 
-use crate::partie::Demande;
+use crate::intention::Intention;
 use crate::theme;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
-use fight_of_pions::{Action, Game, Position};
+use fight_of_pions::{Action, Decision, Game, Position};
 
 /// Où se trouve le damier à l'écran pour cette image.
 struct Geometrie {
@@ -49,20 +50,19 @@ impl Geometrie {
     }
 }
 
-pub fn show(ui: &mut egui::Ui, game: &Game, demandes: &mut Vec<Demande>) {
+/// Dessine `game` : la vraie partie, ou sa copie pendant le choix d'une attaque.
+pub fn show(ui: &mut egui::Ui, game: &Game, intentions: &mut Vec<Intention>) {
     egui::CentralPanel::default().show_inside(ui, |ui| {
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::click());
         let geo = Geometrie::new(response.rect, game.board().size());
         let survol = response.hover_pos().and_then(|p| geo.point_vers_case(p));
-        // Les cases jouables viennent du moteur : le labo ne connaît aucune règle.
-        let jouables: Vec<Position> = game
-            .legal_actions()
-            .into_iter()
-            .filter_map(|action| match action {
-                Action::Place(pos) => Some(pos),
-                Action::EndTurn => None,
-            })
-            .collect();
+        let legales = game.legal_actions();
+        let posables = |pos| legales.contains(&Action::Place(pos));
+        let choisissables = |pos| legales.contains(&Action::Choose(pos));
+        let lanceur = match game.pending_decision() {
+            Some(Decision::ChooseTarget { launcher, .. }) => Some(launcher),
+            _ => None,
+        };
 
         for row in 0..geo.taille {
             for col in 0..geo.taille {
@@ -76,7 +76,7 @@ pub fn show(ui: &mut egui::Ui, game: &Game, demandes: &mut Vec<Demande>) {
                     theme::CASE_FONCEE
                 };
                 painter.rect_filled(rect, theme::ARRONDI_CASE, fond);
-                if jouables.contains(&pos) {
+                if posables(pos) {
                     painter.circle_filled(
                         rect.center(),
                         geo.cote * theme::RAYON_MARQUE_JOUABLE,
@@ -92,6 +92,21 @@ pub fn show(ui: &mut egui::Ui, game: &Game, demandes: &mut Vec<Demande>) {
                         Stroke::new(theme::EPAISSEUR_CONTOUR_PION, theme::CONTOUR_PION),
                     );
                 }
+
+                let anneau = if lanceur == Some(pos) {
+                    Some(theme::ANNEAU_LANCEUR)
+                } else if choisissables(pos) {
+                    Some(theme::ANNEAU_CHOIX)
+                } else {
+                    None
+                };
+                if let Some(couleur) = anneau {
+                    painter.circle_stroke(
+                        rect.center(),
+                        geo.cote * theme::RAYON_ANNEAU,
+                        Stroke::new(theme::EPAISSEUR_ANNEAU, couleur),
+                    );
+                }
             }
         }
 
@@ -102,7 +117,7 @@ pub fn show(ui: &mut egui::Ui, game: &Game, demandes: &mut Vec<Demande>) {
                 .interact_pointer_pos()
                 .and_then(|p| geo.point_vers_case(p))
         {
-            demandes.push(Demande::Agir(Action::Place(pos)));
+            intentions.push(Intention::ChoisirCase(pos));
         }
     });
 }

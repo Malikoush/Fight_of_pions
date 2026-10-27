@@ -1,5 +1,5 @@
-use crate::Position;
 use crate::config::ConfigError;
+use crate::{Attack, Position};
 use std::fmt;
 
 /// Pourquoi le moteur refuse une configuration ou une action.
@@ -25,6 +25,17 @@ pub enum GameError {
     },
     /// La partie est terminée.
     GameOver,
+    /// Cette action ne répond pas à la décision attendue (par exemple poser un pion
+    /// pendant le choix d'une cible).
+    UnexpectedAction,
+    /// Le joueur n'a pas d'attaque à cet emplacement de son arsenal.
+    NoSuchAttack(usize),
+    /// Cette attaque est en recharge.
+    AttackRecharging(Attack),
+    /// Cette attaque n'a aucune cible possible en ce moment.
+    NoTarget(Attack),
+    /// Ce choix de lanceur ou de cible n'est pas permis.
+    InvalidChoice(Position),
 }
 
 impl fmt::Display for GameError {
@@ -40,6 +51,23 @@ impl fmt::Display for GameError {
                 needed, available
             ),
             GameError::GameOver => write!(f, "la partie est terminée"),
+            GameError::UnexpectedAction => {
+                write!(f, "ce n'est pas le moment de cette action")
+            }
+            GameError::NoSuchAttack(slot) => {
+                write!(
+                    f,
+                    "aucune attaque à l'emplacement {}",
+                    slot.saturating_add(1)
+                )
+            }
+            GameError::AttackRecharging(attack) => {
+                write!(f, "l'attaque {} est en recharge", attack)
+            }
+            GameError::NoTarget(attack) => {
+                write!(f, "l'attaque {} n'a aucune cible possible", attack)
+            }
+            GameError::InvalidChoice(pos) => write!(f, "la case {} ne peut pas être choisie", pos),
         }
     }
 }

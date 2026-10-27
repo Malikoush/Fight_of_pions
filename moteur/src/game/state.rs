@@ -1,24 +1,43 @@
+use super::arsenal::ArsenalSlot;
 use crate::{
-    Action, Board, Cell, Decision, EndReason, Event, GameConfig, GameEnd, GameError, Outcome, Pion,
-    PionId, Player, Position, rules,
+    Action, Attack, Board, Cell, Decision, EndReason, Event, GameConfig, GameEnd, GameError,
+    Outcome, Pion, PionId, Player, Position, rules,
 };
 
 /// L'état complet d'une partie, et le seul point d'entrée des actions.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Game {
-    config: GameConfig,
+    pub(super) config: GameConfig,
     /// La graine de la partie. Rien n'est encore tiré au hasard ; le draft s'en servira.
-    seed: u64,
-    board: Board,
-    current_player: Player,
-    turn: u32,
-    actions_left: u32,
-    reserve_pions: [u32; 2],
-    banked_actions: [u32; 2],
+    pub(super) seed: u64,
+    pub(super) board: Board,
+    pub(super) current_player: Player,
+    pub(super) turn: u32,
+    pub(super) actions_left: u32,
+    pub(super) reserve_pions: [u32; 2],
+    pub(super) banked_actions: [u32; 2],
+    /// Les attaques de chaque joueur et leur recharge.
+    pub(super) arsenals: [Vec<ArsenalSlot>; 2],
+    /// L'attaque en cours de choix (lanceur, cibles), s'il y en a une.
+    pub(super) pending_attack: Option<PendingAttack>,
     /// `Some` dès que la partie est finie.
-    end: Option<GameEnd>,
+    pub(super) end: Option<GameEnd>,
     /// L'identité que recevra le prochain pion créé.
-    next_pion_id: PionId,
+    pub(super) next_pion_id: PionId,
+}
+
+/// Une attaque commencée dont les choix ne sont pas finis. Rien n'est modifié tant que le
+/// dernier choix n'est pas fait.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) struct PendingAttack {
+    /// L'emplacement de l'attaque dans l'arsenal du joueur courant.
+    pub(super) slot: usize,
+    /// L'attaque elle-même, retenue au début : rien ne la relit ensuite dans l'arsenal.
+    pub(super) attack: Attack,
+    /// La case du pion lanceur, une fois choisie.
+    pub(super) launcher: Option<Position>,
+    /// Les cibles déjà choisies.
+    pub(super) targets: Vec<Position>,
 }
 
 impl Game {
@@ -59,6 +78,11 @@ impl Game {
         self.banked_actions[player.index()]
     }
 
+    /// L'arsenal d'un joueur : ses attaques, dans l'ordre de leurs emplacements.
+    pub fn arsenal(&self, player: Player) -> &[ArsenalSlot] {
+        &self.arsenals[player.index()]
+    }
+
     /// Numéro du tour en cours, à partir de 1 ; chaque joueur qui joue compte pour un tour.
     pub fn turn(&self) -> u32 {
         self.turn
@@ -76,25 +100,53 @@ impl Game {
 
     /// La décision attendue maintenant, ou `None` si la partie est finie.
     pub fn pending_decision(&self) -> Option<Decision> {
-        match self.end {
-            Some(_) => None,
-            None => Some(Decision::MainAction {
-                player: self.current_player,
-            }),
+        if self.end.is_some() {
+            return None;
         }
+        let player = self.current_player;
+        Some(match &self.pending_attack {
+            None => Decision::MainAction { player },
+            Some(pending) => {
+                let attack = pending.attack;
+                match pending.launcher {
+                    None => Decision::ChooseLauncher { player, attack },
+                    Some(launcher) => Decision::ChooseTarget {
+                        player,
+                        attack,
+                        launcher,
+                    },
+                }
+            }
+        })
     }
 
     /// Toutes les actions que [`Game::apply`] accepterait maintenant, dans un ordre
-    /// toujours identique : les poses rangée par rangée (A1, B1… puis A2…), puis
-    /// `EndTurn` en dernier. Vide si la partie est finie.
+    /// toujours identique : les poses rangée par rangée (A1, B1… puis A2…), les attaques
+    /// dans l'ordre de l'arsenal, les choix de case rangée par rangée, puis `EndTurn`.
+    /// Vide si la partie est finie.
     ///
     /// La liste est construite en passant chaque action candidate par la validation
-    /// elle-même : elle ne peut pas contredire `apply`.
+    /// elle-même : elle ne peut pas contredire `apply`. Les candidates sont seulement
+    /// celles qui répondent à la décision attendue, pour ne pas tester pour rien des
+    /// actions forcément refusées (c'est appelé à chaque coup par les bots).
     pub fn legal_actions(&self) -> Vec<Action> {
-        self.board
-            .positions()
-            .map(Action::Place)
-            .chain([Action::EndTurn])
+        if self.end.is_some() {
+            return Vec::new();
+        }
+        let candidates: Vec<Action> = match self.pending_attack {
+            None => {
+                let slots = 0..self.arsenal(self.current_player).len();
+                self.board
+                    .positions()
+                    .map(Action::Place)
+                    .chain(slots.map(Action::UseAttack))
+                    .chain([Action::EndTurn])
+                    .collect()
+            }
+            Some(_) => self.board.positions().map(Action::Choose).collect(),
+        };
+        candidates
+            .into_iter()
             .filter(|&action| self.validate(action).is_ok())
             .collect()
     }
@@ -105,9 +157,14 @@ impl Game {
     pub fn new(config: GameConfig, seed: u64) -> Result<Game, GameError> {
         config.validate()?;
         let pions = config.pions_per_player;
+        let arsenal_of = |player: Player| -> Vec<ArsenalSlot> {
+            config.starting_attacks[player.index()]
+                .iter()
+                .map(|&attack| ArsenalSlot::new(attack))
+                .collect()
+        };
 
         Ok(Self {
-            config,
             seed,
             board: Board::new(config.board_size),
             current_player: Player::One,
@@ -115,8 +172,11 @@ impl Game {
             actions_left: config.first_turn_actions,
             reserve_pions: [pions, pions],
             banked_actions: [0, 0],
+            arsenals: [arsenal_of(Player::One), arsenal_of(Player::Two)],
+            pending_attack: None,
             end: None,
             next_pion_id: PionId::FIRST,
+            config,
         })
     }
 
@@ -128,32 +188,32 @@ impl Game {
         Ok(self.execute(action)) // modifie l'état, ne vérifie plus
     }
 
-    /// Le nombre d'actions que coûte une décision.
-    fn cost(&self, action: Action) -> u32 {
-        match action {
-            Action::Place(_) => self.config.place_cost,
-            Action::EndTurn => 0,
-        }
-    }
-
     fn validate(&self, action: Action) -> Result<(), GameError> {
         if self.end.is_some() {
             return Err(GameError::GameOver);
         }
-        let needed = self.cost(action);
+        match (&self.pending_attack, action) {
+            (None, Action::Place(pos)) => self.validate_place(pos),
+            (None, Action::UseAttack(slot)) => self.validate_use_attack(slot),
+            (None, Action::EndTurn) => Ok(()),
+            (Some(pending), Action::Choose(pos)) => self.validate_choice(pending, pos),
+            _ => Err(GameError::UnexpectedAction),
+        }
+    }
+
+    /// Vérifie qu'il reste assez d'actions pour payer ce coût.
+    pub(super) fn ensure_actions(&self, needed: u32) -> Result<(), GameError> {
         if self.actions_left < needed {
             return Err(GameError::NotEnoughActions {
                 needed,
                 available: self.actions_left,
             });
         }
-        match action {
-            Action::EndTurn => Ok(()),
-            Action::Place(pos) => self.validate_place(pos),
-        }
+        Ok(())
     }
 
     fn validate_place(&self, pos: Position) -> Result<(), GameError> {
+        self.ensure_actions(self.config.place_cost)?;
         self.ensure_empty(pos)?;
         if self.reserve_pions[self.current_player.index()] == 0 {
             return Err(GameError::EmptyReserve);
@@ -174,6 +234,8 @@ impl Game {
         let mut events = Vec::new();
         match action {
             Action::Place(pos) => self.execute_place(pos, &mut events),
+            Action::UseAttack(slot) => self.start_attack(slot),
+            Action::Choose(pos) => self.execute_choice(pos, &mut events),
             // Finir son tour ne change ni le plateau ni les réserves : la partie ne peut
             // pas devenir figée ici, seule la limite de tours peut l'arrêter.
             Action::EndTurn => self.finish_turn(&mut events),
@@ -197,11 +259,20 @@ impl Game {
         let reserve = &mut self.reserve_pions[player.index()];
         *reserve = reserve.saturating_sub(1);
         events.push(Event::PionPlaced { pion, at: pos });
+        events.push(self.reserve_changed(player));
         events.push(self.actions_changed(player));
 
         if rules::complete_line(&self.board, pos, self.config.align_to_win) {
             self.finish_game(Outcome::Won(player), EndReason::Alignment, events);
-        } else if self.is_frozen() {
+        } else {
+            self.after_action(events);
+        }
+    }
+
+    /// Ce qui suit toute action qui a modifié le plateau sans aligner : la partie peut se
+    /// figer, ou le tour se terminer faute d'actions.
+    pub(super) fn after_action(&mut self, events: &mut Vec<Event>) {
+        if self.is_frozen() {
             self.finish_game(self.outcome_without_alignment(), EndReason::Frozen, events);
         } else if self.actions_left == 0 {
             self.finish_turn(events);
@@ -226,19 +297,44 @@ impl Game {
         self.banked_actions[ending.index()] = self.actions_left.min(self.config.max_banked_actions);
         self.current_player = ending.opponent();
         self.turn = self.turn.saturating_add(1);
-        self.start_turn();
         if ending_counters_change {
             events.push(self.actions_changed(ending));
         }
         events.push(Event::TurnEnded {
             next: self.current_player,
         });
+        self.start_turn(events);
+    }
+
+    /// Prépare le tour du nouveau joueur courant : ses actions, et la recharge de ses
+    /// attaques. Le tout premier tour de la partie est réglé dans [`Game::new`] : ici,
+    /// c'est toujours un tour ordinaire.
+    fn start_turn(&mut self, events: &mut Vec<Event>) {
+        let player = self.current_player;
+        let i = player.index();
+        self.actions_left = self
+            .config
+            .actions_per_turn
+            .saturating_add(self.banked_actions[i]);
+        self.banked_actions[i] = 0;
         // Le joueur qui commence reçoit toujours au moins une action : son compteur change.
-        events.push(self.actions_changed(self.current_player));
+        events.push(self.actions_changed(player));
+
+        for (slot, emplacement) in self.arsenals[i].iter_mut().enumerate() {
+            let left = emplacement.cooldown_left();
+            if left > 0 {
+                emplacement.set_cooldown(left - 1);
+                events.push(Event::CooldownChanged {
+                    player,
+                    slot,
+                    turns_left: left - 1,
+                });
+            }
+        }
     }
 
     /// L'annonce des compteurs d'actions d'un joueur, tels qu'ils sont maintenant.
-    fn actions_changed(&self, player: Player) -> Event {
+    pub(super) fn actions_changed(&self, player: Player) -> Event {
         let actions_left = if player == self.current_player {
             self.actions_left
         } else {
@@ -251,15 +347,12 @@ impl Game {
         }
     }
 
-    /// Prépare le tour du nouveau joueur courant. Le tout premier tour de la partie est
-    /// réglé dans [`Game::new`] : ici, c'est toujours un tour ordinaire.
-    fn start_turn(&mut self) {
-        let i = self.current_player.index();
-        self.actions_left = self
-            .config
-            .actions_per_turn
-            .saturating_add(self.banked_actions[i]);
-        self.banked_actions[i] = 0;
+    /// L'annonce de la réserve de pions d'un joueur, telle qu'elle est maintenant.
+    pub(super) fn reserve_changed(&self, player: Player) -> Event {
+        Event::ReserveChanged {
+            player,
+            pions: self.reserve_pions[player.index()],
+        }
     }
 
     fn finish_game(&mut self, outcome: Outcome, reason: EndReason, events: &mut Vec<Event>) {
@@ -280,14 +373,20 @@ impl Game {
         !self.can_ever_act(Player::One) && !self.can_ever_act(Player::Two)
     }
 
-    /// Vrai si ce joueur pourra encore agir, maintenant ou après avoir économisé ses
-    /// actions : la configuration garantit qu'une pose est toujours atteignable.
+    /// Vrai si ce joueur pourra encore agir, maintenant ou plus tard : poser un pion, ou
+    /// lancer une attaque qui a une cible, même si elle est en recharge ou qu'il doit
+    /// d'abord économiser ses actions (la configuration garantit que tout coût est
+    /// atteignable).
     fn can_ever_act(&self, player: Player) -> bool {
-        let has_pions = self.reserve_pions[player.index()] > 0;
-        has_pions
+        let can_place = self.reserve_pions[player.index()] > 0
             && self
                 .board
                 .positions()
-                .any(|pos| self.ensure_empty(pos).is_ok())
+                .any(|pos| self.ensure_empty(pos).is_ok());
+        can_place
+            || self
+                .arsenal(player)
+                .iter()
+                .any(|slot| self.attack_has_a_target(player, slot.attack()))
     }
 }

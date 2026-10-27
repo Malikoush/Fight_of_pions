@@ -5,18 +5,20 @@ mod common;
 use common::{SEED, game_with, new_game, place, random_config};
 use fight_of_pions::{
     Action, Event, Game, GameConfig, GameEnd, GameError, GameRecord, Pion, Player, Position,
-    ReplayError, Rng,
+    Rarity, ReplayError, Rng,
 };
 
 /// Ce qu'un client sait de la partie s'il ne suit **que** les événements, en partant de
 /// la configuration. S'il diverge un jour du moteur, un client (labo, Godot, bot) se
-/// désynchronise : c'est ce que ces tests interdisent.
+/// désynchronise : c'est ce que ces tests interdisent. Chaque annonce doit aussi changer
+/// quelque chose : une annonce inutile est refusée.
 struct EventMirror {
     size: usize,
     cells: Vec<Option<Pion>>,
     reserves: [u32; 2],
     actions_left: [u32; 2],
     banked: [u32; 2],
+    cooldowns: [Vec<u32>; 2],
     current_player: Player,
     end: Option<GameEnd>,
 }
@@ -24,22 +26,41 @@ struct EventMirror {
 impl EventMirror {
     /// L'état de départ, connu par la seule configuration.
     fn new(config: &GameConfig) -> EventMirror {
+        let ready = |player: Player| vec![0; config.starting_attacks[player.index()].len()];
         EventMirror {
             size: config.board_size,
             cells: vec![None; config.board_size * config.board_size],
             reserves: [config.pions_per_player; 2],
             actions_left: [config.first_turn_actions, 0],
             banked: [0, 0],
+            cooldowns: [ready(Player::One), ready(Player::Two)],
             current_player: Player::One,
             end: None,
         }
     }
 
+    fn cell(&mut self, at: Position) -> &mut Option<Pion> {
+        &mut self.cells[at.row * self.size + at.col]
+    }
+
     fn follow(&mut self, event: &Event) {
         match *event {
             Event::PionPlaced { pion, at } => {
-                self.cells[at.row * self.size + at.col] = Some(pion);
-                self.reserves[pion.owner().index()] -= 1;
+                assert_eq!(
+                    *self.cell(at),
+                    None,
+                    "pose sur une case occupée : {event:?}"
+                );
+                *self.cell(at) = Some(pion);
+            }
+            Event::PionKilled { pion, at, .. } => {
+                assert_eq!(*self.cell(at), Some(pion), "pion tué absent : {event:?}");
+                *self.cell(at) = None;
+            }
+            Event::ReserveChanged { player, pions } => {
+                let reserve = &mut self.reserves[player.index()];
+                assert_ne!(*reserve, pions, "annonce inutile : {event:?}");
+                *reserve = pions;
             }
             Event::ActionsChanged {
                 player,
@@ -52,6 +73,17 @@ impl EventMirror {
                 self.actions_left[i] = actions_left;
                 self.banked[i] = banked;
             }
+            Event::CooldownChanged {
+                player,
+                slot,
+                turns_left,
+            } => {
+                let cooldown = &mut self.cooldowns[player.index()][slot];
+                assert_ne!(*cooldown, turns_left, "annonce inutile : {event:?}");
+                *cooldown = turns_left;
+            }
+            // L'attaque elle-même ne change rien : ses effets sont annoncés à part.
+            Event::AttackUsed { .. } => {}
             Event::TurnEnded { next } => self.current_player = next,
             Event::GameEnded(end) => self.end = Some(end),
         }
@@ -76,6 +108,12 @@ impl EventMirror {
                 self.actions_left[i], expected_actions,
                 "actions de {player:?}"
             );
+            let cooldowns: Vec<u32> = game
+                .arsenal(player)
+                .iter()
+                .map(|slot| slot.cooldown_left())
+                .collect();
+            assert_eq!(self.cooldowns[i], cooldowns, "recharges de {player:?}");
         }
         assert_eq!(self.current_player, game.current_player());
         assert_eq!(self.end, game.end());
@@ -89,12 +127,23 @@ struct PlayedGame {
     steps: Vec<(Vec<Event>, Game)>,
 }
 
+impl PlayedGame {
+    /// Combien d'événements de cette sorte la partie a produits.
+    fn count(&self, matches: impl Fn(&Event) -> bool) -> usize {
+        self.steps
+            .iter()
+            .flat_map(|(events, _)| events)
+            .filter(|event| matches(event))
+            .count()
+    }
+}
+
 /// Joue une partie au hasard jusqu'à la fin, en vérifiant le miroir après chaque action.
 fn play_random_game(config: GameConfig, seed: u64, rng: &mut Rng) -> PlayedGame {
-    let mut game = Game::new(config, seed).unwrap();
+    let mut game = Game::new(config.clone(), seed).unwrap();
+    let mut mirror = EventMirror::new(&config);
     let mut record = GameRecord::new(config, seed);
     let mut steps = Vec::new();
-    let mut mirror = EventMirror::new(&config);
     // L'état de départ, déduit de la seule configuration, doit déjà être juste.
     mirror.assert_matches(&game);
 
@@ -113,6 +162,7 @@ fn play_random_game(config: GameConfig, seed: u64, rng: &mut Rng) -> PlayedGame 
 
 #[test]
 fn events_are_enough_to_follow_the_board() {
+    let (mut attacks, mut epics, mut kills) = (0, 0, 0);
     for seed in 0..300 {
         let mut rng = Rng::new(seed);
         let config = if seed % 2 == 0 {
@@ -120,8 +170,17 @@ fn events_are_enough_to_follow_the_board() {
         } else {
             random_config(&mut rng)
         };
-        play_random_game(config, seed, &mut rng);
+        let played = play_random_game(config, seed, &mut rng);
+        attacks += played.count(|event| matches!(event, Event::AttackUsed { .. }));
+        epics += played.count(|event| {
+            matches!(event, Event::AttackUsed { attack, .. } if attack.rarity == Rarity::Epic)
+        });
+        kills += played.count(|event| matches!(event, Event::PionKilled { .. }));
     }
+    // Sans attaques jouées, ce test ne prouverait rien sur elles.
+    assert!(attacks > 100, "seulement {attacks} attaques jouées");
+    assert!(epics > 20, "seulement {epics} Ours Épique joués");
+    assert!(kills > 100, "seulement {kills} pions tués");
 }
 
 #[test]
@@ -145,7 +204,7 @@ fn same_seed_and_actions_give_same_events_at_every_step() {
         let played = play_random_game(config, seed, &mut rng);
 
         // Rejoue action par action : à chaque coup, mêmes événements et même état.
-        let mut again = Game::new(config, seed).unwrap();
+        let mut again = Game::new(played.record.config.clone(), seed).unwrap();
         for (action, (events, state)) in played.record.actions.iter().zip(&played.steps) {
             assert_eq!(&again.apply(*action).unwrap(), events);
             assert_eq!(&again, state);
@@ -167,7 +226,10 @@ fn same_seed_and_actions_give_same_events_and_state() {
 #[test]
 fn the_seed_is_part_of_the_game() {
     let config = GameConfig::default();
-    assert_ne!(Game::new(config, 1).unwrap(), Game::new(config, 2).unwrap());
+    assert_ne!(
+        Game::new(config.clone(), 1).unwrap(),
+        Game::new(config, 2).unwrap()
+    );
 }
 
 #[test]
