@@ -1,6 +1,6 @@
 # Glossaire
 
-Dernière mise à jour : 2026-10-27.
+Dernière mise à jour : 2026-10-28.
 
 Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de règles et dans le code.
 
@@ -20,9 +20,13 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Tour | `turn` | Le tour **d'un** joueur. Le compteur avance à chaque fin de tour. |
 | Manche | `round` (cible) | Un tour de chaque joueur (le « Tour 1 » du tableau du GDD) |
 | Action | `Action` | Une décision envoyée au moteur : `Place`, `UseAttack`, `Choose`, `EndTurn` (plus tard `Pass` pour les réactions…) |
-| Coût de la pose | `place_cost` | Actions que coûte la pose d'un pion (1 par défaut) |
-| Actions du tour | `actions_left` | Ce qu'il reste à dépenser au joueur courant |
+| Coût de la pose | `place_cost` | Actions que coûte la pose d'un pion (1 par défaut). 0 (pose gratuite) seulement si les poses sont limitées par tour. |
+| Poses par tour | `max_placements_per_turn` | Le plus de pions qu'un joueur peut poser dans un tour ; elles ne s'accumulent pas. `None` (par défaut) : seules les actions limitent les poses. |
+| Poses restantes | `Game::placements_left()` | Combien de pions le joueur courant peut encore poser ce tour : selon ses actions, ses poses permises, sa réserve et les cases libres |
+| Actions du tour | `actions_left` | Ce qu'il reste à dépenser au joueur courant. Dans les règles cibles, on parle de **points d'action** : ils ne servent qu'aux cartes. |
 | Actions en réserve | `banked_actions`, `Game::banked_actions()` | Actions non utilisées gardées pour le tour suivant (jusqu'à `max_banked_actions`, 2 par défaut). **À ne pas confondre avec la réserve de pions.** |
+| Banque de départ, la Pièce | `starting_banked_actions` | Actions que chaque joueur a en banque au début de la partie (0 par défaut). La Pièce : J2 commence avec 1, pour compenser le premier joueur. |
+| Règles cibles | `bots::target_rules()`, variante « règles cibles » | La configuration vers laquelle le jeu va, face aux règles actuelles (`current_rules()`) : 1 pose gratuite par tour, 1 point d'action par tour gardé jusqu'à 3, mal du débarquement, la Pièce (voir le carnet) |
 | Événement | `Event` | Ce que le moteur annonce après une action ; suffit à suivre tout l'état visible |
 | Compteurs d'actions annoncés | `Event::ActionsChanged` | Actions restantes et gardées d'un joueur, émis à chaque changement |
 | Réserve annoncée | `Event::ReserveChanged` | Pions en réserve d'un joueur, émis à chaque changement (pose, kill…) |
@@ -54,6 +58,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Identité d'un pion | `PionId` | Numéro stable d'un pion (affiché « #3 »), pour qu'un effet le suive quand il bouge |
 | Réserve de pions | `reserve_pions` | Les pions qu'un joueur peut encore poser (15 au départ) |
 | Pion lanceur | `launcher` | Le pion du joueur depuis lequel une attaque est lancée, choisi par `Action::Choose` |
+| Mal du débarquement | `summoning_sickness`, `Game::is_summoning_sick(pos)`, `GameError::NoReadyLauncher` | Avec ce réglage, un pion posé ce tour ne peut pas lancer d'attaque. (cible) Un pion invoqué non plus ; un pion déplacé garde son ancienneté ; le mot-clé « Charge » l'ignorera. |
 | Tombe | couche `tomb` de `Cell` (cible) | Ce que laisse un pion tué. Elle ne bloque pas la case. |
 | Trou | couche terrain de `Cell` (cible) | Case détruite par le Coup du taureau, injouable |
 | Zombie | type de pion (cible) | Pion ressuscité par le Médecin |

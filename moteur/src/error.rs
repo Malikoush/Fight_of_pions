@@ -16,6 +16,8 @@ pub enum GameError {
     CellOccupied(Position),
     /// Le joueur n'a plus de pion en réserve.
     EmptyReserve,
+    /// Le joueur a déjà posé autant de pions que permis ce tour.
+    NoPlacementLeft,
     /// Il ne reste pas assez d'actions ce tour.
     NotEnoughActions {
         /// Coût de l'action demandée.
@@ -34,6 +36,9 @@ pub enum GameError {
     AttackRecharging(Attack),
     /// Cette attaque n'a aucune cible possible en ce moment.
     NoTarget(Attack),
+    /// Cette attaque aurait des cibles, mais seulement depuis des pions posés ce tour, que
+    /// le mal du débarquement empêche d'attaquer.
+    NoReadyLauncher(Attack),
     /// Ce choix de lanceur ou de cible n'est pas permis.
     InvalidChoice(Position),
 }
@@ -45,6 +50,7 @@ impl fmt::Display for GameError {
             GameError::OutOfBounds(pos) => write!(f, "la case {} est hors du plateau", pos),
             GameError::CellOccupied(pos) => write!(f, "la case {} est déjà occupée", pos),
             GameError::EmptyReserve => write!(f, "la réserve de pions est vide"),
+            GameError::NoPlacementLeft => write!(f, "plus aucune pose permise ce tour"),
             GameError::NotEnoughActions { needed, available } => write!(
                 f,
                 "pas assez d'actions : il en faut {}, il en reste {}",
@@ -67,6 +73,11 @@ impl fmt::Display for GameError {
             GameError::NoTarget(attack) => {
                 write!(f, "l'attaque {} n'a aucune cible possible", attack)
             }
+            GameError::NoReadyLauncher(attack) => write!(
+                f,
+                "l'attaque {} n'a aucun lanceur prêt : un pion posé ce tour ne peut pas attaquer",
+                attack
+            ),
             GameError::InvalidChoice(pos) => write!(f, "la case {} ne peut pas être choisie", pos),
         }
     }

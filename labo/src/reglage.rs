@@ -113,7 +113,21 @@ impl ReglageDePartie {
                 "Actions gardées au plus",
                 &mut config.max_banked_actions,
             );
+            ligne(
+                ui,
+                "Banque de départ J1",
+                &mut config.starting_banked_actions[0],
+            );
+            ligne(
+                ui,
+                "Banque de départ J2",
+                &mut config.starting_banked_actions[1],
+            );
             ligne(ui, "Coût d'une pose", &mut config.place_cost);
+            poses_par_tour(ui, &mut config.max_placements_per_turn);
+            ui.label("Mal du débarquement");
+            ui.checkbox(&mut config.summoning_sickness, "");
+            ui.end_row();
             ligne(ui, "Limite de tours", &mut config.max_turns);
         });
     }
@@ -188,6 +202,21 @@ fn cocher(arsenal: &mut Vec<Attack>, catalogue: &[Attack], attaque: Attack, pres
             }
         })
         .collect();
+}
+
+/// Les poses par tour : sans limite (seules les actions comptent), ou au plus tant.
+fn poses_par_tour(ui: &mut egui::Ui, limite: &mut Option<u32>) {
+    ui.label("Poses par tour");
+    ui.horizontal(|ui| {
+        let mut limitees = limite.is_some();
+        if ui.checkbox(&mut limitees, "limitées").changed() {
+            *limite = limitees.then_some(theme::POSES_PAR_TOUR_PROPOSEES);
+        }
+        if let Some(poses) = limite {
+            ui.add(egui::DragValue::new(poses));
+        }
+    });
+    ui.end_row();
 }
 
 /// Un réglage numérique : son nom, et sa valeur qu'on fait glisser ou qu'on tape.

@@ -3,7 +3,7 @@
 //! 1. **Gagner** : finir une fenêtre en posant, ou après une attaque jouée sur une copie.
 //! 2. **Se défendre** : bloquer les **menaces**, les fenêtres que l'adversaire pourrait
 //!    finir en posant à son prochain tour, avec la pose ou l'attaque qui en laisse le moins.
-//! 3. **Garder des actions**, s'il est réglé pour.
+//! 3. **Garder des actions**, s'il est réglé pour (une pose gratuite se fait quand même).
 //! 4. **Se développer** : poser sur une des meilleures cases selon les fenêtres.
 //!
 //! Il ne voit pas les attaques de l'adversaire dans ses menaces : une ligne bloquée qu'un
@@ -47,15 +47,27 @@ impl GreedyBot {
         GreedyBot { banking }
     }
 
-    /// Finir son tour pour garder ses actions, s'il est réglé pour et qu'il peut toutes
-    /// les garder.
-    fn keep_actions(&self, game: &Game) -> Option<Action> {
+    /// Finir son tour pour garder ses actions, s'il est réglé pour, qu'il peut toutes les
+    /// garder et que poser lui en coûterait : une pose gratuite se fait quand même.
+    fn keep_actions(&self, game: &Game, legal: &[Action]) -> Option<Action> {
         let keep = match self.banking {
             Banking::SpendAll => 0,
             Banking::KeepMax => game.config().max_banked_actions,
         };
-        (keep > 0 && game.actions_left() <= keep).then_some(Action::EndTurn)
+        let wants_to_keep = (1..=keep).contains(&game.actions_left());
+        (wants_to_keep && placing_costs_actions(game, legal)).then_some(Action::EndTurn)
     }
+}
+
+/// Vrai si poser maintenant dépense des actions, lu sur une copie où l'on pose. Si le tour
+/// s'y termine, c'est que la pose a dépensé les dernières actions.
+fn placing_costs_actions(game: &Game, legal: &[Action]) -> bool {
+    placeable(legal).first().is_some_and(|&pos| {
+        let mut copy = game.clone();
+        copy.apply(Action::Place(pos)).is_ok()
+            && (copy.current_player() != game.current_player()
+                || copy.actions_left() < game.actions_left())
+    })
 }
 
 impl Bot for GreedyBot {
@@ -88,7 +100,7 @@ impl Bot for GreedyBot {
         } else {
             view.winning_move()
                 .or_else(|| view.defensive_move())
-                .or_else(|| self.keep_actions(game))
+                .or_else(|| self.keep_actions(game, &legal))
                 .or_else(|| view.developing_move(rng))
         }
     }

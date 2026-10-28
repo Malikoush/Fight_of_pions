@@ -542,6 +542,26 @@ mod tests {
     }
 
     #[test]
+    fn une_partie_copiee_avant_l_economie_reglable_se_charge_encore() {
+        let mut source = partie();
+        source.traiter(Demande::CoupsAuHasard(3));
+        let mut ancienne: serde_json::Value =
+            serde_json::from_str(&exporter(source.record()).unwrap()).unwrap();
+        let config = ancienne["config"].as_object_mut().unwrap();
+        for champ in [
+            "starting_banked_actions",
+            "max_placements_per_turn",
+            "summoning_sickness",
+        ] {
+            assert!(config.remove(champ).is_some(), "{champ}");
+        }
+
+        let mut cible = partie();
+        cible.traiter(Demande::Charger(ancienne.to_string()));
+        assert_eq!(cible.record(), source.record());
+    }
+
+    #[test]
     fn un_champ_inconnu_est_refuse_au_lieu_d_etre_ignore() {
         let record = GameRecord::new(GameConfig::default(), GRAINE);
         let texte = exporter(&record)

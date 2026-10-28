@@ -91,6 +91,13 @@ pub fn show(ui: &mut egui::Ui, game: &Game, intentions: &mut Vec<Intention>) {
                         theme::couleur_joueur(player),
                         Stroke::new(theme::EPAISSEUR_CONTOUR_PION, theme::CONTOUR_PION),
                     );
+                    if game.is_summoning_sick(pos) {
+                        painter.circle_filled(
+                            rect.center(),
+                            geo.cote * theme::RAYON_MARQUE_NOUVEAU,
+                            theme::MARQUE_NOUVEAU,
+                        );
+                    }
                 }
 
                 let anneau = if lanceur == Some(pos) {

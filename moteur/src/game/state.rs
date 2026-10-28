@@ -1,4 +1,5 @@
 use super::arsenal::ArsenalSlot;
+use super::attack_flow::Launch;
 use crate::{
     Action, Attack, Board, Cell, Decision, EndReason, Event, GameConfig, GameEnd, GameError,
     Outcome, Pion, PionId, Player, Position, rules,
@@ -14,6 +15,11 @@ pub struct Game {
     pub(super) current_player: Player,
     pub(super) turn: u32,
     pub(super) actions_left: u32,
+    /// Les pions posés par le joueur courant depuis le début de son tour.
+    pub(super) placements_this_turn: u32,
+    /// L'identité du premier pion créé ce tour : les identités suivant l'ordre des poses,
+    /// tout pion d'identité supérieure ou égale est arrivé ce tour.
+    pub(super) turn_start_pion_id: PionId,
     pub(super) reserve_pions: [u32; 2],
     pub(super) banked_actions: [u32; 2],
     /// Les attaques de chaque joueur et leur recharge.
@@ -55,6 +61,52 @@ impl Game {
     /// Actions qu'il reste au joueur courant pour ce tour.
     pub fn actions_left(&self) -> u32 {
         self.actions_left
+    }
+
+    /// Combien de pions le joueur courant peut encore poser ce tour : autant que ses
+    /// actions en paient, que ses poses permises par tour, que sa réserve et que les cases
+    /// libres. 0 si la partie est finie.
+    pub fn placements_left(&self) -> u32 {
+        if self.end.is_some() {
+            return 0;
+        }
+        self.actions_left
+            .checked_div(self.config.place_cost)
+            .unwrap_or(u32::MAX) // pose gratuite : seules les autres limites comptent
+            .min(self.placement_limit_left())
+            .min(self.reserve_pions[self.current_player.index()])
+            .min(self.free_cells())
+    }
+
+    /// Le nombre de cases libres du plateau.
+    fn free_cells(&self) -> u32 {
+        let free = self
+            .board
+            .positions()
+            .filter(|&pos| self.ensure_empty(pos).is_ok())
+            .count();
+        u32::try_from(free).unwrap_or(u32::MAX)
+    }
+
+    /// Les poses que la limite par tour permet encore ; sans limite, autant qu'on veut.
+    fn placement_limit_left(&self) -> u32 {
+        self.config.max_placements_per_turn.map_or(u32::MAX, |max| {
+            max.saturating_sub(self.placements_this_turn)
+        })
+    }
+
+    /// Vrai si le pion de cette case ne peut pas encore lancer d'attaque à cause du mal du
+    /// débarquement ([`GameConfig::summoning_sickness`]) : il a été posé ce tour.
+    pub fn is_summoning_sick(&self, pos: Position) -> bool {
+        self.config.summoning_sickness && self.arrived_this_turn(pos)
+    }
+
+    /// Vrai si le pion de cette case a été posé ce tour.
+    fn arrived_this_turn(&self, pos: Position) -> bool {
+        self.board
+            .get(pos)
+            .and_then(Cell::pion)
+            .is_some_and(|pion| pion.id() >= self.turn_start_pion_id)
     }
 
     /// Le joueur qui doit jouer.
@@ -157,6 +209,7 @@ impl Game {
     pub fn new(config: GameConfig, seed: u64) -> Result<Game, GameError> {
         config.validate()?;
         let pions = config.pions_per_player;
+        let [first_bank, second_bank] = config.starting_banked_actions;
         let arsenal_of = |player: Player| -> Vec<ArsenalSlot> {
             config.starting_attacks[player.index()]
                 .iter()
@@ -169,9 +222,13 @@ impl Game {
             board: Board::new(config.board_size),
             current_player: Player::One,
             turn: 1,
-            actions_left: config.first_turn_actions,
+            // Le premier joueur reçoit tout de suite sa banque de départ, comme on reçoit
+            // ses actions gardées au début d'un tour.
+            actions_left: config.first_turn_actions.saturating_add(first_bank),
+            placements_this_turn: 0,
+            turn_start_pion_id: PionId::FIRST,
             reserve_pions: [pions, pions],
-            banked_actions: [0, 0],
+            banked_actions: [0, second_bank],
             arsenals: [arsenal_of(Player::One), arsenal_of(Player::Two)],
             pending_attack: None,
             end: None,
@@ -214,6 +271,9 @@ impl Game {
 
     fn validate_place(&self, pos: Position) -> Result<(), GameError> {
         self.ensure_actions(self.config.place_cost)?;
+        if self.placement_limit_left() == 0 {
+            return Err(GameError::NoPlacementLeft);
+        }
         self.ensure_empty(pos)?;
         if self.reserve_pions[self.current_player.index()] == 0 {
             return Err(GameError::EmptyReserve);
@@ -254,13 +314,17 @@ impl Game {
             return;
         }
         self.next_pion_id = self.next_pion_id.next();
+        self.placements_this_turn = self.placements_this_turn.saturating_add(1);
         // Les soustractions ne peuvent pas passer sous zéro : `validate` a vérifié les deux.
         self.actions_left = self.actions_left.saturating_sub(self.config.place_cost);
         let reserve = &mut self.reserve_pions[player.index()];
         *reserve = reserve.saturating_sub(1);
         events.push(Event::PionPlaced { pion, at: pos });
         events.push(self.reserve_changed(player));
-        events.push(self.actions_changed(player));
+        // Une pose gratuite ne change pas les compteurs d'actions : rien à annoncer.
+        if self.config.place_cost > 0 {
+            events.push(self.actions_changed(player));
+        }
 
         if rules::complete_line(&self.board, pos, self.config.align_to_win) {
             self.finish_game(Outcome::Won(player), EndReason::Alignment, events);
@@ -270,11 +334,11 @@ impl Game {
     }
 
     /// Ce qui suit toute action qui a modifié le plateau sans aligner : la partie peut se
-    /// figer, ou le tour se terminer faute d'actions.
+    /// figer, ou le tour se terminer quand il ne reste ni action ni pose.
     pub(super) fn after_action(&mut self, events: &mut Vec<Event>) {
         if self.is_frozen() {
             self.finish_game(self.outcome_without_alignment(), EndReason::Frozen, events);
-        } else if self.actions_left == 0 {
+        } else if self.actions_left == 0 && self.placements_left() == 0 {
             self.finish_turn(events);
         }
     }
@@ -306,12 +370,14 @@ impl Game {
         self.start_turn(events);
     }
 
-    /// Prépare le tour du nouveau joueur courant : ses actions, et la recharge de ses
-    /// attaques. Le tout premier tour de la partie est réglé dans [`Game::new`] : ici,
-    /// c'est toujours un tour ordinaire.
+    /// Prépare le tour du nouveau joueur courant : ses actions et ses poses, et la
+    /// recharge de ses attaques. Le tout premier tour de la partie est réglé dans
+    /// [`Game::new`] : ici, c'est toujours un tour ordinaire.
     fn start_turn(&mut self, events: &mut Vec<Event>) {
         let player = self.current_player;
         let i = player.index();
+        self.placements_this_turn = 0;
+        self.turn_start_pion_id = self.next_pion_id;
         self.actions_left = self
             .config
             .actions_per_turn
@@ -378,15 +444,11 @@ impl Game {
     /// d'abord économiser ses actions (la configuration garantit que tout coût est
     /// atteignable).
     fn can_ever_act(&self, player: Player) -> bool {
-        let can_place = self.reserve_pions[player.index()] > 0
-            && self
-                .board
-                .positions()
-                .any(|pos| self.ensure_empty(pos).is_ok());
+        let can_place = self.reserve_pions[player.index()] > 0 && self.free_cells() > 0;
         can_place
             || self
                 .arsenal(player)
                 .iter()
-                .any(|slot| self.attack_has_a_target(player, slot.attack()))
+                .any(|slot| self.attack_has_a_target(player, slot.attack(), Launch::Someday))
     }
 }

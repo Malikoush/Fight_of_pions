@@ -8,7 +8,8 @@ use crate::Position;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Action {
     /// Poser un pion de sa réserve sur une case libre ; coûte
-    /// [`crate::GameConfig::place_cost`] actions.
+    /// [`crate::GameConfig::place_cost`] actions, dans la limite de
+    /// [`crate::GameConfig::max_placements_per_turn`] poses par tour.
     Place(Position),
     /// Commencer l'attaque de cet emplacement de son arsenal. Le lanceur puis les cibles
     /// se choisissent ensuite avec [`Action::Choose`] ; le coût est payé au dernier choix.

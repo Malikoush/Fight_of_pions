@@ -2,7 +2,7 @@
 
 mod common;
 
-use bots::{Banking, Bot, GreedyBot, Windows};
+use bots::{Banking, Bot, GreedyBot, Windows, target_rules};
 use common::{duel, place, play};
 use fight_of_pions::{Action, Game, Player, Rng};
 
@@ -83,6 +83,21 @@ fn the_banker_keeps_its_actions_and_the_spender_does_not() {
         greedy().choose(&game, &mut Rng::new(0)),
         Some(Action::Place(_))
     ));
+}
+
+#[test]
+fn the_banker_still_makes_a_free_placement() {
+    // Règles cibles : la pose ne coûte aucune action, garder ses actions n'empêche pas de poser.
+    let mut game = Game::new(target_rules(), 0).unwrap();
+    let banker = GreedyBot::new(Banking::KeepMax);
+    let action = banker.choose(&game, &mut Rng::new(0)).unwrap();
+    assert!(matches!(action, Action::Place(_)), "{action:?}");
+
+    game.apply(action).unwrap();
+    assert_eq!(
+        banker.choose(&game, &mut Rng::new(0)),
+        Some(Action::EndTurn)
+    );
 }
 
 #[test]
