@@ -4,8 +4,8 @@ mod common;
 
 use common::{SEED, game_with, new_game, place, random_config};
 use fight_of_pions::{
-    Action, Event, Game, GameConfig, GameEnd, GameError, GameRecord, Pion, Player, Position,
-    Rarity, ReplayError, Rng,
+    Action, Event, Game, GameConfig, GameEnd, GameError, GameRecord, Pion, PionId, Player,
+    Position, Rarity, ReplayError, Rng,
 };
 
 /// Ce qu'un client sait de la partie s'il ne suit **que** les événements, en partant de
@@ -21,22 +21,51 @@ struct EventMirror {
     cooldowns: [Vec<u32>; 2],
     current_player: Player,
     end: Option<GameEnd>,
+    /// Les pions posés depuis le début du tour en cours.
+    arrived: Vec<PionId>,
+    /// Ce qu'il faut de la configuration pour recalculer les poses restantes.
+    place_cost: u32,
+    max_placements_per_turn: Option<u32>,
+    summoning_sickness: bool,
 }
 
 impl EventMirror {
     /// L'état de départ, connu par la seule configuration.
     fn new(config: &GameConfig) -> EventMirror {
         let ready = |player: Player| vec![0; config.starting_attacks[player.index()].len()];
+        let [first_bank, second_bank] = config.starting_banked_actions;
         EventMirror {
             size: config.board_size,
             cells: vec![None; config.board_size * config.board_size],
             reserves: [config.pions_per_player; 2],
-            actions_left: [config.first_turn_actions, 0],
-            banked: [0, 0],
+            actions_left: [config.first_turn_actions + first_bank, 0],
+            banked: [0, second_bank],
             cooldowns: [ready(Player::One), ready(Player::Two)],
             current_player: Player::One,
             end: None,
+            arrived: Vec::new(),
+            place_cost: config.place_cost,
+            max_placements_per_turn: config.max_placements_per_turn,
+            summoning_sickness: config.summoning_sickness,
         }
+    }
+
+    /// Les poses restantes, recalculées depuis le seul miroir : un second calcul,
+    /// indépendant de celui du moteur.
+    fn placements_left(&self) -> u32 {
+        if self.end.is_some() {
+            return 0;
+        }
+        let i = self.current_player.index();
+        let made = self.arrived.len() as u32;
+        let by_actions = self.actions_left[i]
+            .checked_div(self.place_cost)
+            .unwrap_or(u32::MAX);
+        let by_limit = self
+            .max_placements_per_turn
+            .map_or(u32::MAX, |max| max - made);
+        let free = self.cells.iter().filter(|cell| cell.is_none()).count() as u32;
+        by_actions.min(by_limit).min(self.reserves[i]).min(free)
     }
 
     fn cell(&mut self, at: Position) -> &mut Option<Pion> {
@@ -52,6 +81,7 @@ impl EventMirror {
                     "pose sur une case occupée : {event:?}"
                 );
                 *self.cell(at) = Some(pion);
+                self.arrived.push(pion.id());
             }
             Event::PionKilled { pion, at, .. } => {
                 assert_eq!(*self.cell(at), Some(pion), "pion tué absent : {event:?}");
@@ -84,7 +114,10 @@ impl EventMirror {
             }
             // L'attaque elle-même ne change rien : ses effets sont annoncés à part.
             Event::AttackUsed { .. } => {}
-            Event::TurnEnded { next } => self.current_player = next,
+            Event::TurnEnded { next } => {
+                self.current_player = next;
+                self.arrived.clear();
+            }
             Event::GameEnded(end) => self.end = Some(end),
         }
     }
@@ -94,7 +127,11 @@ impl EventMirror {
             let in_game = game.board().get(pos).and_then(|cell| cell.pion());
             let mirrored = self.cells[pos.row * self.size + pos.col];
             assert_eq!(mirrored, in_game, "case {pos} différente");
+            let sick = self.summoning_sickness
+                && mirrored.is_some_and(|pion| self.arrived.contains(&pion.id()));
+            assert_eq!(sick, game.is_summoning_sick(pos), "case {pos}");
         }
+        assert_eq!(self.placements_left(), game.placements_left());
         for player in [Player::One, Player::Two] {
             let i = player.index();
             assert_eq!(self.reserves[i], game.reserve_pions(player));

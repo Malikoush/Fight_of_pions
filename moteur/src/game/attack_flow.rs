@@ -6,6 +6,15 @@ use super::state::{Game, PendingAttack};
 use crate::attacks::{AttackContext, Effect, can_complete};
 use crate::{Attack, AttackStats, Cell, Event, GameError, Pion, PionId, Player, Position};
 
+/// Quand un pion doit pouvoir lancer une attaque.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Launch {
+    /// Maintenant : le mal du débarquement compte.
+    Now,
+    /// Un jour : un pion posé ce tour pourra lancer au tour suivant.
+    Someday,
+}
+
 impl Game {
     pub(super) fn validate_use_attack(&self, slot: usize) -> Result<(), GameError> {
         let player = self.current_player;
@@ -17,8 +26,15 @@ impl Game {
             return Err(GameError::AttackRecharging(attack));
         }
         self.ensure_actions(self.attack_stats(attack).cost)?;
-        if !self.attack_has_a_target(player, attack) {
-            return Err(GameError::NoTarget(attack));
+        if !self.attack_has_a_target(player, attack, Launch::Now) {
+            // Des cibles, mais seulement depuis des pions posés ce tour : le dire.
+            return Err(
+                if self.attack_has_a_target(player, attack, Launch::Someday) {
+                    GameError::NoReadyLauncher(attack)
+                } else {
+                    GameError::NoTarget(attack)
+                },
+            );
         }
         Ok(())
     }
@@ -31,9 +47,10 @@ impl Game {
         let player = self.current_player;
         let attack = pending.attack;
         let allowed = match pending.launcher {
-            // Le lanceur : un de ses pions, depuis lequel l'attaque a au moins une cible.
+            // Le lanceur : un de ses pions prêt à lancer, depuis lequel l'attaque a au
+            // moins une cible.
             None => {
-                self.board.owner(pos) == Some(player)
+                self.can_launch(player, pos, Launch::Now)
                     && self.can_complete_from(player, attack, pos, &mut Vec::new())
             }
             // Une cible : proposée par la famille, et après laquelle on peut encore finir.
@@ -53,13 +70,20 @@ impl Game {
         }
     }
 
-    /// Vrai si ce joueur a, quelque part sur le plateau, un lanceur depuis lequel cette
-    /// attaque peut aller au bout. Ne regarde ni le coût ni la recharge.
-    pub(super) fn attack_has_a_target(&self, player: Player, attack: Attack) -> bool {
+    /// Vrai si ce joueur a, quelque part sur le plateau, un lanceur prêt (`when`) depuis
+    /// lequel cette attaque peut aller au bout. Ne regarde ni le coût ni la recharge.
+    pub(super) fn attack_has_a_target(&self, player: Player, attack: Attack, when: Launch) -> bool {
         self.board
             .positions()
-            .filter(|&pos| self.board.owner(pos) == Some(player))
+            .filter(|&pos| self.can_launch(player, pos, when))
             .any(|launcher| self.can_complete_from(player, attack, launcher, &mut Vec::new()))
+    }
+
+    /// Vrai si le pion de cette case est à ce joueur et peut lancer une attaque `when` :
+    /// avec le mal du débarquement, un pion posé ce tour ne le peut pas maintenant.
+    fn can_launch(&self, player: Player, pos: Position, when: Launch) -> bool {
+        let sick = when == Launch::Now && self.is_summoning_sick(pos);
+        self.board.owner(pos) == Some(player) && !sick
     }
 
     pub(super) fn start_attack(&mut self, slot: usize) {

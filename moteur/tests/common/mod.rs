@@ -70,13 +70,20 @@ pub fn random_below(rng: &mut Rng, len: usize) -> usize {
 }
 
 /// Une configuration valide tirée au hasard, petite pour que les fins arrivent vite.
-/// Elle couvre les cas où il faut économiser ses actions pour poser ou attaquer, et donne
-/// souvent des attaques aux joueurs (parfois deux fois la même carte).
+/// Elle couvre les cas où il faut économiser ses actions pour poser ou attaquer, les poses
+/// limitées par tour (parfois gratuites), la banque de départ et le mal du débarquement,
+/// et donne souvent des attaques aux joueurs (parfois deux fois la même carte).
 pub fn random_config(rng: &mut Rng) -> GameConfig {
     let board_size = 2 + random_below(rng, 4);
     let actions_per_turn = 1 + random_below(rng, 2) as u32;
     let max_banked_actions = random_below(rng, 3) as u32;
     let max_actions = (actions_per_turn + max_banked_actions) as usize;
+    let max_placements_per_turn =
+        (random_below(rng, 2) == 1).then(|| 1 + random_below(rng, 2) as u32);
+    // La pose ne peut être gratuite que si elle est limitée par tour.
+    let cheapest_place = usize::from(max_placements_per_turn.is_none());
+    let mut random_bank = || random_below(rng, max_banked_actions as usize + 1) as u32;
+    let starting_banked_actions = [random_bank(), random_bank()];
     let attacks = [ours(Rarity::Rare), ours(Rarity::Epic)];
     let attack_catalog = attacks
         .iter()
@@ -102,7 +109,10 @@ pub fn random_config(rng: &mut Rng) -> GameConfig {
         first_turn_actions: 1 + random_below(rng, 5) as u32,
         actions_per_turn,
         max_banked_actions,
-        place_cost: 1 + random_below(rng, max_actions) as u32,
+        starting_banked_actions,
+        place_cost: (cheapest_place + random_below(rng, max_actions + 1 - cheapest_place)) as u32,
+        max_placements_per_turn,
+        summoning_sickness: random_below(rng, 2) == 1,
         max_turns: 1 + random_below(rng, 60) as u32,
         attack_catalog,
         starting_attacks,

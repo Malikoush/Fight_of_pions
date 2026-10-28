@@ -16,6 +16,8 @@ pub const COUPS_AU_HASARD_MAX: u32 = 500;
 /// Hauteur, en lignes, de la zone où l'on colle une partie à charger.
 pub const LIGNES_ZONE_CHARGEMENT: usize = 4;
 pub const INDICE_CHARGEMENT: &str = "Coller ici une partie copiée";
+/// La limite proposée quand on coche « Poses par tour : limitées ».
+pub const POSES_PAR_TOUR_PROPOSEES: u32 = 1;
 /// Hauteur maximale du journal, en points : au-delà, il défile.
 pub const HAUTEUR_JOURNAL: f32 = 220.0;
 
@@ -60,6 +62,13 @@ pub const RAYON_MARQUE_JOUABLE: f32 = 0.07;
 pub const ANNEAU_CHOIX: Color32 = Color32::from_rgb(211, 47, 47);
 /// Anneau sur le pion lanceur déjà choisi.
 pub const ANNEAU_LANCEUR: Color32 = Color32::from_rgb(255, 160, 0);
+/// Point au centre d'un pion posé ce tour, quand le mal du débarquement l'empêche
+/// d'attaquer, et son rayon en fraction du côté d'une case.
+pub const MARQUE_NOUVEAU: Color32 = Color32::from_rgb(0, 150, 136);
+pub const RAYON_MARQUE_NOUVEAU: f32 = 0.1;
+/// Sa légende, sous l'état de la partie : elle nomme la couleur ci-dessus.
+pub const LEGENDE_MARQUE_NOUVEAU: &str =
+    "Point turquoise : pion posé ce tour, il ne peut pas encore attaquer.";
 /// Rayon de ces anneaux, en fraction du côté d'une case, et leur épaisseur en points.
 pub const RAYON_ANNEAU: f32 = 0.46;
 pub const EPAISSEUR_ANNEAU: f32 = 3.0;

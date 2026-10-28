@@ -21,9 +21,22 @@ pub struct GameConfig {
     pub actions_per_turn: u32,
     /// Actions non utilisées qu'on peut garder pour le tour suivant.
     pub max_banked_actions: u32,
-    /// Actions que coûte la pose d'un pion, au moins 1, et atteignable en économisant :
-    /// au plus `actions_per_turn + max_banked_actions`.
+    /// Actions que chaque joueur a en banque au début de la partie (indice :
+    /// `Player::index`), au plus `max_banked_actions`. La Pièce, qui compense le premier
+    /// joueur : `[0, 1]`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub starting_banked_actions: [u32; 2],
+    /// Actions que coûte la pose d'un pion, atteignable en économisant : au plus
+    /// `actions_per_turn + max_banked_actions`. Au moins 1, sauf si les poses sont limitées
+    /// par tour : 0 rend alors la pose gratuite.
     pub place_cost: u32,
+    /// Le plus de pions qu'un joueur peut poser dans un tour, au moins 1 ; les poses non
+    /// faites ne s'accumulent pas. `None` : seules les actions limitent les poses.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub max_placements_per_turn: Option<u32>,
+    /// Le mal du débarquement : un pion posé ce tour ne peut pas lancer d'attaque.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub summoning_sickness: bool,
     /// La partie s'arrête (match nul) à la fin de ce tour, au moins 1. Filet de sécurité
     /// pour les bots : une vraie partie ne doit pas l'atteindre.
     pub max_turns: u32,
@@ -44,7 +57,10 @@ impl Default for GameConfig {
             first_turn_actions: 1,
             actions_per_turn: 2,
             max_banked_actions: 2,
+            starting_banked_actions: [0, 0],
             place_cost: 1,
+            max_placements_per_turn: None,
+            summoning_sickness: false,
             max_turns: 200,
             attack_catalog: default_attack_catalog(),
             starting_attacks: [Vec::new(), Vec::new()],
@@ -78,10 +94,15 @@ pub enum ConfigError {
     NoPions,
     /// Un tour ne donnerait aucune action.
     NoActionsPerTurn,
-    /// Poser un pion ne coûterait rien : toute la réserve partirait en un tour.
+    /// Poser un pion ne coûterait rien sans limite par tour : toute la réserve partirait
+    /// en un tour.
     FreePlacement,
+    /// La limite de poses par tour vaudrait 0 : personne ne pourrait jamais poser.
+    NoPlacementPerTurn,
     /// Poser un pion coûterait plus que le maximum d'actions d'un tour, même en économisant.
     PlacementUnreachable,
+    /// Un joueur commencerait avec plus d'actions en banque qu'on ne peut en garder.
+    StartingBankTooLarge,
     /// La limite de tours vaudrait 0 : la partie finirait avant de commencer.
     NoTurnLimit,
     /// Cette attaque du catalogue n'est pas (encore) jouable par le moteur.
@@ -119,12 +140,20 @@ impl fmt::Display for ConfigError {
             ConfigError::NoActionsPerTurn => {
                 write!(f, "chaque tour doit donner au moins une action")
             }
-            ConfigError::FreePlacement => {
-                write!(f, "poser un pion doit coûter au moins une action")
+            ConfigError::FreePlacement => write!(
+                f,
+                "poser un pion doit coûter au moins une action, ou être limité par tour"
+            ),
+            ConfigError::NoPlacementPerTurn => {
+                write!(f, "la limite de poses par tour doit valoir au moins 1")
             }
             ConfigError::PlacementUnreachable => write!(
                 f,
                 "poser un pion coûte plus que le maximum d'actions d'un tour, même en économisant"
+            ),
+            ConfigError::StartingBankTooLarge => write!(
+                f,
+                "la banque de départ dépasse le maximum d'actions gardées"
             ),
             ConfigError::NoTurnLimit => write!(f, "la limite de tours doit valoir au moins 1"),
             ConfigError::AttackNotImplemented(attack) => {
@@ -211,11 +240,21 @@ impl GameConfig {
         if self.first_turn_actions == 0 || self.actions_per_turn == 0 {
             return Some(ConfigError::NoActionsPerTurn);
         }
-        if self.place_cost == 0 {
+        if self.place_cost == 0 && self.max_placements_per_turn.is_none() {
             return Some(ConfigError::FreePlacement);
+        }
+        if self.max_placements_per_turn == Some(0) {
+            return Some(ConfigError::NoPlacementPerTurn);
         }
         if self.place_cost > self.max_actions_in_a_turn() {
             return Some(ConfigError::PlacementUnreachable);
+        }
+        if self
+            .starting_banked_actions
+            .iter()
+            .any(|&bank| bank > self.max_banked_actions)
+        {
+            return Some(ConfigError::StartingBankTooLarge);
         }
         if self.max_turns == 0 {
             return Some(ConfigError::NoTurnLimit);
@@ -333,12 +372,32 @@ mod tests {
     }
 
     #[test]
-    fn placing_cannot_be_free() {
-        let config = GameConfig {
+    fn placing_is_free_only_when_limited_per_turn() {
+        let free = GameConfig {
             place_cost: 0,
             ..GameConfig::default()
         };
-        assert_eq!(problem(config), Some(ConfigError::FreePlacement));
+        assert_eq!(problem(free.clone()), Some(ConfigError::FreePlacement));
+        let limited = |max| GameConfig {
+            max_placements_per_turn: Some(max),
+            ..free.clone()
+        };
+        assert_eq!(problem(limited(1)), None);
+        assert_eq!(problem(limited(0)), Some(ConfigError::NoPlacementPerTurn));
+    }
+
+    #[test]
+    fn the_starting_bank_fits_in_the_bank() {
+        let with_bank = |starting_banked_actions| GameConfig {
+            starting_banked_actions,
+            ..GameConfig::default()
+        };
+        // On garde au plus 2 actions par défaut.
+        assert_eq!(problem(with_bank([0, 2])), None);
+        assert_eq!(
+            problem(with_bank([3, 0])),
+            Some(ConfigError::StartingBankTooLarge)
+        );
     }
 
     #[test]

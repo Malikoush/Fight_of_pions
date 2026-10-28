@@ -67,6 +67,22 @@ pub fn current_rules() -> GameConfig {
     GameConfig::default().with_full_arsenals()
 }
 
+/// Les règles cibles (carnet de règles, « Règles cibles ») : 1 pose gratuite par tour, 1
+/// action par tour gardée jusqu'à 3, la Pièce et le mal du débarquement. Le reste suit la
+/// règle actuelle.
+pub fn target_rules() -> GameConfig {
+    GameConfig {
+        first_turn_actions: 1,
+        actions_per_turn: 1,
+        max_banked_actions: 3,
+        starting_banked_actions: [0, 1],
+        place_cost: 0,
+        max_placements_per_turn: Some(1),
+        summoning_sickness: true,
+        ..current_rules()
+    }
+}
+
 /// Les variantes comparées par défaut, la règle actuelle d'abord. Une ligne de plus ici
 /// suffit pour mesurer un nouveau réglage, tant qu'il tient dans la configuration :
 /// l'arène et le labo la proposent aussitôt.
@@ -96,6 +112,10 @@ pub fn variants() -> Vec<Variant> {
         Variant {
             name: "banque max 1 et Ours Rare à 1 action",
             config: with_cost(bank_of_one, ours_rare, 1),
+        },
+        Variant {
+            name: "règles cibles",
+            config: target_rules(),
         },
     ]
 }

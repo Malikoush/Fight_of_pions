@@ -378,7 +378,14 @@ fn etat(ui: &mut egui::Ui, game: &Game) {
             ));
         }
     }
-    ui.label(format!("Actions restantes : {}", game.actions_left()));
+    ui.label(format!(
+        "Actions restantes : {}, poses restantes : {}",
+        game.actions_left(),
+        game.placements_left()
+    ));
+    if game.config().summoning_sickness {
+        ui.label(theme::LEGENDE_MARQUE_NOUVEAU);
+    }
     for player in [Player::One, Player::Two] {
         ui.label(format!(
             "{} : {} pions en réserve, {} actions gardées",

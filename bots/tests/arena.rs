@@ -2,14 +2,15 @@
 
 use bots::{
     Banking, Bot, BotKind, GreedyBot, RandomBot, STANDARD_PAIRS, current_rules, record_game, run,
-    run_pairs,
+    run_pairs, target_rules,
 };
 use fight_of_pions::{Action, Event, Game, GameConfig, GameError, Position, Rng};
 
 /// Des configurations variées, et combien de parties y jouer : la règle actuelle (une
 /// seule, ses parties entre gloutons durent jusqu'à la limite de tours), un petit plateau
-/// où il faut économiser pour attaquer, un morpion où le plateau se remplit, et deux où
-/// poser coûte 2 actions (il faut économiser pour poser, dès le premier tour).
+/// où il faut économiser pour attaquer, un morpion où le plateau se remplit, deux où
+/// poser coûte 2 actions (il faut économiser pour poser, dès le premier tour), et
+/// les règles cibles sur un petit plateau.
 fn configs() -> Vec<(GameConfig, u64)> {
     let current = current_rules();
     let mut tiny = GameConfig {
@@ -25,8 +26,15 @@ fn configs() -> Vec<(GameConfig, u64)> {
     for entry in &mut tiny.attack_catalog {
         entry.stats.cost = entry.stats.cost.min(2);
     }
+    let small_target_rules = GameConfig {
+        board_size: 5,
+        align_to_win: 4,
+        pions_per_player: 6,
+        ..target_rules()
+    };
     vec![
         (tiny, 3),
+        (small_target_rules, 3),
         (
             GameConfig {
                 board_size: 5,
