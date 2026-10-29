@@ -1,6 +1,6 @@
 # Glossaire
 
-Dernière mise à jour : 2026-10-28.
+Dernière mise à jour : 2026-10-29.
 
 Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de règles et dans le code.
 
@@ -21,14 +21,16 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Manche | `round` (cible) | Un tour de chaque joueur (le « Tour 1 » du tableau du GDD) |
 | Action | `Action` | Une décision envoyée au moteur : `Place`, `UseAttack`, `Choose`, `EndTurn` (plus tard `Pass` pour les réactions…) |
 | Coût de la pose | `place_cost` | Actions que coûte la pose d'un pion (1 par défaut). 0 (pose gratuite) seulement si les poses sont limitées par tour. |
-| Poses par tour | `max_placements_per_turn` | Le plus de pions qu'un joueur peut poser dans un tour ; elles ne s'accumulent pas. `None` (par défaut) : seules les actions limitent les poses. |
+| Poses par tour | `max_placements_per_turn`, `GameError::NoPlacementLeft` | Le plus de pions qu'un joueur peut poser dans un tour ; elles ne s'accumulent pas. `None` (par défaut) : seules les actions limitent les poses. Une pose de trop est refusée (`NoPlacementLeft`) ; une limite de 0 est refusée à la configuration (`ConfigError::NoPlacementPerTurn`), comme une pose gratuite sans limite (`ConfigError::FreePlacement`). |
 | Poses restantes | `Game::placements_left()` | Combien de pions le joueur courant peut encore poser ce tour : selon ses actions, ses poses permises, sa réserve et les cases libres |
 | Actions du tour | `actions_left` | Ce qu'il reste à dépenser au joueur courant. Dans les règles cibles, on parle de **points d'action** : ils ne servent qu'aux cartes. |
 | Actions en réserve | `banked_actions`, `Game::banked_actions()` | Actions non utilisées gardées pour le tour suivant (jusqu'à `max_banked_actions`, 2 par défaut). **À ne pas confondre avec la réserve de pions.** |
-| Banque de départ, la Pièce | `starting_banked_actions` | Actions que chaque joueur a en banque au début de la partie (0 par défaut). La Pièce : J2 commence avec 1, pour compenser le premier joueur. |
+| Banque de départ, la Pièce | `starting_banked_actions`, `ConfigError::StartingBankTooLarge` | Actions que chaque joueur a en banque au début de la partie (0 par défaut), au plus `max_banked_actions`. J1 les reçoit avec son premier tour, J2 les trouve en banque. La Pièce : J2 commence avec 1, pour compenser le premier joueur. |
 | Règles cibles | `bots::target_rules()`, variante « règles cibles » | La configuration vers laquelle le jeu va, face aux règles actuelles (`current_rules()`) : 1 pose gratuite par tour, 1 point d'action par tour gardé jusqu'à 3, mal du débarquement, la Pièce (voir le carnet) |
 | Événement | `Event` | Ce que le moteur annonce après une action ; suffit à suivre tout l'état visible |
 | Compteurs d'actions annoncés | `Event::ActionsChanged` | Actions restantes et gardées d'un joueur, émis à chaque changement |
+| Poses restantes annoncées | `Event::PlacementsChanged` | Poses restantes d'un joueur (`Game::placements_left`), émis à chaque changement, toujours avant la fin de partie |
+| Attaque en cours de choix | `Decision::is_attack_choice()`, `Game::attack_in_progress()` | Une attaque commencée attend son lanceur ou une cible : seule `Action::Choose` est permise |
 | Réserve annoncée | `Event::ReserveChanged` | Pions en réserve d'un joueur, émis à chaque changement (pose, kill…) |
 | Refus | `GameError` | Pourquoi une action ou une configuration est refusée |
 | Configuration incohérente | `ConfigError` | La raison précise du refus d'une configuration (`GameError::InvalidConfig`) |
@@ -64,7 +66,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Zombie | type de pion (cible) | Pion ressuscité par le Médecin |
 | Axe d'alignement | `Direction::AXES`, `axis` | Une des 4 directions de ligne : horizontale, verticale, deux diagonales |
 | Alignement | `rules::complete_line` | Une ligne droite d'au moins `align_to_win` pions d'un joueur |
-| Règle d'or | victoire en attente (cible) | Une ligne obtenue par une attaque doit survivre à un tour adverse |
+| Règle d'or | `golden_rule`, `rules::has_line` | Une ligne ne gagne qu'au début du tour de son propriétaire, si elle y est encore. Une ligne présente au début de son tour gagne dans tous les cas ; une ligne en attente gagne aussi quand la partie s'arrête. |
 
 ## Attaques
 
@@ -97,7 +99,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Glouton, banquier | `Banking::SpendAll`, `Banking::KeepMax` | Le glouton dépense toutes ses actions ; le banquier garde le maximum permis, sauf pour gagner ou se défendre |
 | Fenêtre | `Windows`, `WindowContent` | Une suite de `align_to_win` cases consécutives sur un axe d'alignement. Sans pion adverse, c'est une ligne encore possible. |
 | Menace | `threats` (interne aux bots) | Une fenêtre que l'adversaire peut finir en posant à son prochain tour |
-| Poses possibles | `placement_budget` (interne) | Combien de pions un joueur peut poser dans son tour (en cours, ou le prochain lu sur une copie) : actions, coût de la pose et réserve |
+| Poses possibles | `placement_budget` (interne) | Combien de pions un joueur peut poser dans son tour : `Game::placements_left` pour le tour en cours, ou sur une copie où l'on a fini son tour pour le prochain |
 | Plan d'attaque | `AttackPlan` (interne) | Une attaque jouée jusqu'au bout sur une copie de la partie, pour voir son effet sans connaître sa règle |
 | Arène | `bots::run`, `bots::run_pairs`, `cargo arene` | Joue N parties entre deux bots (graines 0 à N−1) et en fait le bilan ; `run_pairs` le fait pour plusieurs paires en parallèle |
 | Bots disponibles | `BotKind` | La liste des bots proposés par l'arène et le labo : aléatoire, glouton, banquier |

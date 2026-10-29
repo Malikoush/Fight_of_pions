@@ -32,6 +32,15 @@ pub enum Decision {
 }
 
 impl Decision {
+    /// Vrai si c'est un choix d'attaque commencée (lanceur ou cible), et non l'action
+    /// principale du tour.
+    pub fn is_attack_choice(self) -> bool {
+        matches!(
+            self,
+            Decision::ChooseLauncher { .. } | Decision::ChooseTarget { .. }
+        )
+    }
+
     /// Le joueur qui doit choisir.
     pub fn player(self) -> Player {
         match self {

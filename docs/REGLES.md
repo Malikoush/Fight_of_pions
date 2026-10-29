@@ -8,7 +8,7 @@ Ce carnet dit **ce que le moteur implémente réellement**, avec la date de chaq
 
 - Plateau de `board_size × board_size` cases (10 par défaut), toutes jouables.
 - Chaque joueur a `pions_per_player` pions en réserve (15 par défaut).
-- Aligner au moins `align_to_win` pions (6 par défaut) en ligne droite (horizontale, verticale ou diagonale) **en posant** gagne immédiatement.
+- Aligner au moins `align_to_win` pions (6 par défaut) en ligne droite (horizontale, verticale ou diagonale) **en posant** gagne immédiatement, sans la règle d'or ; avec elle, la ligne gagne au début du tour suivant de son propriétaire (voir « Fin de partie »).
 
 ### Configuration (2026-10-26)
 
@@ -81,23 +81,26 @@ Attaque de corps à corps sur les 8 cases autour du lanceur, diagonales comprise
 
 Une partie se termine dans l'un de ces trois cas, vérifiés dans cet ordre :
 
-1. **Alignement** : le joueur qui aligne en posant gagne immédiatement.
+1. **Alignement** : une ligne d'au moins `align_to_win` pions fait gagner son propriétaire :
+   - sans la règle d'or (par défaut), dès qu'elle est faite en posant ;
+   - **au début de son tour**, si elle y est encore, dans tous les cas (2026-10-29). C'est ce qui fait gagner avec la règle d'or (`golden_rule`), et ce qui couvre les lignes faites par une carte, y compris une carte de l'adversaire. Ce contrôle passe avant le gain des actions et les recharges : le joueur qui gagne ainsi ne reçoit pas ses actions.
 2. **Partie figée** : plus aucun joueur ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation. Un joueur peut encore agir s'il peut poser (un pion en réserve et une case libre) ou lancer une attaque qui a une cible, même si elle est en recharge ou qu'il doit économiser pour la payer (2026-10-27). Résultat : **match nul**.
    Une réserve vide ne fige donc plus la partie tant qu'un contact entre ennemis permet d'attaquer. Le risque principal devient la partie sans fin, traité par la limite de tours et l'anti-stagnation.
 3. **Limite de tours** : à la fin du tour numéro `max_turns` (200 par défaut). Chaque tour d'un joueur compte : 200 tours font 100 tours par joueur. C'est un filet de sécurité pour les bots ; il n'est pas censé arriver dans une vraie partie. Résultat : **match nul**.
+
+Quand la partie s'arrête ainsi (figée ou limite de tours), une ligne qui attendait le début du tour de son propriétaire **gagne quand même** (2026-10-29) : on fait comme si les tours continuaient, donc l'adversaire du dernier joueur est vérifié d'abord, puis le dernier joueur. Sinon, nul.
 
 Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors alignement est pour l'instant toujours le nul ; un départage pourra le remplacer sans toucher au reste.
 
 ## Pas encore implémenté
 
 - Les autres attaques que l'Ours Rare et Épique, et les réactions.
-- La règle d'or (aucune attaque actuelle ne peut créer une ligne : tuer n'en complète jamais).
 - Le draft et la cache secrète.
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
 
-### Règles cibles (décidées le 2026-10-28, codées en option sauf la règle d'or et le départage)
+### Règles cibles (décidées le 2026-10-28, codées en option sauf le départage)
 
-Codées avec les réglages ci-dessus (variante « règles cibles », `bots::target_rules()`) : 1 pose gratuite par tour, 1 action par tour, 3 actions gardées au plus, la Pièce, le mal du débarquement. Restent à coder : la règle d'or (B2), et le départage, en attente. Aujourd'hui, une ligne de 6 gagne donc tout de suite, comme dans les règles actuelles.
+Codées avec les réglages ci-dessus (variante « règles cibles », `bots::target_rules()`) : 1 pose gratuite par tour, 1 action par tour, 3 actions gardées au plus, la Pièce, le mal du débarquement, et la règle d'or (`golden_rule`, 2026-10-29). Reste à coder : le départage, en attente.
 
 Elles remplaceront le tour de jeu actuel (actions partagées entre poser et attaquer). Comparée à une économie « à la pioche » (pions sacrifiés en points d'action, pions tués recrutés, fatigue), écartée : le jeu n'est pas un Connect6, ce sont les cartes (attaque, mouvement, invocation, pose…) qui font avancer le plateau.
 
@@ -111,9 +114,9 @@ Elles remplaceront le tour de jeu actuel (actions partagées entre poser et atta
 - **Premier joueur** : J2 commence avec 1 point en banque (la Pièce).
 - **Tous ses pions sur le plateau** : on ne peut plus poser, il reste les cartes. C'est au joueur de gérer (à revoir plus tard si besoin).
 - **Limite de tours** : la partie s'arrête sur une égalité. Le départage (critère et tour) est en attente.
-- Une ligne créée pour un joueur par une carte de l'adversaire (échange, séduction) : voir les questions bloquantes (B2).
+- Une ligne créée pour un joueur par une carte de l'adversaire (échange, séduction) compte, comme toute ligne (2026-10-29).
 
-Plan de mesure : les règles actuelles et les règles cibles sont deux configurations, comparées par l'arène. Avec les seuls Ours, les règles cibles sont mesurées dans leur pire cas (aucune carte pour construire) ; on les remesurera après B2 (règle d'or), B4 (mouvement) puis B5 (invocations). Premiers résultats : voir la feuille de route.
+Plan de mesure : les règles actuelles et les règles cibles sont deux configurations, comparées par l'arène. Avec les seuls Ours, les règles cibles sont mesurées dans leur pire cas (aucune carte pour construire) ; remesurées après B2 (règle d'or, 2026-10-29), et à remesurer après B4 (mouvement) puis B5 (invocations). Résultats : voir la feuille de route.
 
 ## Questions bloquantes
 
@@ -126,8 +129,9 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B1 | Le coût d'une attaque est-il payé quand tous les choix sont faits ? Peut-on annuler gratuitement pendant le ciblage ? | Oui et oui | **2026-10-27** : oui. Le coût est payé et la carte part en recharge au dernier choix. L'annulation est gratuite mais se fait dans l'interface (sélection sur une copie de la partie) : le moteur n'a pas d'action « annuler », pour qu'aucun bot ne puisse boucler. Le moteur ne propose jamais un choix qui mène à une impasse. |
 | B1 | Un pion tué retourne dans la réserve de son propriétaire, et laisse-t-il une tombe dès maintenant ? | Retour en réserve oui ; tombe ajoutée avec le Médecin | **2026-10-27** : retour en réserve, comme le dit le GDD. Pas de tombe avant B9 (Médecin), quand sa règle sera figée. |
 | B2 | « Survivre à un tour adverse » : la même ligne, ou n'importe quelle ligne de 6 ? | N'importe quelle ligne de 6 au début du tour suivant du joueur | **2026-10-28** : n'importe quelle ligne de 6 ou plus au début de son tour gagne. |
-| B2 | Si une attaque crée une ligne pour **l'adversaire** (échange, séduction), que se passe-t-il ? | Elle compte : si elle est toujours là au début de son tour, cet adversaire gagne (celui qui a joué la carte avait son tour pour l'éviter ou la casser). Découle de la règle d'or du 2026-10-28, sans exception. | |
-| B2 | Si la partie s'arrête (figée ou limite de tours) alors qu'une victoire est en attente, que se passe-t-il ? | La victoire en attente l'emporte | |
+| B2 | Si une attaque crée une ligne pour **l'adversaire** (échange, séduction), que se passe-t-il ? | Elle compte : si elle est toujours là au début de son tour, cet adversaire gagne (celui qui a joué la carte avait son tour pour l'éviter ou la casser). Découle de la règle d'or du 2026-10-28, sans exception. | **2026-10-29** : elle compte, sans exception. |
+| Statistiques | Une victoire obtenue quand la partie s'arrête (ligne en attente) rend la même raison, « alignement », qu'une victoire en jeu : faut-il les distinguer, pour mesurer combien de parties se jouent ainsi ? | Non pour l'instant | |
+| B2 | Si la partie s'arrête (figée ou limite de tours) alors qu'une victoire est en attente, que se passe-t-il ? | La victoire en attente l'emporte | **2026-10-29** : la ligne gagne. On fait comme si les tours continuaient : l'adversaire du dernier joueur est vérifié d'abord, puis le dernier joueur ; sinon, nul. |
 | Anti-stagnation | Effondrement, boost d'actions par tour, ou les deux ? Règle de répétition (même position 3 fois) ? Nul ou départage quand la partie s'arrête sans alignement ? | À mesurer avec les bots | **2026-10-28** (en partie) : avec les règles cibles, la limite de tours donne une égalité ; le départage est en attente. |
 | Règles cibles | « Banque de 3 » : 3 actions gardées d'un tour à l'autre (donc jusqu'à 4 dans un tour, avec celle du tour), ou 3 au total ? | 3 gardées : c'est ce qui est codé (`max_banked_actions` = 3). Pour 3 au total, régler 2 gardées. | |
 | Règles cibles | Un pion déplacé par une carte redevient-il « nouveau » (mal du débarquement) ? | Non : seuls la pose et l'invocation | **2026-10-28** : seuls un pion posé ou invoqué ce tour ne peut pas attaquer. |
@@ -141,6 +145,7 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B5 | Un pion séduit qui meurt retourne dans la réserve de quel joueur ? | Son camp actuel | |
 | B7 | Qu'est-ce que le « mur » du Coup du taureau ? Un trou est-il permanent ? | À définir | |
 | B8 | Quand plusieurs effets réagissent au même événement, dans quel ordre ? | D'abord le joueur qui subit, puis l'autre | |
+| B8 | Avec le mal du débarquement, un pion posé à son dernier tour peut-il **réagir** pendant le tour adverse ? (Aujourd'hui, l'ancienneté se compte depuis le début du tour en cours : il n'est déjà plus « nouveau » au tour adverse.) | Oui | |
 | B10 | Les Légendaires peuvent-elles sortir au draft ? | Non (comme le GDD actuel) | |
 | B10 | Comment se déclenche la révélation d'une carte de la cache adverse ? | À définir | |
 
@@ -160,3 +165,5 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-10-27 | Labo : chaque joueur humain ou bot, écran Arène pour simuler des parties et en revoir une. Moteur inchangé. Aucune règle de jeu modifiée. |
 | 2026-10-28 | Économie réglable : poses limitées par tour (et alors gratuites si on veut), banque de départ (la Pièce), mal du débarquement. Par défaut, les règles ne changent pas ; la variante « règles cibles » les utilise. Le tour se termine automatiquement quand il ne reste ni action ni pose. |
 | 2026-10-28 | Règles cibles décidées (pose et points d'action séparés, mal du débarquement, règle d'or « une ligne au début de ton tour gagne », la Pièce, limite de tours → égalité). Codée en option le même jour (ligne ci-dessus), sauf la règle d'or et le départage. |
+| 2026-10-29 | Les poses restantes sont annoncées par un événement à chaque changement, comme les actions. Aucune règle de jeu modifiée. |
+| 2026-10-29 | B2 : la règle d'or, en option (`golden_rule`, activée dans les règles cibles). Une ligne présente au début de son tour gagne, dans tous les cas ; une ligne en attente gagne aussi quand la partie s'arrête (figée ou limite de tours). Par défaut, une ligne faite en posant gagne toujours aussitôt. |

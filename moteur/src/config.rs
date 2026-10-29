@@ -37,6 +37,13 @@ pub struct GameConfig {
     /// Le mal du débarquement : un pion posé ce tour ne peut pas lancer d'attaque.
     #[cfg_attr(feature = "serde", serde(default))]
     pub summoning_sickness: bool,
+    /// La règle d'or : une ligne gagnante ne fait jamais gagner tout de suite, mais au
+    /// début du tour de son propriétaire, si elle y est encore, ou quand la partie
+    /// s'arrête (figée, limite de tours). Sans elle, une ligne faite
+    /// en posant gagne aussitôt. Dans les deux cas, une ligne présente au début de son
+    /// tour fait gagner (c'est ce qui couvre les lignes faites par une carte).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub golden_rule: bool,
     /// La partie s'arrête (match nul) à la fin de ce tour, au moins 1. Filet de sécurité
     /// pour les bots : une vraie partie ne doit pas l'atteindre.
     pub max_turns: u32,
@@ -61,6 +68,7 @@ impl Default for GameConfig {
             place_cost: 1,
             max_placements_per_turn: None,
             summoning_sickness: false,
+            golden_rule: false,
             max_turns: 200,
             attack_catalog: default_attack_catalog(),
             starting_attacks: [Vec::new(), Vec::new()],

@@ -7,9 +7,12 @@
 //! 4. **Se développer** : poser sur une des meilleures cases selon les fenêtres.
 //!
 //! Il ne voit pas les attaques de l'adversaire dans ses menaces : une ligne bloquée qu'un
-//! Ours pourrait rouvrir ne l'inquiète pas.
+//! Ours pourrait rouvrir ne l'inquiète pas. Avec la règle d'or, il ne casse jamais une
+//! ligne adverse déjà faite : il mesure les menaces en finissant son tour sur une copie
+//! (`placement_budget`), où la ligne adverse gagne aussitôt ; il n'y voit donc plus aucune
+//! pose adverse possible, et aucune menace.
 
-use crate::reading::{AttackPlan, attack_plans, is_choosing, placeable, placement_budget};
+use crate::reading::{AttackPlan, attack_plans, placeable, placement_budget};
 use crate::windows::WindowContent;
 use crate::{Bot, Windows};
 use fight_of_pions::{Action, Game, Player, Position, Rng};
@@ -91,7 +94,7 @@ impl Bot for GreedyBot {
         };
         // Chaque étape ne propose que des actions légales : une erreur ici doit apparaître
         // comme un refus dans le bilan de l'arène, pas être rattrapée en silence.
-        if is_choosing(game) {
+        if game.attack_in_progress() {
             // La suite de l'attaque commencée, choisie comme au début : gagner d'abord,
             // sinon laisser le moins de menaces.
             view.winning_plan()

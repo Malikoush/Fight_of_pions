@@ -68,8 +68,8 @@ pub fn current_rules() -> GameConfig {
 }
 
 /// Les règles cibles (carnet de règles, « Règles cibles ») : 1 pose gratuite par tour, 1
-/// action par tour gardée jusqu'à 3, la Pièce et le mal du débarquement. Le reste suit la
-/// règle actuelle.
+/// action par tour gardée jusqu'à 3, la Pièce, le mal du débarquement et la règle d'or. Le
+/// reste suit la règle actuelle.
 pub fn target_rules() -> GameConfig {
     GameConfig {
         first_turn_actions: 1,
@@ -79,6 +79,7 @@ pub fn target_rules() -> GameConfig {
         place_cost: 0,
         max_placements_per_turn: Some(1),
         summoning_sickness: true,
+        golden_rule: true,
         ..current_rules()
     }
 }

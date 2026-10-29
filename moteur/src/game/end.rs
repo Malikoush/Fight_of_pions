@@ -13,7 +13,8 @@ pub enum Outcome {
 /// Pourquoi une partie s'est terminée.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EndReason {
-    /// Un joueur a aligné assez de pions en posant.
+    /// Un joueur a une ligne gagnante : faite en posant (sans la règle d'or), ou encore là
+    /// au début de son tour, ou au moment où la partie s'arrête.
     Alignment,
     /// Plus personne ne pourra jamais agir autrement qu'en finissant son tour.
     Frozen,

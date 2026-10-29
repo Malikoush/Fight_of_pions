@@ -128,6 +128,10 @@ impl ReglageDePartie {
             ui.label("Mal du débarquement");
             ui.checkbox(&mut config.summoning_sickness, "");
             ui.end_row();
+            ui.label("Règle d'or");
+            ui.checkbox(&mut config.golden_rule, "")
+                .on_hover_text("Une ligne ne gagne qu'au début du tour de son propriétaire.");
+            ui.end_row();
             ligne(ui, "Limite de tours", &mut config.max_turns);
         });
     }

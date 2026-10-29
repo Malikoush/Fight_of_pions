@@ -71,7 +71,7 @@ pub fn random_below(rng: &mut Rng, len: usize) -> usize {
 
 /// Une configuration valide tirée au hasard, petite pour que les fins arrivent vite.
 /// Elle couvre les cas où il faut économiser ses actions pour poser ou attaquer, les poses
-/// limitées par tour (parfois gratuites), la banque de départ et le mal du débarquement,
+/// limitées par tour (parfois gratuites), la banque de départ, le mal du débarquement et la règle d'or,
 /// et donne souvent des attaques aux joueurs (parfois deux fois la même carte).
 pub fn random_config(rng: &mut Rng) -> GameConfig {
     let board_size = 2 + random_below(rng, 4);
@@ -113,6 +113,7 @@ pub fn random_config(rng: &mut Rng) -> GameConfig {
         place_cost: (cheapest_place + random_below(rng, max_actions + 1 - cheapest_place)) as u32,
         max_placements_per_turn,
         summoning_sickness: random_below(rng, 2) == 1,
+        golden_rule: random_below(rng, 2) == 1,
         max_turns: 1 + random_below(rng, 60) as u32,
         attack_catalog,
         starting_attacks,

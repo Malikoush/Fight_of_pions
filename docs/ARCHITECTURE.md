@@ -1,6 +1,6 @@
 # Architecture de Fight of Pions
 
-Dernière mise à jour : 2026-10-27.
+Dernière mise à jour : 2026-10-29.
 
 Ce document décrit comment le code est organisé et **pourquoi**. Il sert de référence pour toutes les tâches de la [feuille de route](FEUILLE_DE_ROUTE.md). Ce qui n'existe pas encore est marqué **(cible)**.
 
@@ -44,7 +44,7 @@ Ils viennent de la conception initiale, et certains sont précisés par l'analys
 | Membre | Rôle | Dépendances |
 |---|---|---|
 | `moteur/` (paquet `fight_of_pions`) | Toutes les règles. Bibliothèque. | Aucune ; feature `serde` optionnelle (sauvegarde JSON d'un `GameRecord`) |
-| `labo/` | Client de test eframe/egui, en deux écrans. **Partie** : panneau, damier cliquable avec cases jouables, journal, graine, annuler, coups au hasard, copier/charger une partie, chaque joueur humain ou bot, configuration de la prochaine partie réglable. **Arène** : simuler des parties entre bots sur une configuration réglable, et en revoir une. **Arène** : simuler des parties entre bots et en revoir une. | `moteur` (avec `serde`), `bots`, `eframe`, `serde_json` |
+| `labo/` | Client de test eframe/egui, en deux écrans. **Partie** : panneau, damier cliquable avec cases jouables, journal, graine, annuler, coups au hasard, copier/charger une partie, chaque joueur humain ou bot, configuration de la prochaine partie réglable. **Arène** : simuler des parties entre bots sur une configuration réglable, et en revoir une. | `moteur` (avec `serde`), `bots`, `eframe`, `serde_json` |
 | `terminal/` | Client texte. | `moteur` |
 | `bots/` | Bots (aléatoire, glouton) et arène de parties automatiques. Bibliothèque ; l'arène est l'exemple `arene`. | `moteur` |
 | `py_bindings/` (cible) | Environnement Python pour l'entraînement ML. | `moteur`, `pyo3` |
@@ -113,8 +113,8 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
 
 ### La victoire et la fin de partie
 
-- Une ligne de `align_to_win` pions **faite en posant** gagne tout de suite.
-- **Règle d'or (cible, B2)** : une ligne obtenue grâce à une attaque donne une victoire en attente, qui doit survivre à un tour adverse.
+- Une ligne de `align_to_win` pions **faite en posant** gagne tout de suite, sans la règle d'or.
+- **Règle d'or** (`golden_rule`, en option) : une ligne ne gagne qu'au début du tour de son propriétaire. Le contrôle « une ligne au début de ton tour gagne » existe dans tous les cas : il couvre les lignes faites par une carte, sans avoir à suivre l'origine d'une ligne. Quand la partie s'arrête (figée, limite de tours), les lignes en attente sont vérifiées comme si les tours continuaient (`stop_game`).
 - **Fin garantie** : toute partie se termine (`GameEnd`), soit par alignement, soit **figée** (plus personne ne pourra jamais agir), soit par la **limite de tours** `max_turns`, filet de sécurité pour les bots.
 - Trois choses sont séparées pour rester modifiables : le **déclencheur** (`EndReason`, utile aux statistiques), le **résultat** (`Outcome`, calculé à un seul endroit : nul pour l'instant, départage possible plus tard) et la **limite** (réglage).
 - « Figée » veut dire *plus personne ne peut agir et rien de programmé ne peut changer la situation*. Une future mécanique anti-stagnation (Effondrement) devra être prise en compte dans ce test.
@@ -125,7 +125,7 @@ Les bots de base et l'arène existent depuis le 2026-10-27. Ils ont été avanc�
 
 ### Les bots, des clients comme les autres
 
-- **Aucune règle recopiée** : un bot choisit parmi `legal_actions()`. Pour savoir ce que donne une attaque, il la joue jusqu'au bout sur une **copie** de la partie (`AttackPlan`) ; pour connaître les actions du prochain tour adverse, il finit son tour sur une copie. Une nouvelle famille d'attaques, ou un changement du début de tour, est donc pris en compte sans rien changer dans `bots/`. Aucune lecture de règle : les poses restantes viennent du moteur (`Game::placements_left`), pour le tour en cours ou, sur une copie, pour le suivant.
+- **Aucune règle recopiée** : un bot choisit parmi `legal_actions()`. Pour savoir ce que donne une attaque, il la joue jusqu'au bout sur une **copie** de la partie (`AttackPlan`) ; pour connaître les actions du prochain tour adverse, il finit son tour sur une copie. Une nouvelle famille d'attaques, ou un changement du début de tour, est donc pris en compte sans rien changer dans `bots/`. Aucune lecture de règle de légalité : les poses restantes viennent du moteur (`Game::placements_left`), pour le tour en cours ou, sur une copie, pour le suivant. Seule hypothèse, pour jouer et non pour décider de la légalité : `Windows` suppose qu'une ligne gagnante est faite de `align_to_win` cases consécutives sur un axe. Une règle d'or différente ne cassera pas un bot, il jouera seulement moins bien.
 - **Sans état** : tout vient de la partie, et le hasard du générateur que l'arène passe au bot, initialisé avec la graine de la partie. Une partie entre bots se rejoue à l'identique, et le même appel de l'arène donne toujours le même bilan.
 - **Lecture en fenêtres** (`Windows`) : la géométrie vient du moteur (`Direction::AXES`, `Board::neighbor`) et la longueur de `align_to_win`. Aucune taille n'est écrite en dur.
 - **L'arène** (`bots::run`) joue N parties entre deux bots et rend un `Report` ; `run_pairs` fait de même pour plusieurs paires en parallèle, et `record_game` rend une partie précise sous forme de `GameRecord`. Une action refusée par le moteur abandonne la partie et apparaît dans le bilan (« refus ») : c'est toujours un bug.

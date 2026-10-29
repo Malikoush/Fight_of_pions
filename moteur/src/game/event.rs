@@ -3,8 +3,8 @@ use crate::{Attack, GameEnd, Pion, PionId, Player, Position};
 /// Ce que le moteur annonce après une action acceptée.
 ///
 /// Les clients mettent leur affichage à jour à partir de ces événements. Ils suffisent à
-/// suivre tout l'état visible (plateau, réserves, actions, recharges, joueur courant, fin)
-/// sans recalculer aucune règle ; un test le vérifie sur des centaines de parties. Les
+/// suivre tout l'état visible (plateau, réserves, actions, poses restantes, recharges,
+/// joueur courant, fin) sans recalculer aucune règle ; un test le vérifie sur des centaines de parties. Les
 /// choix intermédiaires d'une attaque (lanceur, cibles) n'en produisent aucun : l'attaque
 /// est annoncée quand elle est résolue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -51,6 +51,16 @@ pub enum Event {
         actions_left: u32,
         /// Actions gardées pour son prochain tour.
         banked: u32,
+    },
+    /// Les poses restantes d'un joueur ont changé ([`crate::Game::placements_left`]) : pose,
+    /// attaque qui dépense des actions ou libère une case, tour qui commence ou finit, fin
+    /// de partie (plus aucune pose). N'est jamais émis si rien n'a changé ; toujours avant
+    /// [`Event::GameEnded`].
+    PlacementsChanged {
+        /// Le joueur concerné.
+        player: Player,
+        /// Pions qu'il peut encore poser ce tour ; 0 si ce n'est pas son tour.
+        placements_left: u32,
     },
     /// La recharge d'une attaque d'un arsenal a changé (attaque lancée, tour qui commence).
     CooldownChanged {
