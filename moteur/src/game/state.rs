@@ -65,27 +65,46 @@ impl Game {
 
     /// Combien de pions le joueur courant peut encore poser ce tour : autant que ses
     /// actions en paient, que ses poses permises par tour, que sa réserve et que les cases
-    /// libres. 0 si la partie est finie.
+    /// libres. 0 si la partie est finie. Pendant le choix d'une attaque, ce sont les poses
+    /// d'avant l'attaque (son coût n'est payé qu'à la résolution) ; poser n'est pas permis à
+    /// ce moment-là.
+    /// Chaque changement est annoncé par [`Event::PlacementsChanged`].
     pub fn placements_left(&self) -> u32 {
         if self.end.is_some() {
             return 0;
         }
-        self.actions_left
+        let without_cells = self
+            .actions_left
             .checked_div(self.config.place_cost)
             .unwrap_or(u32::MAX) // pose gratuite : seules les autres limites comptent
             .min(self.placement_limit_left())
-            .min(self.reserve_pions[self.current_player.index()])
-            .min(self.free_cells())
-    }
-
-    /// Le nombre de cases libres du plateau.
-    fn free_cells(&self) -> u32 {
+            .min(self.reserve_pions[self.current_player.index()]);
+        // Les cases libres ne comptent que jusqu'à cette limite : on s'arrête dès qu'on en a
+        // trouvé assez, au lieu de parcourir tout le plateau.
+        let limit = usize::try_from(without_cells).unwrap_or(usize::MAX);
         let free = self
             .board
             .positions()
             .filter(|&pos| self.ensure_empty(pos).is_ok())
+            .take(limit)
             .count();
-        u32::try_from(free).unwrap_or(u32::MAX)
+        u32::try_from(free).unwrap_or(without_cells)
+    }
+
+    /// Les poses restantes de ce joueur : celles du tour en cours si c'est à lui, 0 sinon.
+    fn placements_of(&self, player: Player) -> u32 {
+        if player == self.current_player {
+            self.placements_left()
+        } else {
+            0
+        }
+    }
+
+    /// Vrai s'il reste au moins une case libre ; s'arrête à la première trouvée.
+    fn has_free_cell(&self) -> bool {
+        self.board
+            .positions()
+            .any(|pos| self.ensure_empty(pos).is_ok())
     }
 
     /// Les poses que la limite par tour permet encore ; sans limite, autant qu'on veut.
@@ -125,7 +144,8 @@ impl Game {
     }
 
     /// Actions qu'un joueur a gardées de son dernier tour : elles s'ajouteront à son
-    /// prochain tour. Toujours 0 pour le joueur courant, qui les a déjà reçues.
+    /// prochain tour. Toujours 0 pour le joueur courant, qui les a déjà reçues, sauf si la
+    /// partie s'est finie au début de son tour (règle d'or) : il ne les a alors pas reçues.
     pub fn banked_actions(&self, player: Player) -> u32 {
         self.banked_actions[player.index()]
     }
@@ -170,6 +190,13 @@ impl Game {
                 }
             }
         })
+    }
+
+    /// Vrai si une attaque est commencée et attend encore son lanceur ou une cible : seule
+    /// [`Action::Choose`] est alors permise.
+    pub fn attack_in_progress(&self) -> bool {
+        self.pending_decision()
+            .is_some_and(Decision::is_attack_choice)
     }
 
     /// Toutes les actions que [`Game::apply`] accepterait maintenant, dans un ordre
@@ -291,6 +318,7 @@ impl Game {
 
     /// Exécute une action déjà validée. Ne peut pas échouer.
     fn execute(&mut self, action: Action) -> Vec<Event> {
+        let placements_before = [Player::One, Player::Two].map(|p| self.placements_of(p));
         let mut events = Vec::new();
         match action {
             Action::Place(pos) => self.execute_place(pos, &mut events),
@@ -300,7 +328,29 @@ impl Game {
             // pas devenir figée ici, seule la limite de tours peut l'arrêter.
             Action::EndTurn => self.finish_turn(&mut events),
         }
+        self.announce_placements(placements_before, &mut events);
         events
+    }
+
+    /// Annonce les poses restantes de chaque joueur qui ont changé pendant l'action. Elles
+    /// dépendent de beaucoup de choses (actions, poses du tour, réserve, cases libres,
+    /// joueur courant, fin) : les comparer avant et après ne peut en oublier aucune. Les
+    /// annonces passent avant la fin de partie, qui reste le dernier événement.
+    fn announce_placements(&self, before: [u32; 2], events: &mut Vec<Event>) {
+        let at = match events.last() {
+            Some(Event::GameEnded(_)) => events.len() - 1,
+            _ => events.len(),
+        };
+        let after = [Player::One, Player::Two].map(|p| self.placements_of(p));
+        let changes: Vec<Event> = [Player::One, Player::Two]
+            .into_iter()
+            .filter(|&player| after[player.index()] != before[player.index()])
+            .map(|player| Event::PlacementsChanged {
+                player,
+                placements_left: after[player.index()],
+            })
+            .collect();
+        events.splice(at..at, changes);
     }
 
     fn execute_place(&mut self, pos: Position, events: &mut Vec<Event>) {
@@ -326,20 +376,44 @@ impl Game {
             events.push(self.actions_changed(player));
         }
 
-        if rules::complete_line(&self.board, pos, self.config.align_to_win) {
-            self.finish_game(Outcome::Won(player), EndReason::Alignment, events);
+        // Sans la règle d'or, une ligne faite en posant gagne aussitôt. Avec elle, la ligne
+        // devra être encore là au début du prochain tour du joueur.
+        let wins_now = !self.config.golden_rule
+            && rules::complete_line(&self.board, pos, self.config.align_to_win);
+        if wins_now {
+            self.win_by_alignment(player, events);
         } else {
             self.after_action(events);
         }
     }
 
-    /// Ce qui suit toute action qui a modifié le plateau sans aligner : la partie peut se
-    /// figer, ou le tour se terminer quand il ne reste ni action ni pose.
+    /// Ce qui suit toute action qui a modifié le plateau sans faire gagner : la partie peut
+    /// se figer, ou le tour se terminer quand il ne reste ni action ni pose.
     pub(super) fn after_action(&mut self, events: &mut Vec<Event>) {
         if self.is_frozen() {
-            self.finish_game(self.outcome_without_alignment(), EndReason::Frozen, events);
+            self.stop_game(EndReason::Frozen, events);
         } else if self.actions_left == 0 && self.placements_left() == 0 {
             self.finish_turn(events);
+        }
+    }
+
+    /// Vrai si ce joueur a une ligne gagnante n'importe où sur le plateau.
+    fn has_winning_line(&self, player: Player) -> bool {
+        rules::has_line(&self.board, player, self.config.align_to_win)
+    }
+
+    /// Arrête la partie avant son terme (figée, limite de tours). Une ligne qui attendait
+    /// le début du tour de son propriétaire gagne quand même : on fait comme si les tours
+    /// continuaient, donc l'adversaire du dernier joueur est vérifié d'abord, puis le
+    /// dernier joueur. Sinon, le résultat sans alignement.
+    fn stop_game(&mut self, reason: EndReason, events: &mut Vec<Event>) {
+        let next = self.current_player.opponent();
+        match [next, self.current_player]
+            .into_iter()
+            .find(|&player| self.has_winning_line(player))
+        {
+            Some(winner) => self.win_by_alignment(winner, events),
+            None => self.finish_game(self.outcome_without_alignment(), reason, events),
         }
     }
 
@@ -347,11 +421,7 @@ impl Game {
     /// permis, sinon l'adversaire commence le sien.
     fn finish_turn(&mut self, events: &mut Vec<Event>) {
         if self.turn >= self.config.max_turns {
-            self.finish_game(
-                self.outcome_without_alignment(),
-                EndReason::TurnLimit,
-                events,
-            );
+            self.stop_game(EndReason::TurnLimit, events);
             return;
         }
         let ending = self.current_player;
@@ -359,8 +429,15 @@ impl Game {
         // elles passent alors dans sa réserve. Sinon, ils sont déjà annoncés à (0, 0).
         let ending_counters_change = self.actions_left > 0;
         self.banked_actions[ending.index()] = self.actions_left.min(self.config.max_banked_actions);
+        // Les actions du joueur sortant sont en banque ; le nouveau joueur reçoit les siennes
+        // dans `start_turn`, après la règle d'or (et jamais si elle finit la partie).
+        self.actions_left = 0;
         self.current_player = ending.opponent();
         self.turn = self.turn.saturating_add(1);
+        // Le nouveau tour commence ici, même s'il s'arrête aussitôt sur la règle d'or :
+        // plus aucun pion n'est « posé ce tour ».
+        self.placements_this_turn = 0;
+        self.turn_start_pion_id = self.next_pion_id;
         if ending_counters_change {
             events.push(self.actions_changed(ending));
         }
@@ -370,14 +447,19 @@ impl Game {
         self.start_turn(events);
     }
 
-    /// Prépare le tour du nouveau joueur courant : ses actions et ses poses, et la
-    /// recharge de ses attaques. Le tout premier tour de la partie est réglé dans
-    /// [`Game::new`] : ici, c'est toujours un tour ordinaire.
+    /// Le début du tour du nouveau joueur courant, dans l'ordre du carnet : 1) la règle
+    /// d'or, 2) ses actions, 3) la recharge de ses attaques. Le tout premier tour de la
+    /// partie est réglé dans [`Game::new`] : ici, c'est toujours un tour ordinaire.
     fn start_turn(&mut self, events: &mut Vec<Event>) {
         let player = self.current_player;
+        // 1) Une ligne encore là au début de son tour fait gagner, quelle que soit la façon
+        // dont elle a été faite : le joueur ne reçoit alors ni actions ni recharges.
+        if self.has_winning_line(player) {
+            self.win_by_alignment(player, events);
+            return;
+        }
+        // 2) Ses actions.
         let i = player.index();
-        self.placements_this_turn = 0;
-        self.turn_start_pion_id = self.next_pion_id;
         self.actions_left = self
             .config
             .actions_per_turn
@@ -385,6 +467,8 @@ impl Game {
         self.banked_actions[i] = 0;
         // Le joueur qui commence reçoit toujours au moins une action : son compteur change.
         events.push(self.actions_changed(player));
+
+        // 3) La recharge de ses attaques.
 
         for (slot, emplacement) in self.arsenals[i].iter_mut().enumerate() {
             let left = emplacement.cooldown_left();
@@ -421,6 +505,11 @@ impl Game {
         }
     }
 
+    /// Ce joueur gagne avec une ligne.
+    fn win_by_alignment(&mut self, winner: Player, events: &mut Vec<Event>) {
+        self.finish_game(Outcome::Won(winner), EndReason::Alignment, events);
+    }
+
     fn finish_game(&mut self, outcome: Outcome, reason: EndReason, events: &mut Vec<Event>) {
         let end = GameEnd { outcome, reason };
         self.end = Some(end);
@@ -444,7 +533,7 @@ impl Game {
     /// d'abord économiser ses actions (la configuration garantit que tout coût est
     /// atteignable).
     fn can_ever_act(&self, player: Player) -> bool {
-        let can_place = self.reserve_pions[player.index()] > 0 && self.free_cells() > 0;
+        let can_place = self.reserve_pions[player.index()] > 0 && self.has_free_cell();
         can_place
             || self
                 .arsenal(player)

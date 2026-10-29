@@ -16,14 +16,21 @@ fn draw(reason: EndReason) -> Event {
 }
 
 /// Vérifie qu'une réponse est exactement « un pion posé, sa réserve et ses actions
-/// décomptées, puis la fin » : aucun `TurnEnded` ne doit se glisser avant la fin, même si
-/// la pose a vidé les actions du tour.
+/// décomptées, plus aucune pose, puis la fin » : aucun `TurnEnded` ne doit se glisser
+/// avant la fin, même si la pose a vidé les actions du tour.
 fn assert_placed_then(events: &[Event], end: Event) {
-    assert_eq!(events.len(), 4, "événements inattendus : {events:?}");
+    assert_eq!(events.len(), 5, "événements inattendus : {events:?}");
     assert!(matches!(events[0], Event::PionPlaced { .. }));
     assert!(matches!(events[1], Event::ReserveChanged { .. }));
     assert!(matches!(events[2], Event::ActionsChanged { .. }));
-    assert_eq!(events[3], end);
+    assert!(matches!(
+        events[3],
+        Event::PlacementsChanged {
+            placements_left: 0,
+            ..
+        }
+    ));
+    assert_eq!(events[4], end);
 }
 
 /// La définition du carnet, écrite indépendamment du moteur : une partie est figée quand
@@ -187,7 +194,17 @@ fn turn_limit_ends_the_game_in_a_draw() {
     play(&mut game, &[Action::EndTurn]); // fin du tour 2
 
     let events = play(&mut game, &[Action::EndTurn]); // fin du tour 3 : limite
-    assert_eq!(events, vec![draw(EndReason::TurnLimit)]);
+    // Le joueur 1 pouvait encore poser ; la partie finie, il ne le peut plus.
+    assert_eq!(
+        events,
+        vec![
+            Event::PlacementsChanged {
+                player: Player::One,
+                placements_left: 0,
+            },
+            draw(EndReason::TurnLimit),
+        ]
+    );
     assert_eq!(game.turn(), 3);
     assert_eq!(game.pending_decision(), None);
 }

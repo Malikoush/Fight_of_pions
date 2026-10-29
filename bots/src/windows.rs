@@ -43,22 +43,27 @@ impl Windows {
         self.windows.iter().map(Vec::as_slice)
     }
 
-    /// Les fenêtres que `player` finirait en posant au plus `placements` pions : sans
-    /// pion adverse, et avec au plus `placements` cases libres.
+    /// Les fenêtres que `player` finirait en posant entre 1 et `placements` pions : sans
+    /// pion adverse, avec au moins une et au plus `placements` cases libres. Une fenêtre
+    /// déjà pleine n'en fait pas partie : avec la règle d'or, elle peut exister sans avoir
+    /// fini la partie (elle attend le début du tour de son propriétaire), mais aucune pose
+    /// ne la « finit ».
     pub fn finishable(
         &self,
         board: &Board,
         player: Player,
         placements: usize,
     ) -> Vec<WindowContent> {
-        // Une fenêtre pleine d'un même joueur aurait déjà fini la partie : sans pose
-        // possible, aucune ne peut être finie.
         if placements == 0 {
             return Vec::new();
         }
         self.iter()
             .map(|window| WindowContent::of(board, window, player))
-            .filter(|content| content.opponent == 0 && content.empty.len() <= placements)
+            .filter(|content| {
+                content.opponent == 0
+                    && !content.empty.is_empty()
+                    && content.empty.len() <= placements
+            })
             .collect()
     }
 }
@@ -166,5 +171,27 @@ mod tests {
             ]
         );
         assert!(windows.finishable(game.board(), Player::One, 1).is_empty());
+    }
+
+    #[test]
+    fn a_full_window_waiting_for_the_golden_rule_is_not_finishable() {
+        let config = GameConfig {
+            board_size: 3,
+            align_to_win: 3,
+            golden_rule: true,
+            ..GameConfig::default()
+        };
+        let mut game = Game::new(config, 0).unwrap();
+        let at = |row, col| Position { row, col };
+        for pos in [at(0, 0), at(2, 2), at(2, 1), at(0, 1), at(0, 2)] {
+            game.apply(Action::Place(pos)).unwrap();
+        }
+        // Le joueur 1 a la première rangée, en attente du début de son tour.
+        assert_eq!(game.end(), None);
+
+        let windows = Windows::new(game.board(), 3);
+        let finishable = windows.finishable(game.board(), Player::One, 2);
+        assert!(!finishable.is_empty());
+        assert!(finishable.iter().all(|content| !content.empty.is_empty()));
     }
 }

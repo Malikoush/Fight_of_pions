@@ -4,7 +4,7 @@
 //! charger et annuler un coup.
 
 use bots::{Bot, BotKind, RandomBot, current_rules, start_game};
-use fight_of_pions::{Action, Decision, Event, Game, GameConfig, GameError, GameRecord, Rng};
+use fight_of_pions::{Action, Event, Game, GameConfig, GameError, GameRecord, Rng};
 use std::iter;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -155,7 +155,7 @@ impl Partie {
             let tour_humain = game
                 .pending_decision()
                 .is_some_and(|decision| humains[decision.player().index()]);
-            if !en_plein_choix(&game) && (tour_humain || !face_a_un_bot) {
+            if !game.attack_in_progress() && (tour_humain || !face_a_un_bot) {
                 arret_trouve = true;
                 break;
             }
@@ -193,7 +193,7 @@ impl Partie {
                 self.hasard = avant;
                 break;
             }
-            if !en_plein_choix(&self.game) {
+            if !self.game.attack_in_progress() {
                 break;
             }
         }
@@ -256,14 +256,6 @@ impl Partie {
 /// variantes proposées.
 pub fn config_initiale() -> GameConfig {
     current_rules()
-}
-
-/// Vrai si la partie attend le lanceur ou une cible d'une attaque commencée.
-pub fn en_plein_choix(game: &Game) -> bool {
-    matches!(
-        game.pending_decision(),
-        Some(Decision::ChooseLauncher { .. } | Decision::ChooseTarget { .. })
-    )
 }
 
 /// La partie en JSON lisible, à coller ailleurs ou à joindre à un rapport de bug.
@@ -381,7 +373,7 @@ mod tests {
         let mut partie = partie();
         while partie.game().end().is_none() && partie.record().actions.len() < 200 {
             partie.traiter(Demande::CoupDuBot(BotKind::Banker));
-            assert!(!en_plein_choix(partie.game()));
+            assert!(!partie.game().attack_in_progress());
         }
     }
 
@@ -434,8 +426,8 @@ mod tests {
     fn une_attaque_choisie_sur_une_copie_se_joue_d_un_bloc() {
         let mut partie = avant_une_attaque();
         let apercu = partie.apercu(&attaque_complete()[..2]).unwrap();
-        assert!(en_plein_choix(&apercu));
-        assert!(!en_plein_choix(partie.game())); // la vraie partie n'a pas bougé
+        assert!(apercu.attack_in_progress());
+        assert!(!partie.game().attack_in_progress()); // la vraie partie n'a pas bougé
 
         partie.traiter(Demande::Jouer(attaque_complete()));
         assert_eq!(
@@ -469,7 +461,7 @@ mod tests {
             humains: DEUX_HUMAINS,
         });
         assert_eq!(partie.game(), &avant);
-        assert!(!en_plein_choix(partie.game()));
+        assert!(!partie.game().attack_in_progress());
     }
 
     #[test]
@@ -478,7 +470,7 @@ mod tests {
             let mut partie = Partie::avec_graine(config_initiale(), graine).unwrap();
             for _ in 0..20 {
                 partie.traiter(Demande::CoupsAuHasard(1));
-                assert!(!en_plein_choix(partie.game()), "graine {graine}");
+                assert!(!partie.game().attack_in_progress(), "graine {graine}");
             }
         }
     }
@@ -552,6 +544,7 @@ mod tests {
             "starting_banked_actions",
             "max_placements_per_turn",
             "summoning_sickness",
+            "golden_rule",
         ] {
             assert!(config.remove(champ).is_some(), "{champ}");
         }

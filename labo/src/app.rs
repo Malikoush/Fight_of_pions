@@ -11,7 +11,7 @@
 use crate::arene::EcranArene;
 use crate::intention::Intention;
 use crate::panneau::Panneau;
-use crate::partie::{Demande, Nouvelle, Partie, en_plein_choix};
+use crate::partie::{Demande, Nouvelle, Partie};
 use crate::{plateau, theme};
 use bots::BotKind;
 use eframe::egui;
@@ -95,7 +95,7 @@ impl Labo {
         let Some(mut suite) = self.selection.take() else {
             // Sans sélection : une pose, ou un choix si la vraie partie en attend un
             // (partie chargée au milieu d'une attaque, par exemple).
-            let action = if en_plein_choix(self.partie.game()) {
+            let action = if self.partie.game().attack_in_progress() {
                 Action::Choose(pos)
             } else {
                 Action::Place(pos)
@@ -106,7 +106,7 @@ impl Labo {
         suite.push(Action::Choose(pos));
         match self.partie.apercu(&suite) {
             // Le choix est accepté et l'attaque attend encore un choix : on continue.
-            Ok(apercu) if en_plein_choix(&apercu) => self.selection = Some(suite),
+            Ok(apercu) if apercu.attack_in_progress() => self.selection = Some(suite),
             // Le dernier choix est fait : l'attaque entière est jouée pour de vrai.
             Ok(_) => {
                 self.demander(Demande::Jouer(suite));

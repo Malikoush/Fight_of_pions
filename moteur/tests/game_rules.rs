@@ -201,6 +201,14 @@ fn placing_the_last_action_announces_each_counter_once() {
                 actions_left: 2,
                 banked: 0,
             },
+            Event::PlacementsChanged {
+                player: Player::One,
+                placements_left: 0,
+            },
+            Event::PlacementsChanged {
+                player: Player::Two,
+                placements_left: 2,
+            },
         ]
     );
 }
@@ -224,6 +232,14 @@ fn ending_the_turn_announces_both_players_actions() {
                 player: Player::One,
                 actions_left: 2,
                 banked: 0,
+            },
+            Event::PlacementsChanged {
+                player: Player::One,
+                placements_left: 2,
+            },
+            Event::PlacementsChanged {
+                player: Player::Two,
+                placements_left: 0,
             },
         ]
     );

@@ -2,15 +2,7 @@
 //! `legal_actions`, les poses restantes de `placements_left`, l'effet d'une attaque ou
 //! d'une fin de tour d'une copie de la partie où on les a joués.
 
-use fight_of_pions::{Action, Decision, Game, Player, Position};
-
-/// Vrai si la partie attend le lanceur ou une cible d'une attaque commencée.
-pub(crate) fn is_choosing(game: &Game) -> bool {
-    matches!(
-        game.pending_decision(),
-        Some(Decision::ChooseLauncher { .. } | Decision::ChooseTarget { .. })
-    )
-}
+use fight_of_pions::{Action, Game, Player, Position};
 
 /// Les cases où l'on peut poser maintenant.
 pub(crate) fn placeable(legal: &[Action]) -> Vec<Position> {
@@ -49,7 +41,7 @@ pub(crate) struct AttackPlan {
 /// chaque carte utilisable si aucune attaque n'est en cours, sinon la suite de l'attaque
 /// commencée. Le moteur ne propose jamais d'impasse : chaque branche va au bout.
 pub(crate) fn attack_plans(game: &Game) -> Vec<AttackPlan> {
-    let choosing = is_choosing(game);
+    let choosing = game.attack_in_progress();
     let mut plans = Vec::new();
     for first in game.legal_actions() {
         if choosing || matches!(first, Action::UseAttack(_)) {
@@ -65,7 +57,7 @@ fn play_to_the_end(game: &Game, first: Action, next: Action, plans: &mut Vec<Att
     if copy.apply(next).is_err() {
         return;
     }
-    if is_choosing(&copy) {
+    if copy.attack_in_progress() {
         for action in copy.legal_actions() {
             play_to_the_end(&copy, first, action, plans);
         }

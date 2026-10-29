@@ -21,17 +21,18 @@ struct EventMirror {
     cooldowns: [Vec<u32>; 2],
     current_player: Player,
     end: Option<GameEnd>,
-    /// Les pions posés depuis le début du tour en cours.
+    /// Les poses restantes de chaque joueur, telles qu'annoncées.
+    placements: [u32; 2],
+    /// Les pions posés depuis le début du tour en cours (un fait, pas une règle).
     arrived: Vec<PionId>,
-    /// Ce qu'il faut de la configuration pour recalculer les poses restantes.
-    place_cost: u32,
-    max_placements_per_turn: Option<u32>,
     summoning_sickness: bool,
 }
 
 impl EventMirror {
-    /// L'état de départ, connu par la seule configuration.
-    fn new(config: &GameConfig) -> EventMirror {
+    /// L'état de départ, connu par la configuration. Seules les poses restantes du premier
+    /// tour se lisent sur la partie qui commence, comme un client le ferait une fois : les
+    /// déduire de la configuration reviendrait à recoder la règle.
+    fn new(config: &GameConfig, game: &Game) -> EventMirror {
         let ready = |player: Player| vec![0; config.starting_attacks[player.index()].len()];
         let [first_bank, second_bank] = config.starting_banked_actions;
         EventMirror {
@@ -43,29 +44,10 @@ impl EventMirror {
             cooldowns: [ready(Player::One), ready(Player::Two)],
             current_player: Player::One,
             end: None,
+            placements: [game.placements_left(), 0],
             arrived: Vec::new(),
-            place_cost: config.place_cost,
-            max_placements_per_turn: config.max_placements_per_turn,
             summoning_sickness: config.summoning_sickness,
         }
-    }
-
-    /// Les poses restantes, recalculées depuis le seul miroir : un second calcul,
-    /// indépendant de celui du moteur.
-    fn placements_left(&self) -> u32 {
-        if self.end.is_some() {
-            return 0;
-        }
-        let i = self.current_player.index();
-        let made = self.arrived.len() as u32;
-        let by_actions = self.actions_left[i]
-            .checked_div(self.place_cost)
-            .unwrap_or(u32::MAX);
-        let by_limit = self
-            .max_placements_per_turn
-            .map_or(u32::MAX, |max| max - made);
-        let free = self.cells.iter().filter(|cell| cell.is_none()).count() as u32;
-        by_actions.min(by_limit).min(self.reserves[i]).min(free)
     }
 
     fn cell(&mut self, at: Position) -> &mut Option<Pion> {
@@ -73,6 +55,11 @@ impl EventMirror {
     }
 
     fn follow(&mut self, event: &Event) {
+        // La fin de partie est toujours le dernier événement.
+        assert_eq!(
+            self.end, None,
+            "événement après la fin de partie : {event:?}"
+        );
         match *event {
             Event::PionPlaced { pion, at } => {
                 assert_eq!(
@@ -103,6 +90,14 @@ impl EventMirror {
                 self.actions_left[i] = actions_left;
                 self.banked[i] = banked;
             }
+            Event::PlacementsChanged {
+                player,
+                placements_left,
+            } => {
+                let placements = &mut self.placements[player.index()];
+                assert_ne!(*placements, placements_left, "annonce inutile : {event:?}");
+                *placements = placements_left;
+            }
             Event::CooldownChanged {
                 player,
                 slot,
@@ -131,7 +126,6 @@ impl EventMirror {
                 && mirrored.is_some_and(|pion| self.arrived.contains(&pion.id()));
             assert_eq!(sick, game.is_summoning_sick(pos), "case {pos}");
         }
-        assert_eq!(self.placements_left(), game.placements_left());
         for player in [Player::One, Player::Two] {
             let i = player.index();
             assert_eq!(self.reserves[i], game.reserve_pions(player));
@@ -144,6 +138,15 @@ impl EventMirror {
             assert_eq!(
                 self.actions_left[i], expected_actions,
                 "actions de {player:?}"
+            );
+            let expected_placements = if player == game.current_player() {
+                game.placements_left()
+            } else {
+                0
+            };
+            assert_eq!(
+                self.placements[i], expected_placements,
+                "poses restantes de {player:?}"
             );
             let cooldowns: Vec<u32> = game
                 .arsenal(player)
@@ -178,10 +181,11 @@ impl PlayedGame {
 /// Joue une partie au hasard jusqu'à la fin, en vérifiant le miroir après chaque action.
 fn play_random_game(config: GameConfig, seed: u64, rng: &mut Rng) -> PlayedGame {
     let mut game = Game::new(config.clone(), seed).unwrap();
-    let mut mirror = EventMirror::new(&config);
+    let mut mirror = EventMirror::new(&config, &game);
     let mut record = GameRecord::new(config, seed);
     let mut steps = Vec::new();
-    // L'état de départ, déduit de la seule configuration, doit déjà être juste.
+    // L'état de départ, déduit de la configuration (et des poses restantes lues une fois
+    // sur la partie), doit déjà être juste.
     mirror.assert_matches(&game);
 
     while game.end().is_none() {

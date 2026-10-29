@@ -84,6 +84,15 @@ fn ours_rare_kills_an_adjacent_enemy_who_goes_back_to_reserve() {
                 actions_left: 2,
                 banked: 0,
             },
+            // Les poses restantes : le joueur 1 n'en a plus, le joueur 2 peut en faire 2.
+            Event::PlacementsChanged {
+                player: Player::One,
+                placements_left: 0,
+            },
+            Event::PlacementsChanged {
+                player: Player::Two,
+                placements_left: 2,
+            },
         ]
     );
     assert_eq!(game.board().owner(Position { row: 4, col: 5 }), None);

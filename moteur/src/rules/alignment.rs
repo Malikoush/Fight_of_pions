@@ -39,6 +39,14 @@ pub fn complete_line(board: &Board, pos: Position, target: usize) -> bool {
     longest_line(board, pos) >= target
 }
 
+/// Vrai si ce joueur a, n'importe où sur le plateau, une ligne d'au moins `target` pions.
+pub fn has_line(board: &Board, player: Player, target: usize) -> bool {
+    board
+        .positions()
+        .filter(|&pos| board.owner(pos) == Some(player))
+        .any(|pos| complete_line(board, pos, target))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,6 +93,18 @@ mod tests {
         }
 
         assert_eq!(longest_line(&board, Position { row: 4, col: 2 }), 3);
+    }
+
+    #[test]
+    fn has_line_finds_any_line_of_the_player_only() {
+        let mut board = Board::new(10);
+        for i in 2..5 {
+            put_pion(&mut board, i, 9 - i, Player::Two); // diagonale montante
+        }
+        put_pion(&mut board, 0, 0, Player::One);
+        assert!(has_line(&board, Player::Two, 3));
+        assert!(!has_line(&board, Player::Two, 4));
+        assert!(!has_line(&board, Player::One, 3)); // la ligne de l'autre ne compte pas
     }
 
     #[test]

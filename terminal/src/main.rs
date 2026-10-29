@@ -48,6 +48,7 @@ fn main() {
                             // Le plateau et les compteurs sont réaffichés à chaque tour.
                             Event::PionPlaced { .. }
                             | Event::ActionsChanged { .. }
+                            | Event::PlacementsChanged { .. }
                             | Event::ReserveChanged { .. }
                             | Event::CooldownChanged { .. } => {}
                             Event::AttackUsed {

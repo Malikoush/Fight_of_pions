@@ -401,7 +401,8 @@ fn nom_controleur(controleur: Option<BotKind>) -> &'static str {
 }
 
 /// La ligne de journal d'un événement, ou `None` pour ceux qui le rendraient illisible
-/// (compteurs d'actions, réserves et recharges sont déjà affichés dans le panneau).
+/// (compteurs d'actions, poses restantes, réserves et recharges sont déjà affichés dans
+/// le panneau).
 fn decrire(event: &Event) -> Option<String> {
     match event {
         Event::PionPlaced { pion, at } => Some(format!(
@@ -427,6 +428,7 @@ fn decrire(event: &Event) -> Option<String> {
             at
         )),
         Event::ActionsChanged { .. }
+        | Event::PlacementsChanged { .. }
         | Event::ReserveChanged { .. }
         | Event::CooldownChanged { .. } => None,
         Event::TurnEnded { next } => Some(format!("Au tour de {}", theme::nom_joueur(*next))),

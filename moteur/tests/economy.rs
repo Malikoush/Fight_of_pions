@@ -1,4 +1,4 @@
-//! L'économie réglable (carnet de règles, « Économie cible B ») : poses limitées par tour
+//! L'économie réglable (carnet de règles, « Économie réglable ») : poses limitées par tour
 //! et gratuites, banque de départ (la Pièce), mal du débarquement.
 
 mod common;
@@ -133,6 +133,40 @@ fn a_pion_placed_this_turn_cannot_launch_an_attack() {
         &[Action::UseAttack(RARE), choose(4, 5), choose(4, 4)],
     );
     assert!(game.board().get(at(4, 4)).unwrap().pion().is_none());
+}
+
+#[test]
+fn a_new_pion_cannot_be_chosen_as_launcher_but_an_old_one_can() {
+    let mut game = game_with(target_rules());
+    play(&mut game, &[place(4, 4), Action::EndTurn]); // J1 : E5
+    play(&mut game, &[place(4, 5), Action::EndTurn]); // J2 : F5, contre E5, garde 2 actions
+    play(&mut game, &[place(0, 0), Action::EndTurn]); // J1 : loin
+    // J2 pose D5, lui aussi contre E5 : il a 3 actions, l'Ours Rare en coûte 2.
+    play(&mut game, &[place(4, 3)]);
+    assert!(game.is_summoning_sick(at(4, 3)));
+
+    // L'attaque est proposée (F5 peut la lancer), mais D5, nouveau, ne peut pas être lanceur.
+    play(&mut game, &[Action::UseAttack(RARE)]);
+    assert_eq!(
+        game.apply(choose(4, 3)),
+        Err(GameError::InvalidChoice(at(4, 3)))
+    );
+    assert!(!game.legal_actions().contains(&choose(4, 3)));
+    assert!(game.legal_actions().contains(&choose(4, 5)));
+    play(&mut game, &[choose(4, 5), choose(4, 4)]);
+    assert!(game.board().get(at(4, 4)).unwrap().pion().is_none());
+}
+
+#[test]
+fn the_first_player_receives_its_starting_bank_with_its_first_turn() {
+    let game = game_with(GameConfig {
+        starting_banked_actions: [2, 0],
+        ..GameConfig::default()
+    });
+    // 1 action du premier tour + 2 en banque de départ, reçues tout de suite.
+    assert_eq!(game.actions_left(), 3);
+    assert_eq!(game.banked_actions(Player::One), 0);
+    assert_eq!(game.banked_actions(Player::Two), 0);
 }
 
 #[test]
