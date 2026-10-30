@@ -120,6 +120,21 @@ impl Labo {
         }
     }
 
+    /// Joue l'attaque en cours de choix avec les cibles déjà choisies : la suite complète
+    /// part d'un bloc, comme quand le dernier choix est fait. Sans sélection (partie chargée
+    /// en plein choix), l'action va directement à la vraie partie. Le moteur refuse si
+    /// l'attaque n'est pas encore complète.
+    fn finir_attaque(&mut self) {
+        let demande = match self.selection.take() {
+            Some(mut suite) => {
+                suite.push(Action::FinishAttack);
+                Demande::Jouer(suite)
+            }
+            None => Demande::Agir(Action::FinishAttack),
+        };
+        self.demander(demande);
+    }
+
     fn ecran_partie(&mut self, ui: &mut egui::Ui, intentions: &mut Vec<Intention>) {
         // Pendant le choix d'une attaque, on montre la copie : lanceur et cibles marqués.
         let apercu = self
@@ -132,7 +147,7 @@ impl Labo {
             ui,
             self.partie.game(),
             self.partie.record(),
-            self.selection.is_some(),
+            apercu.as_ref(),
             intentions,
         );
         plateau::show(ui, affichee, intentions);
@@ -145,6 +160,7 @@ impl Labo {
             intention,
             Intention::CommencerAttaque(_)
                 | Intention::ChoisirCase(_)
+                | Intention::FinirAttaque
                 | Intention::Demande(Demande::Agir(_) | Demande::Jouer(_))
         );
         if geste_de_jeu && self.bot_qui_doit_jouer().is_some() {
@@ -160,6 +176,7 @@ impl Labo {
                 self.selection = Some(vec![Action::UseAttack(slot)]);
             }
             Intention::ChoisirCase(pos) => self.choisir_case(pos),
+            Intention::FinirAttaque => self.finir_attaque(),
             Intention::AnnulerSelection => self.selection = None,
             Intention::Revoir {
                 config,

@@ -6,7 +6,7 @@
 use crate::intention::Intention;
 use crate::theme;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
-use fight_of_pions::{Action, Decision, Game, Position};
+use fight_of_pions::{Action, Decision, EffectKind, Game, Position};
 
 /// Où se trouve le damier à l'écran pour cette image.
 struct Geometrie {
@@ -98,6 +98,7 @@ pub fn show(ui: &mut egui::Ui, game: &Game, intentions: &mut Vec<Intention>) {
                             theme::MARQUE_NOUVEAU,
                         );
                     }
+                    statuts(&painter, &geo, game, pos);
                 }
 
                 let anneau = if lanceur == Some(pos) {
@@ -127,6 +128,35 @@ pub fn show(ui: &mut egui::Ui, game: &Game, intentions: &mut Vec<Intention>) {
             intentions.push(Intention::ChoisirCase(pos));
         }
     });
+}
+
+/// Les statuts du pion de cette case, lus dans le moteur : une croix s'il est immobilisé,
+/// un anneau s'il est protégé.
+fn statuts(painter: &egui::Painter, geo: &Geometrie, game: &Game, pos: Position) {
+    let rect = geo.case_vers_rect(pos);
+    let centre = rect.center();
+    if game.has_effect(pos, EffectKind::Immobilized) {
+        let demi = geo.cote * theme::DEMI_CROIX_IMMOBILISE;
+        let trait_croix = Stroke::new(theme::EPAISSEUR_CROIX_IMMOBILISE, theme::MARQUE_IMMOBILISE);
+        painter.line_segment(
+            [centre - Vec2::splat(demi), centre + Vec2::splat(demi)],
+            trait_croix,
+        );
+        painter.line_segment(
+            [
+                centre + Vec2::new(-demi, demi),
+                centre + Vec2::new(demi, -demi),
+            ],
+            trait_croix,
+        );
+    }
+    if game.has_effect(pos, EffectKind::Protected) {
+        painter.circle_stroke(
+            centre,
+            geo.cote * theme::RAYON_ANNEAU_PROTEGE,
+            Stroke::new(theme::EPAISSEUR_ANNEAU, theme::ANNEAU_PROTEGE),
+        );
+    }
 }
 
 /// Lettres au-dessus, numéros à gauche. La lettre vient du moteur

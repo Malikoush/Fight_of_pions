@@ -44,13 +44,19 @@ pub struct GameConfig {
     /// tour fait gagner (c'est ce qui couvre les lignes faites par une carte).
     #[cfg_attr(feature = "serde", serde(default))]
     pub golden_rule: bool,
+    /// Tours qu'un pion tué passe à l'infirmerie avant de revenir dans la réserve de son
+    /// propriétaire, comptés en tours de l'adversaire du joueur qui l'a tué (aujourd'hui
+    /// toujours son propriétaire, puisqu'on ne tue que des pions adverses). 0 : il y revient
+    /// aussitôt.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub infirmary_turns: u32,
     /// La partie s'arrête (match nul) à la fin de ce tour, au moins 1. Filet de sécurité
     /// pour les bots : une vraie partie ne doit pas l'atteindre.
     pub max_turns: u32,
     /// Le catalogue des attaques : le coût et la recharge de chaque variante jouable.
     pub attack_catalog: Vec<CatalogEntry>,
     /// Les attaques de chaque joueur au début de la partie (indice : `Player::index`).
-    /// En attendant le draft (B10), c'est ici qu'on les choisit ; plus tard, ce sera la
+    /// En attendant le draft (B9), c'est ici qu'on les choisit ; plus tard, ce sera la
     /// cache secrète de chaque joueur.
     pub starting_attacks: [Vec<Attack>; 2],
 }
@@ -69,6 +75,7 @@ impl Default for GameConfig {
             max_placements_per_turn: None,
             summoning_sickness: false,
             golden_rule: false,
+            infirmary_turns: 0,
             max_turns: 200,
             attack_catalog: default_attack_catalog(),
             starting_attacks: [Vec::new(), Vec::new()],
@@ -76,16 +83,23 @@ impl Default for GameConfig {
     }
 }
 
-/// Les variantes que le moteur sait jouer, avec les coûts indicatifs du GDD v0.2
-/// (Rare 2 actions, Épique 3) et une recharge d'un tour (« une fois par tour »).
+/// Les variantes que le moteur sait jouer, avec les coûts des fiches attaques du
+/// 2026-10-29 (Commune 1, Rare 2, Épique 3, Légendaire 4) et une recharge d'un tour pour
+/// toutes (« une fois par tour », carnet du 2026-10-30).
 fn default_attack_catalog() -> Vec<CatalogEntry> {
     let entry = |kind, rarity, cost| CatalogEntry {
         attack: Attack { kind, rarity },
         stats: AttackStats { cost, cooldown: 1 },
     };
     vec![
+        entry(AttackKind::BeauteFatale, Rarity::Common, 1),
+        entry(AttackKind::BeauteFatale, Rarity::Rare, 2),
+        entry(AttackKind::Reine, Rarity::Common, 1),
+        entry(AttackKind::Attila, Rarity::Common, 1),
+        entry(AttackKind::Ours, Rarity::Common, 1),
         entry(AttackKind::Ours, Rarity::Rare, 2),
         entry(AttackKind::Ours, Rarity::Epic, 3),
+        entry(AttackKind::Ours, Rarity::Legendary, 4),
     ]
 }
 
@@ -216,6 +230,19 @@ impl GameConfig {
             starting_attacks: [all.clone(), all],
             ..self
         }
+    }
+
+    /// Cette configuration sans les attaques qu'aucun tour ne peut payer, même en
+    /// économisant : elles sortent du catalogue et des arsenaux. Pratique pour régler
+    /// moins d'actions par tour sans que les attaques les plus chères la rendent invalide.
+    pub fn without_unaffordable_attacks(mut self) -> GameConfig {
+        let most = self.max_actions_in_a_turn();
+        self.attack_catalog.retain(|entry| entry.stats.cost <= most);
+        let kept = self.catalog_attacks();
+        for arsenal in &mut self.starting_attacks {
+            arsenal.retain(|attack| kept.contains(attack));
+        }
+        self
     }
 
     /// Le coût et la recharge d'une attaque, si elle est dans le catalogue.
@@ -458,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn default_catalog_holds_the_playable_ours() {
+    fn default_catalog_holds_every_playable_attack_at_its_card_cost() {
         let config = GameConfig::default();
         assert_eq!(
             config.attack_stats(ours(Rarity::Rare)),
@@ -467,12 +494,29 @@ mod tests {
                 cooldown: 1
             })
         );
-        assert!(config.attack_stats(ours(Rarity::Common)).is_none());
+        for entry in &config.attack_catalog {
+            assert!(entry.attack.is_implemented(), "{}", entry.attack);
+            let card_cost = match entry.attack.rarity {
+                Rarity::Common => 1,
+                Rarity::Rare => 2,
+                Rarity::Epic => 3,
+                Rarity::Legendary => 4,
+            };
+            assert_eq!(entry.stats.cost, card_cost, "{}", entry.attack);
+        }
+        let not_yet = Attack {
+            kind: AttackKind::BeauteFatale,
+            rarity: Rarity::Epic,
+        };
+        assert!(config.attack_stats(not_yet).is_none());
     }
 
     #[test]
     fn catalog_only_holds_attacks_the_engine_can_play() {
-        let attack = ours(Rarity::Common);
+        let attack = Attack {
+            kind: AttackKind::BeauteFatale,
+            rarity: Rarity::Epic,
+        };
         assert_eq!(
             problem(with_catalog(attack, 1, 1)),
             Some(ConfigError::AttackNotImplemented(attack))
@@ -482,10 +526,11 @@ mod tests {
     #[test]
     fn an_attack_cannot_be_listed_twice() {
         let mut config = GameConfig::default();
-        config.attack_catalog.push(config.attack_catalog[0]);
+        let first = config.attack_catalog[0];
+        config.attack_catalog.push(first);
         assert_eq!(
             problem(config),
-            Some(ConfigError::AttackListedTwice(ours(Rarity::Rare)))
+            Some(ConfigError::AttackListedTwice(first.attack))
         );
     }
 
@@ -523,6 +568,38 @@ mod tests {
         assert_eq!(
             problem(config),
             Some(ConfigError::AttackNotInCatalog(ours(Rarity::Rare)))
+        );
+    }
+
+    #[test]
+    fn only_the_unaffordable_attacks_are_removed() {
+        // 1 action par tour + 1 gardée : 2 au plus, donc ni Épique (3) ni Légendaire (4).
+        let config = GameConfig {
+            actions_per_turn: 1,
+            max_banked_actions: 1,
+            ..GameConfig::default().with_full_arsenals()
+        };
+        assert!(problem(config.clone()).is_some());
+
+        let affordable = config.clone().without_unaffordable_attacks();
+        assert_eq!(problem(affordable.clone()), None);
+        let kept: Vec<Attack> = config
+            .attack_catalog
+            .iter()
+            .filter(|entry| entry.stats.cost <= 2)
+            .map(|entry| entry.attack)
+            .collect();
+        assert!(!kept.is_empty());
+        assert_eq!(affordable.catalog_attacks(), kept);
+        assert_eq!(affordable.starting_attacks, [kept.clone(), kept]);
+        // Rien d'autre ne change.
+        assert_eq!(
+            GameConfig {
+                attack_catalog: config.attack_catalog.clone(),
+                starting_attacks: config.starting_attacks.clone(),
+                ..affordable
+            },
+            config
         );
     }
 

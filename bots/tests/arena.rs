@@ -53,7 +53,8 @@ fn configs() -> Vec<(GameConfig, u64)> {
                 pions_per_player: 6,
                 max_banked_actions: 1,
                 ..current.clone()
-            },
+            }
+            .without_unaffordable_attacks(),
             3,
         ),
         (

@@ -36,11 +36,13 @@ pub enum GameError {
     AttackRecharging(Attack),
     /// Cette attaque n'a aucune cible possible en ce moment.
     NoTarget(Attack),
-    /// Cette attaque aurait des cibles, mais seulement depuis des pions posés ce tour, que
-    /// le mal du débarquement empêche d'attaquer.
+    /// Cette attaque aurait des cibles, mais seulement depuis des pions qui ne peuvent pas
+    /// attaquer maintenant : posés ce tour (mal du débarquement) ou immobilisés.
     NoReadyLauncher(Attack),
     /// Ce choix de lanceur ou de cible n'est pas permis.
     InvalidChoice(Position),
+    /// L'attaque en cours ne peut pas encore être jouée : il faut choisir d'autres cibles.
+    TargetsMissing(Attack),
 }
 
 impl fmt::Display for GameError {
@@ -75,10 +77,13 @@ impl fmt::Display for GameError {
             }
             GameError::NoReadyLauncher(attack) => write!(
                 f,
-                "l'attaque {} n'a aucun lanceur prêt : un pion posé ce tour ne peut pas attaquer",
+                "l'attaque {} n'a aucun lanceur prêt : un pion posé ce tour ou immobilisé ne peut pas attaquer",
                 attack
             ),
             GameError::InvalidChoice(pos) => write!(f, "la case {} ne peut pas être choisie", pos),
+            GameError::TargetsMissing(attack) => {
+                write!(f, "l'attaque {} attend encore une cible", attack)
+            }
         }
     }
 }

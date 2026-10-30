@@ -1,9 +1,11 @@
 mod action;
 mod arsenal;
 mod attack_flow;
+mod clock;
 mod decision;
 mod end;
 mod event;
+mod lasting;
 mod record;
 mod state;
 
@@ -12,5 +14,7 @@ pub use arsenal::ArsenalSlot;
 pub use decision::Decision;
 pub use end::{EndReason, GameEnd, Outcome};
 pub use event::Event;
+pub(crate) use lasting::pion_has;
+pub use lasting::{ActiveEffect, EffectId, EffectKind, Patient};
 pub use record::{GameRecord, ReplayError};
 pub use state::Game;

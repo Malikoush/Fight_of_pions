@@ -72,6 +72,17 @@ pub const LEGENDE_MARQUE_NOUVEAU: &str =
 /// Rayon de ces anneaux, en fraction du côté d'une case, et leur épaisseur en points.
 pub const RAYON_ANNEAU: f32 = 0.46;
 pub const EPAISSEUR_ANNEAU: f32 = 3.0;
+/// Croix sur un pion immobilisé : sa couleur, sa demi-largeur en fraction du côté d'une
+/// case, et son épaisseur en points.
+pub const MARQUE_IMMOBILISE: Color32 = Color32::from_rgb(25, 118, 210);
+pub const DEMI_CROIX_IMMOBILISE: f32 = 0.22;
+pub const EPAISSEUR_CROIX_IMMOBILISE: f32 = 3.0;
+/// Anneau autour d'un pion protégé, entre le pion et l'anneau de choix.
+pub const ANNEAU_PROTEGE: Color32 = Color32::from_rgb(56, 142, 60);
+pub const RAYON_ANNEAU_PROTEGE: f32 = 0.42;
+/// La légende des statuts, sous l'état de la partie : elle nomme les couleurs ci-dessus.
+pub const LEGENDE_STATUTS: &str = "Croix bleue : pion immobilisé, il ne peut pas attaquer. \
+     Anneau vert : pion protégé, il ne peut pas être tué.";
 
 pub fn couleur_joueur(player: Player) -> Color32 {
     match player {

@@ -4,11 +4,27 @@
 //!
 //! Lancer : `cargo run --release -p fight_of_pions --example random_games`
 
-use fight_of_pions::{EndReason, Game, GameConfig, Rng};
+use fight_of_pions::{Attack, AttackKind, EndReason, Game, GameConfig, Rarity, Rng};
 use std::time::Instant;
 
 fn main() {
     measure("sans attaque", GameConfig::default(), 20_000);
+
+    // L'arsenal de B1 (Ours Rare et Épique) : la même partie qu'aux mesures précédentes,
+    // pour comparer le coût du moteur d'une tâche à l'autre.
+    let ours = |rarity| Attack {
+        kind: AttackKind::Ours,
+        rarity,
+    };
+    let b1_arsenal = vec![ours(Rarity::Rare), ours(Rarity::Epic)];
+    measure(
+        "Ours Rare et Épique",
+        GameConfig {
+            starting_attacks: [b1_arsenal.clone(), b1_arsenal],
+            ..GameConfig::default()
+        },
+        2_000,
+    );
 
     // Chaque joueur a toutes les attaques jouables du catalogue. Les parties sont bien
     // plus longues : moins de parties, même durée.

@@ -1,6 +1,6 @@
 # Feuille de route
 
-Dernière mise à jour : 2026-10-29.
+Dernière mise à jour : 2026-10-30.
 
 ## Comment on avance
 
@@ -140,14 +140,14 @@ De la plus stable à la plus floue. Aucune famille « EN REFONTE » avant que sa
   - Labo : réglages « Banque de départ J1 / J2 », « Poses par tour », « Mal du débarquement » ; poses restantes affichées ; point turquoise sur les pions posés ce tour quand le mal du débarquement est actif.
   - Tests : pose gratuite sans annonce d'actions ni fin de tour ; une seule pose permise, et les poses non faites ne s'accumulent pas ; la Pièce ; fin de tour automatique sans action ni pose ; mal du débarquement (avec et sans) ; un pion nouveau qui pourra attaquer ne fige pas la partie ; configurations refusées ; ancienne partie copiée rechargée ; les configurations aléatoires des tests de propriétés (miroir d'événements, actions légales) couvrent les nouveaux réglages ; le banquier fait sa pose gratuite ; tous les bots jouent légalement dans les règles cibles.
   - Premiers résultats (`cargo arene 100`, Ours seuls, sans règle d'or, donc pire cas) : glouton contre glouton, 20 % de victoires J1 (fourchette 13–29 %), 7 % J2 (3–14 %), 73 % de limite de tours (64–81 %), contre 100 % de limite dans les règles actuelles ; 0,27 attaque par partie : le glouton n'attaque que pour gagner ou se défendre. Le banquier et le glouton jouent exactement pareil (la pose est gratuite, les actions ne servent qu'aux attaques) : la paire banquier n'apprend plus rien dans cette économie. Il faut des bots qui attaquent (MCTS) avant de conclure.
-- [ ] **Corrections après la relecture du 2026-10-29** (bots et économie). Relues par le gardien le 2026-10-29 (PRÊT) ; reste la validation de Martin dans le labo, puis le commit.
+- [x] **Corrections après la relecture du 2026-10-29** (bots et économie). Relues par le gardien le 2026-10-29 (PRÊT). Commitées par Martin avec B2 (7600a62).
   - `Event::PlacementsChanged { player, placements_left }` : les poses restantes sont annoncées à chaque changement (décision du 2026-10-29, comme `ActionsChanged`). Elles sont calculées avant et après chaque action dans `execute`, ce qui ne peut en oublier aucune ; toujours avant `GameEnded`. Le miroir les lit au lieu de recalculer la règle.
   - `Decision::is_attack_choice()` et `Game::attack_in_progress()` remplacent `en_plein_choix` (labo) et `is_choosing` (bots).
   - `has_free_cell()` : la partie figée s'arrête à la première case libre ; `placements_left` ne compte les cases libres que si c'est utile.
   - Tests : un pion posé ce tour refusé comme lanceur au moment du choix (et absent de `legal_actions`), un ancien accepté ; la banque de départ de J1 reçue avec son premier tour.
   - Docs : feuille de route, glossaire, architecture et carnet remis à jour.
 
-- [ ] **B2 · Règle d'or** : une ligne de 6 ou plus au début de son tour gagne (décidé le 2026-10-28), avant la première attaque qui peut créer une ligne. Codée le 2026-10-29 ; reste la relecture du gardien, la validation de Martin dans le labo, puis le commit.
+- [x] **B2 · Règle d'or** : une ligne de 6 ou plus au début de son tour gagne (décidé le 2026-10-28), avant la première attaque qui peut créer une ligne. Relue par le gardien (PRÊT). Commitée par Martin (7600a62).
   - Décisions du 2026-10-29 : en option (`golden_rule`, désactivée par défaut, activée dans les règles cibles) ; une ligne offerte par une carte adverse compte ; une ligne en attente gagne quand la partie s'arrête (adversaire du dernier joueur vérifié d'abord).
   - Moteur : `rules::has_line` ; sans la règle d'or, la pose qui aligne gagne aussitôt ; dans tous les cas, au début d'un tour, le joueur qui commence et qui a une ligne gagne, avant de recevoir ses actions ; `stop_game` pour la partie figée et la limite de tours.
   - Deux incohérences trouvées par le miroir d'événements et corrigées : quand la partie finit au début d'un tour, les pions du tour précédent restaient « nouveaux » et `actions_left()` gardait les actions du joueur précédent. Le nouveau tour (repères « posé ce tour », compteur d'actions à 0) commence maintenant dès le changement de joueur, avant la règle d'or.
@@ -157,29 +157,44 @@ De la plus stable à la plus floue. Aucune famille « EN REFONTE » avant que sa
   - Relecture du gardien (PRÊT), corrigée : `Windows::finishable` ne propose plus une fenêtre déjà pleine (avec la règle d'or, le glouton pouvait prendre n'importe quelle attaque pour une « attaque gagnante ») ; début de tour regroupé dans `start_turn` (règle d'or, actions, recharges) ; `win_by_alignment` ; tests : règle d'or avant les recharges, `has_line` ; docs.
 
 > **À prévoir pour les familles suivantes** (relecture de B1, 2026-10-27). Rien n'oblige à réécrire le socle, mais :
-> - **Attaques sans lanceur** : `Decision::ChooseTarget` et `Event::AttackUsed` exigent un lanceur. Si une famille sans lanceur est confirmée par le carnet, ces types publics devront devenir optionnels (impact labo, terminal, Godot).
-> - **Nombre de cibles variable** (sauts enchaînés du Saut du loup, arrêt facultatif) : remplacer `target_count` par un `is_complete(contexte, choisies)` commun à `can_complete` et à la résolution, et peut-être une action pour s'arrêter.
+> - ~~**Attaques sans lanceur**~~ : réglé par les fiches du 2026-10-29, toutes les attaques partent d'un pion. `Decision::ChooseTarget` et `Event::AttackUsed` gardent leur lanceur.
+> - ~~**Nombre de cibles variable**~~ : fait en B3. `target_count` donne de `min` à `max` cibles, `is_complete` est commun à `can_complete`, à la validation et à la résolution, et `Action::FinishAttack` permet de s'arrêter. Les sauts enchaînés (B4) n'auront qu'à proposer, comme cibles, les cases d'arrivée à partir de la dernière.
 > - **Effets en chaîne** (déplacer puis tuer, échanger) : viser les `PionId` plutôt que les positions dans `Effect`.
 > - **Familles qui posent des pions** : élargir `AttackContext` (réserves, effets en cours).
 > - **Réactions (B8)** : ajouter une phase « fenêtre de réaction » à `PendingAttack` ; aujourd'hui seul le joueur courant choisit.
 > - **Coût de `can_complete`** : recherche en profondeur sans mémoire ; à mesurer avec `random_games` dès les sauts enchaînés (B4).
 > - **« Une attaque est en cours de choix »** : fait le 2026-10-29, `Decision::is_attack_choice()` et `Game::attack_in_progress()`, utilisés par le labo et les bots (les deux copies ont disparu).
-- [ ] **B3 · Effets en cours** : `ActiveEffect` et ses échéances ; Beauté fatale C et Saut du loup C (immobiliser).
-- [ ] **B4 · Mouvement** : Beauté fatale R, Ours C, Saut du loup R/É/L (sauts enchaînés), Lièvre, Interchange.
-- [ ] **B5 · Invocation et changement de camp** : Beauté fatale É/L, Familia, Meilleurs amis (vengeance).
-- [ ] **B6 · Économie** : Massacre divin.
-- [ ] **B7 · Terrain** : Coup du taureau (trous).
+
+> **Découpage de B3 à B9** (décidé le 2026-10-30, après l'analyse des [fiches attaques](FICHES_ATTAQUES.md)). Chaque tâche construit les briques d'effets dont ses cartes ont besoin (voir l'architecture, « Les attaques ») : d'abord les statuts, puis le mouvement, les invocations, les jetons, et enfin les réactions. Les fiches « à refondre » du GDD (Reine, Attila, Médecin) sont validées : elles sont réparties selon leurs briques, et l'ancienne tâche « Refontes figées » disparaît.
+
+- [ ] **B3 · Statuts et durées** : une seule horloge pour les durées et l'infirmerie (fin d'une durée décidée le 2026-10-30) ; statuts immobilisé (ne lance pas, ne bouge pas par son propriétaire) et protégé (ne peut pas être choisi comme cible d'un kill) ; effets continus avec leur créateur et la carte qui les a créés ; pion tué → infirmerie ; portée Regard ; nombre de cibles « jusqu'à N ». Codée et relue par le gardien le 2026-10-30 (PRÊT, corrections ci-dessous) ; reste la validation de Martin dans le labo, puis le commit.
+  - Cartes : Ours Commune (Grognement), Ours Épique (« jusqu'à 2 »), Ours Légendaire (Rugissement), Beauté fatale Commune (charme fatal) et Rare, Reine Commune (Garde royal, qui protège son lanceur), Attila Commune. Catalogue par défaut aux coûts des fiches (1, 2, 3, 4), recharge d'un tour.
+  - Moteur :
+    - `game/lasting.rs` : `ActiveEffect` (identité `EffectId`, sorte `EffectKind`, pion visé, créateur, carte, dernier tour) et `Patient` (un pion à l'infirmerie) ; `game/clock.rs` : l'horloge, seul endroit qui crée, arrête et fait expirer ce qui dure. Le dernier tour est calculé une fois, à la création : rien ne décompte à chaque tour.
+    - Effets primitifs `Apply` et `RemoveEnemyEffects`, à côté de `Kill` ; un kill arrête les effets du pion, puis l'envoie à l'infirmerie (`infirmary_turns`, 0 par défaut, 2 dans les règles cibles) ou dans la réserve.
+    - `AttackRules::target_count` donne un intervalle (`1..=2` pour « jusqu'à 2 », `0..=0` pour une attaque sans cible) ; `is_complete` (nombre permis **et** au moins un effet) est commun à la validation, à `can_complete` et à la résolution : aucune attaque sans effet n'est proposée. L'attaque est jouée dès qu'il n'y a plus rien à choisir ; `Action::FinishAttack` la joue plus tôt (`GameError::TargetsMissing` si elle n'a pas assez de cibles).
+    - `AttackContext` lit les statuts (`has`, `can_kill`, `is_enemy`) ; portées partagées dans `attacks/reach.rs` (`around`, `in_sight`).
+    - Un lanceur immobilisé ne peut pas lancer (`NoReadyLauncher`, message élargi). Partie figée : jamais tant qu'un effet ou l'infirmerie est en cours ; vérifiée aussi à la fin d'un tour où quelque chose a expiré.
+    - Événements `EffectStarted`, `EffectEnded`, `InfirmaryEntered`, `InfirmaryLeft` ; lectures `Game::active_effects()`, `Game::has_effect(pos, kind)`, `Game::infirmary()`, `Board::position_of(pion)` ; `GameConfig::without_unaffordable_attacks()`.
+    - `legal_actions` pendant une attaque ne teste plus que ses pions (lanceur) ou les cibles proposées par la famille, au lieu de tout le plateau : ×1,9 sur `random_games`.
+    - Reporté à B6 : le **jeu de carte** qui a créé un effet (l'« effet entier » d'Attila Rare), qu'aucune carte de B3 n'utilise. Retiré : un garde-fou « un pion protégé survit à un kill » dans le résolveur, impossible à atteindre tant qu'aucune famille ne tue sans viser (B4).
+  - Clients : labo (croix bleue sur un pion immobilisé, anneau vert sur un pion protégé, légende, infirmerie par joueur, journal, bouton « Jouer l'attaque », réglage « Tours à l'infirmerie ») ; terminal (statuts et infirmerie affichés, commande `v`) ; bots inchangés (ils jouent les nouvelles cartes par `legal_actions`). Variante « règles cibles » avec l'infirmerie de 2 tours ; variante « banque max 1 » sans les Légendaires, impayables à 3 actions.
+  - Tests : `moteur/tests/statuses.rs` (13 scénarios : Grognement, durée du charme, charme fatal, regard, Beauté fatale Rare, protégé, charme sur un protégé, Rugissement, Attila sur ses pions, sur un protégé adverse, sur ses propres effets, et qui garde tes effets sur le pion libéré) et `moteur/tests/infirmary.rs` (2 scénarios) ; Ours Épique « jusqu'à 2 » et `FinishAttack` dans `attacks.rs` ; `reach.rs` (regard). Le miroir d'événements suit les effets et l'infirmerie, et vérifie deux invariants nouveaux : aucun effet ne survit à son pion, et plateau + réserve + infirmerie = pions de départ. Les configurations aléatoires utilisent toutes les cartes jouables et l'infirmerie ; l'oracle de la partie figée connaît les nouvelles cartes. 12 erreurs volontaires (horloge, lanceur immobilisé, partie figée, charme fatal, Attila, attaque sans effet, « jusqu'à N », effets du pion tué…) toutes attrapées.
+  - Relecture du gardien (PRÊT), corrigée : l'horloge perd un paramètre prévu pour les réactions et jamais utilisé (il reviendra en B8, avec son test) ; le filtre « effet sur ce pion, créé par ce joueur » écrit une seule fois (`ActiveEffect::is_on_by`) ; le charme fatal passe par `can_kill` ; tests d'Attila qui garde tes effets et de `without_unaffordable_attacks` ; carnet (liste des refus, tableau des questions réparé, formulation unique de l'infirmerie) ; labo : « Jouer l'attaque » aussi sur une partie chargée en plein choix. Deux questions de règles ajoutées au carnet (infirmerie d'un pion tué par une carte de son propriétaire, B6 ; ce qu'est une attaque « sans effet »). Garde-fou non testable, commenté : la partie figée après une expiration (aucun scénario possible avec les cartes de B3).
+- [ ] **B4 · Mouvement** : déplacer, échanger, « viser » ; Saut du loup (Commune à Légendaire, sauts enchaînés), Lièvre Commune, Rare et Légendaire, Interchange Rare et Épique, Coup du taureau sans le mur (la charge s'arrête au bord).
+- [ ] **B5 · Invocation** : poser depuis la réserve ou l'infirmerie, tombes, définition du kill, vengeance, geste gratuit ; Beauté fatale Épique et Légendaire (séduction = tuer + poser), Médecin, Reine Rare à Légendaire (couronne, gardes, tir), Familia, Meilleurs amis.
+- [ ] **B6 · Jetons et annulation** : effets à jetons et retours programmés ; le jeu de carte qui a créé un effet (l'« effet entier ») ; Massacre divin (cimetière, défaite par manque de pions), Lièvre Épique, Interchange Commune (retour) et Légendaire, Attila Rare à Légendaire (Terre brûlée).
+- [ ] **B7 · Le mur** (seulement s'il est gardé) : plateau entouré de mur, cases creusées par le Coup du taureau.
 - [ ] **Design · Anti-stagnation** : Effondrement et/ou boost d'actions par tour ; règle de répétition (même position 3 fois → fin, rangée ici le 2026-10-27) ; nul ou départage. Plusieurs variantes en réglages, essayées au labo, puis comparées par les bots (taux de nul, durée, avantage du premier joueur). « Partie figée » doit tenir compte des effondrements à venir.
 - [ ] **B8 · Réactions** : fenêtres de réaction dans le modèle de décision (avant ou après la résolution) ; Feintaille, Sentinelle, Queue du lézard, Perroquet, Hibou.
-- [ ] **B9 · Refontes figées** : Reine, Attila, Médecin (tombes et zombies).
-- [ ] **B10 · Draft et cache secrète** : tirage avec la graine, bans et picks, `PlayerView`, arsenal rempli par le draft. `Game` devra alors garder l'état courant du `Rng`, pas seulement la graine : une copie de partie prise en cours de route doit continuer la même suite de tirages.
+- [ ] **B9 · Draft et cache secrète** : tirage avec la graine, bans et picks, `PlayerView`, arsenal rempli par le draft. `Game` devra alors garder l'état courant du `Rng`, pas seulement la graine : une copie de partie prise en cours de route doit continuer la même suite de tirages.
 - [ ] **Jalon v1.0 « version propre »** : tag Git, toute la doc à jour.
 
 ## Phase C · Après la v1.0 (préparée, pas commencée)
 
 - [ ] Configuration et catalogue chargés depuis un fichier (équilibrer sans recompiler).
 - [x] Membre `bots/` : bot aléatoire, bot glouton, arène de N parties avec statistiques par carte (avancé avant B2, voir la phase B).
-- [ ] Bots plus forts (recherche à 2 coups, puis MCTS) ; statistiques de draft par carte (B10).
+- [ ] Bots plus forts (recherche à 2 coups, puis MCTS) ; statistiques de draft par carte (B9).
 - [ ] Encodage ML (observation → tenseur, action ↔ indice) et membre `py_bindings/` (pyo3).
 - [ ] Membre `godot_bridge/`.
 
@@ -196,4 +211,6 @@ De la plus stable à la plus floue. Aucune famille « EN REFONTE » avant que sa
 | 2026-10-27 | `cargo run -p bots --example arene -- 10` en debug (4 variantes × 7 paires × 10 parties), avant puis après l'optimisation du moteur et des bots dans le profil dev | 52 s → 11,8 s (×4,4) : le debug va désormais à la vitesse de la release |
 | 2026-10-27 | `cargo arene 100` : 4 variantes × 7 paires de bots × 100 parties, paires en parallèle, release | ~1 min 50 ; les parties entre gloutons durent 200 tours et coûtent le plus. `cargo test` des bots : ~3,5 s en debug. |
 | 2026-10-29 | `random_games` après l'économie et `PlacementsChanged`, mesures alternées avec le code d'avant (3 fois chacun) | sans attaque : 12 000 à 14 500 parties/s avant, 10 000 à 13 800 après ; avec attaques : 530 à 590 dans les deux cas. Le bruit domine ; l'annonce des poses coûte au plus quelques pour cent. |
+| 2026-10-30 | `random_games` après B3 (release) | sans attaque : ~11 500 parties/s. Arsenal de B1 (Ours Rare et Épique, nouvelle ligne de mesure, comparable aux mesures précédentes) : 640 parties/s avant l'optimisation de `legal_actions`, **1 205 après** (~250 000 actions/s). Toutes les cartes (8 par joueur) : 78 puis **153 parties/s** (~121 000 actions/s), 792 actions par partie, 97 % de limite de tours : le Garde royal est toujours jouable, une partie où il est dans un arsenal ne se fige jamais. |
+| 2026-10-30 | `cargo arene 10` après B3 (5 variantes × 7 paires, 8 cartes par joueur) | 78 s avant l'optimisation de `legal_actions`, ~27 s après (environ 2 fois plus lent par partie qu'avant B3, pour 4 fois plus de cartes). Le glouton essaie toutes les suites d'attaques sur des copies : à optimiser dans les bots si l'arène devient trop lente. Bilans à 10 parties par paire : trop peu pour conclure. |
 | 2026-10-29 | `cargo test` après une modification du moteur (opt-level 3 en debug) | ~9 s pour `cargo test --workspace` ; la première fois, `cargo test` à la racine recompile aussi le moteur sans `serde` (~10 s de plus). Ensuite 2 à 4 s. |

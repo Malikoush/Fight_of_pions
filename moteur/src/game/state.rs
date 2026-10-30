@@ -1,5 +1,6 @@
 use super::arsenal::ArsenalSlot;
 use super::attack_flow::Launch;
+use super::lasting::{ActiveEffect, EffectId, Patient};
 use crate::{
     Action, Attack, Board, Cell, Decision, EndReason, Event, GameConfig, GameEnd, GameError,
     Outcome, Pion, PionId, Player, Position, rules,
@@ -30,6 +31,12 @@ pub struct Game {
     pub(super) end: Option<GameEnd>,
     /// L'identité que recevra le prochain pion créé.
     pub(super) next_pion_id: PionId,
+    /// Les effets continus en jeu, dans l'ordre de leur création (voir `clock.rs`).
+    pub(super) effects: Vec<ActiveEffect>,
+    /// L'identité que recevra le prochain effet continu créé.
+    pub(super) next_effect_id: EffectId,
+    /// Les pions tués qui attendent de revenir dans la réserve, dans l'ordre d'arrivée.
+    pub(super) infirmary: Vec<Patient>,
 }
 
 /// Une attaque commencée dont les choix ne sont pas finis. Rien n'est modifié tant que le
@@ -192,8 +199,8 @@ impl Game {
         })
     }
 
-    /// Vrai si une attaque est commencée et attend encore son lanceur ou une cible : seule
-    /// [`Action::Choose`] est alors permise.
+    /// Vrai si une attaque est commencée et attend encore son lanceur ou une cible : seules
+    /// [`Action::Choose`] et [`Action::FinishAttack`] sont alors permises.
     pub fn attack_in_progress(&self) -> bool {
         self.pending_decision()
             .is_some_and(Decision::is_attack_choice)
@@ -201,8 +208,8 @@ impl Game {
 
     /// Toutes les actions que [`Game::apply`] accepterait maintenant, dans un ordre
     /// toujours identique : les poses rangée par rangée (A1, B1… puis A2…), les attaques
-    /// dans l'ordre de l'arsenal, les choix de case rangée par rangée, puis `EndTurn`.
-    /// Vide si la partie est finie.
+    /// dans l'ordre de l'arsenal, puis `EndTurn` ; pendant une attaque, les choix de case
+    /// rangée par rangée, puis `FinishAttack`. Vide si la partie est finie.
     ///
     /// La liste est construite en passant chaque action candidate par la validation
     /// elle-même : elle ne peut pas contredire `apply`. Les candidates sont seulement
@@ -222,7 +229,12 @@ impl Game {
                     .chain([Action::EndTurn])
                     .collect()
             }
-            Some(_) => self.board.positions().map(Action::Choose).collect(),
+            Some(ref pending) => self
+                .choice_candidates(pending)
+                .into_iter()
+                .map(Action::Choose)
+                .chain([Action::FinishAttack])
+                .collect(),
         };
         candidates
             .into_iter()
@@ -260,6 +272,9 @@ impl Game {
             pending_attack: None,
             end: None,
             next_pion_id: PionId::FIRST,
+            effects: Vec::new(),
+            next_effect_id: EffectId::FIRST,
+            infirmary: Vec::new(),
             config,
         })
     }
@@ -281,6 +296,7 @@ impl Game {
             (None, Action::UseAttack(slot)) => self.validate_use_attack(slot),
             (None, Action::EndTurn) => Ok(()),
             (Some(pending), Action::Choose(pos)) => self.validate_choice(pending, pos),
+            (Some(pending), Action::FinishAttack) => self.validate_finish(pending),
             _ => Err(GameError::UnexpectedAction),
         }
     }
@@ -324,8 +340,7 @@ impl Game {
             Action::Place(pos) => self.execute_place(pos, &mut events),
             Action::UseAttack(slot) => self.start_attack(slot),
             Action::Choose(pos) => self.execute_choice(pos, &mut events),
-            // Finir son tour ne change ni le plateau ni les réserves : la partie ne peut
-            // pas devenir figée ici, seule la limite de tours peut l'arrêter.
+            Action::FinishAttack => self.resolve_attack(&mut events),
             Action::EndTurn => self.finish_turn(&mut events),
         }
         self.announce_placements(placements_before, &mut events);
@@ -418,10 +433,19 @@ impl Game {
     }
 
     /// Termine le tour du joueur courant : la partie s'arrête si c'était le dernier tour
-    /// permis, sinon l'adversaire commence le sien.
+    /// permis ; sinon ce qui expire à la fin de ce tour s'arrête (effets, infirmerie), et
+    /// l'adversaire commence son tour, sauf si la partie est maintenant figée.
     fn finish_turn(&mut self, events: &mut Vec<Event>) {
         if self.turn >= self.config.max_turns {
             self.stop_game(EndReason::TurnLimit, events);
+            return;
+        }
+        // Finir son tour ne change ni le plateau ni les réserves ; seul ce qui expire peut
+        // figer la partie à ce moment-là. Garde-fou : avec les cartes de B3, aucun scénario
+        // n'y mène (le créateur d'un effet peut encore agir, un pion qui sort de
+        // l'infirmerie trouve une case). Un test viendra avec la carte qui le rendra possible.
+        if self.end_what_expires(events) && self.is_frozen() {
+            self.stop_game(EndReason::Frozen, events);
             return;
         }
         let ending = self.current_player;
@@ -523,9 +547,12 @@ impl Game {
     }
 
     /// Vrai si plus aucun joueur ne pourra jamais agir autrement qu'en finissant son tour,
-    /// et que rien de programmé ne peut changer la situation (rien ne l'est encore).
-    fn is_frozen(&self) -> bool {
-        !self.can_ever_act(Player::One) && !self.can_ever_act(Player::Two)
+    /// et que rien de programmé ne peut changer la situation : aucun effet continu ne
+    /// s'arrêtera, aucun pion ne sortira de l'infirmerie.
+    pub(super) fn is_frozen(&self) -> bool {
+        !self.something_is_scheduled()
+            && !self.can_ever_act(Player::One)
+            && !self.can_ever_act(Player::Two)
     }
 
     /// Vrai si ce joueur pourra encore agir, maintenant ou plus tard : poser un pion, ou

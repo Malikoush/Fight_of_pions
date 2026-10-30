@@ -20,7 +20,8 @@ pub enum Decision {
         /// L'attaque en cours.
         attack: Attack,
     },
-    /// Le joueur choisit la prochaine cible de son attaque.
+    /// Le joueur choisit la prochaine cible de son attaque, ou la joue avec les cibles déjà
+    /// choisies ([`crate::Action::FinishAttack`]) si elle en permet moins.
     ChooseTarget {
         /// Le joueur qui doit choisir.
         player: Player,

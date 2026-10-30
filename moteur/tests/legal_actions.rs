@@ -6,7 +6,8 @@ use common::{game_with, new_game, place, play, random_config};
 use fight_of_pions::{Action, Game, GameConfig, Position, Rng};
 
 /// Toutes les actions qu'un client pourrait tenter : poser ou choisir chaque case, des
-/// cases hors du plateau, chaque emplacement d'attaque et un de trop, finir son tour.
+/// cases hors du plateau, chaque emplacement d'attaque et un de trop, jouer l'attaque en
+/// cours, finir son tour.
 fn candidates(game: &Game) -> Vec<Action> {
     let size = game.board().size();
     let outside = [
@@ -20,7 +21,7 @@ fn candidates(game: &Game) -> Vec<Action> {
         .map(|&pos| Action::Place(pos))
         .chain(cells.iter().map(|&pos| Action::Choose(pos)))
         .chain(slots.map(Action::UseAttack))
-        .chain([Action::EndTurn])
+        .chain([Action::FinishAttack, Action::EndTurn])
         .collect()
 }
 

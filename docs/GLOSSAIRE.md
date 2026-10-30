@@ -1,6 +1,6 @@
 # Glossaire
 
-Dernière mise à jour : 2026-10-29.
+Dernière mise à jour : 2026-10-30.
 
 Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de règles et dans le code.
 
@@ -19,19 +19,22 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Joueur | `Player` | Les deux camps : `One` (commence) et `Two` |
 | Tour | `turn` | Le tour **d'un** joueur. Le compteur avance à chaque fin de tour. |
 | Manche | `round` (cible) | Un tour de chaque joueur (le « Tour 1 » du tableau du GDD) |
-| Action | `Action` | Une décision envoyée au moteur : `Place`, `UseAttack`, `Choose`, `EndTurn` (plus tard `Pass` pour les réactions…) |
+| Action | `Action` | Une décision envoyée au moteur : `Place`, `UseAttack`, `Choose`, `FinishAttack`, `EndTurn` (plus tard `Pass` pour les réactions…) |
 | Coût de la pose | `place_cost` | Actions que coûte la pose d'un pion (1 par défaut). 0 (pose gratuite) seulement si les poses sont limitées par tour. |
 | Poses par tour | `max_placements_per_turn`, `GameError::NoPlacementLeft` | Le plus de pions qu'un joueur peut poser dans un tour ; elles ne s'accumulent pas. `None` (par défaut) : seules les actions limitent les poses. Une pose de trop est refusée (`NoPlacementLeft`) ; une limite de 0 est refusée à la configuration (`ConfigError::NoPlacementPerTurn`), comme une pose gratuite sans limite (`ConfigError::FreePlacement`). |
 | Poses restantes | `Game::placements_left()` | Combien de pions le joueur courant peut encore poser ce tour : selon ses actions, ses poses permises, sa réserve et les cases libres |
 | Actions du tour | `actions_left` | Ce qu'il reste à dépenser au joueur courant. Dans les règles cibles, on parle de **points d'action** : ils ne servent qu'aux cartes. |
 | Actions en réserve | `banked_actions`, `Game::banked_actions()` | Actions non utilisées gardées pour le tour suivant (jusqu'à `max_banked_actions`, 2 par défaut). **À ne pas confondre avec la réserve de pions.** |
 | Banque de départ, la Pièce | `starting_banked_actions`, `ConfigError::StartingBankTooLarge` | Actions que chaque joueur a en banque au début de la partie (0 par défaut), au plus `max_banked_actions`. J1 les reçoit avec son premier tour, J2 les trouve en banque. La Pièce : J2 commence avec 1, pour compenser le premier joueur. |
-| Règles cibles | `bots::target_rules()`, variante « règles cibles » | La configuration vers laquelle le jeu va, face aux règles actuelles (`current_rules()`) : 1 pose gratuite par tour, 1 point d'action par tour gardé jusqu'à 3, mal du débarquement, la Pièce (voir le carnet) |
+| Règles cibles | `bots::target_rules()`, variante « règles cibles » | La configuration vers laquelle le jeu va, face aux règles actuelles (`current_rules()`) : 1 pose gratuite par tour, 1 point d'action par tour gardé jusqu'à 3, mal du débarquement, la Pièce, la règle d'or, l'infirmerie de 2 tours (voir le carnet) |
+| Attaques impayables retirées | `GameConfig::without_unaffordable_attacks()` | La configuration sans les attaques qu'aucun tour ne peut payer, même en économisant (catalogue et arsenaux) : pour régler moins d'actions sans rendre la configuration invalide |
 | Événement | `Event` | Ce que le moteur annonce après une action ; suffit à suivre tout l'état visible |
 | Compteurs d'actions annoncés | `Event::ActionsChanged` | Actions restantes et gardées d'un joueur, émis à chaque changement |
 | Poses restantes annoncées | `Event::PlacementsChanged` | Poses restantes d'un joueur (`Game::placements_left`), émis à chaque changement, toujours avant la fin de partie |
-| Attaque en cours de choix | `Decision::is_attack_choice()`, `Game::attack_in_progress()` | Une attaque commencée attend son lanceur ou une cible : seule `Action::Choose` est permise |
-| Réserve annoncée | `Event::ReserveChanged` | Pions en réserve d'un joueur, émis à chaque changement (pose, kill…) |
+| Attaque en cours de choix | `Decision::is_attack_choice()`, `Game::attack_in_progress()` | Une attaque commencée attend son lanceur ou une cible : seules `Action::Choose` et `Action::FinishAttack` sont permises |
+| Réserve annoncée | `Event::ReserveChanged` | Pions en réserve d'un joueur, émis à chaque changement (pose, kill sans infirmerie, sortie de l'infirmerie) |
+| Effet annoncé | `Event::EffectStarted`, `Event::EffectEnded` | Un effet continu commence, ou s'arrête (durée écoulée, retiré par une carte, pion tué) |
+| Infirmerie annoncée | `Event::InfirmaryEntered`, `Event::InfirmaryLeft` | Un pion tué entre à l'infirmerie, ou en sort pour revenir dans la réserve |
 | Refus | `GameError` | Pourquoi une action ou une configuration est refusée |
 | Configuration incohérente | `ConfigError` | La raison précise du refus d'une configuration (`GameError::InvalidConfig`) |
 | Décision attendue | `Decision`, `pending_decision()` | Qui doit choisir quoi, maintenant : `MainAction`, `ChooseLauncher`, `ChooseTarget` |
@@ -39,7 +42,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Fin de partie | `GameEnd`, `Event::GameEnded` | Le résultat et la raison de la fin |
 | Résultat | `Outcome` | `Won(Player)` ou `Draw` (match nul) |
 | Raison de la fin | `EndReason` | `Alignment`, `Frozen` (partie figée) ou `TurnLimit` |
-| Partie figée | `EndReason::Frozen` | Plus personne ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation |
+| Partie figée | `EndReason::Frozen` | Plus personne ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation (aucun effet continu, personne à l'infirmerie) |
 | Limite de tours | `max_turns` | Le tour après lequel la partie s'arrête en match nul (200 par défaut) : filet de sécurité |
 | Graine | `seed`, `Game::seed()` | Choisie par le client à la création (`Game::new(config, seed)`). Elle fait partie de la partie et initialise le hasard du jeu. |
 | Générateur | `Rng` | Hasard déterministe (SplitMix64) : même graine, même suite. Tout le hasard passe par lui. |
@@ -56,11 +59,12 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Position | `Position` | Rangée et colonne à partir de 0, affichée « C5 » |
 | Direction | `Direction` | Un pas d'une case parmi les 8 directions |
 | Pion | `Pion` | Un pion posé, avec son identité et son propriétaire |
-| Pion tué | `Event::PionKilled { pion, at, by }` | Un pion retiré du plateau ; `by` est l'identité du tueur. Il retourne dans la réserve de son propriétaire. |
+| Pion tué | `Event::PionKilled { pion, at, by }` | Un pion retiré du plateau ; `by` est l'identité du tueur. Ses effets s'arrêtent ; il va à l'infirmerie, ou directement dans la réserve de son propriétaire. |
 | Identité d'un pion | `PionId` | Numéro stable d'un pion (affiché « #3 »), pour qu'un effet le suive quand il bouge |
+| Case d'un pion | `Board::position_of(pion)` | Où se trouve un pion, retrouvé par son identité (un effet vise une identité, pas une case) |
 | Réserve de pions | `reserve_pions` | Les pions qu'un joueur peut encore poser (15 au départ) |
-| Pion lanceur | `launcher` | Le pion du joueur depuis lequel une attaque est lancée, choisi par `Action::Choose` |
-| Mal du débarquement | `summoning_sickness`, `Game::is_summoning_sick(pos)`, `GameError::NoReadyLauncher` | Avec ce réglage, un pion posé ce tour ne peut pas lancer d'attaque. (cible) Un pion invoqué non plus ; un pion déplacé garde son ancienneté ; le mot-clé « Charge » l'ignorera. |
+| Pion lanceur | `launcher` | Le pion du joueur depuis lequel une attaque est lancée, choisi par `Action::Choose`. C'est aussi le pion qui agit : une carte qui déplace, protège ou échange « un de tes pions » s'applique au lanceur (décidé le 2026-10-30) |
+| Mal du débarquement | `summoning_sickness`, `Game::is_summoning_sick(pos)`, `GameError::NoReadyLauncher` | Avec ce réglage, un pion posé ce tour ne peut pas lancer d'attaque (`NoReadyLauncher` vaut aussi pour un pion immobilisé). (cible) Un pion invoqué non plus ; un pion déplacé garde son ancienneté. |
 | Tombe | couche `tomb` de `Cell` (cible) | Ce que laisse un pion tué. Elle ne bloque pas la case. |
 | Trou | couche terrain de `Cell` (cible) | Case détruite par le Coup du taureau, injouable |
 | Zombie | type de pion (cible) | Pion ressuscité par le Médecin |
@@ -73,19 +77,26 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
 | Attaque | `Attack` | Une carte : une famille dans une rareté (« Ours (Rare) ») |
-| Famille d'attaque | `AttackKind` | Ours, et plus tard Lièvre, Beauté fatale… Une famille par fichier dans `attacks/`. |
+| Famille d'attaque | `AttackKind` | `BeauteFatale`, `Reine`, `Attila`, `Ours`, et plus tard Lièvre… Le nom de la carte, tel quel (« Beauté fatale »). Une famille par fichier dans `attacks/`. |
 | Rareté | `Rarity` | `Common`, `Rare`, `Epic`, `Legendary` : la variante de l'attaque et sa place dans le draft, **sans lien imposé avec le coût** |
 | Caractéristiques | `AttackStats` | Coût et recharge d'une attaque |
 | Catalogue | `attack_catalog`, `CatalogEntry` | Dans `GameConfig` : les attaques jouables et leurs caractéristiques |
 | Attaques de départ | `starting_attacks` | Dans `GameConfig` : l'arsenal de chaque joueur au début (plus tard, sa cache secrète) |
 | Arsenal | `Game::arsenal(player)`, `ArsenalSlot` | Les attaques d'un joueur pendant la partie, chacune avec sa recharge en cours |
 | Utiliser une attaque | `Action::UseAttack(slot)` | Commencer l'attaque d'un emplacement de son arsenal ; le lanceur et les cibles se choisissent ensuite |
-| Choisir une case | `Action::Choose(pos)` | Le lanceur, puis chaque cible de l'attaque en cours |
+| Choisir une case | `Action::Choose(pos)` | Le lanceur, puis chaque cible de l'attaque en cours ; l'attaque est jouée dès qu'il n'y a plus rien à choisir |
+| Jouer l'attaque | `Action::FinishAttack`, `GameError::TargetsMissing` | Jouer l'attaque en cours avec les cibles déjà choisies, avant son maximum (« jusqu'à 2 ») ; refusé tant qu'elle n'en a pas assez |
+| Nombre de cibles | `AttackRules::target_count` (interne) | De combien à combien de cibles une variante choisit (`1..=2` : « jusqu'à 2 » ; `0..=0` : aucune, jouée dès le choix du lanceur) |
+| Portée | `attacks/reach.rs` : `around`, `in_sight` (interne) | Où une carte trouve ses cibles, partagé entre familles : collé au lanceur, regard (ligne droite, sans pion entre). Pas de portée par défaut. |
 | Recharge | `cooldown`, `cooldown_left`, `Event::CooldownChanged` | Tours du propriétaire avant de pouvoir relancer une attaque (1 = une fois par tour) |
 | Cible | case choisie | Une case visée par l'attaque en cours, proposée par la famille |
 | Attaque lancée | `Event::AttackUsed` | Annonce d'une attaque résolue ; ses effets suivent |
-| Effet primitif | `Effect` (interne au moteur) | Opération de base produite par une famille : tuer, et plus tard déplacer, poser, changer de camp… Seul le résolveur l'applique. |
-| Effet en cours | `ActiveEffect` (cible) | Un effet qui dure plusieurs tours (immobilisé, protégé…) |
+| Effet primitif | `Effect` (interne au moteur) | Opération de base produite par une famille : `Kill` (tuer), `Apply` (donner un effet continu), `RemoveEnemyEffects` (retirer les effets adverses d'un pion), et plus tard déplacer, échanger, poser… (catalogue dans l'architecture). Seul le résolveur l'applique. Il n'y a pas de « changer de camp » : séduire, c'est tuer puis poser. |
+| Effet continu | `ActiveEffect`, `EffectId`, `Game::active_effects()` | Ce qu'une carte laisse en jeu après avoir été jouée : pour l'instant les statuts ; plus tard couronne, gardes, jetons, pacte, retour programmé, famille. Il vise un pion par son identité, retient son créateur (`creator`), sa carte (`source`) et son dernier tour (`last_turn`). Les fiches disaient aussi « effet en cours ». Les pions, l'infirmerie, les tombes et les cases creusées n'en sont pas. |
+| Statut | `EffectKind::Immobilized`, `EffectKind::Protected`, `Game::has_effect(pos, kind)` | Immobilisé (ne lance pas d'attaque, donc ne bouge pas par une carte de son propriétaire) ou protégé (ne peut pas être choisi comme cible d'un kill) : un effet continu sur un pion |
+| Durée, dernier tour | `last_turn` | Une durée de N tours se compte en tours de l'adversaire de celui qui a joué l'effet, sans le tour en cours ; l'effet s'arrête à la fin de son dernier tour (`clock.rs`) |
+| Infirmerie | `infirmary_turns`, `Game::infirmary()`, `Patient` | Où va un pion tué, pour `infirmary_turns` tours (2 dans les règles cibles, 0 par défaut), avant de revenir dans la réserve de son propriétaire. Un `Patient` est un pion qui y attend. |
+| Cimetière | (cible, B6) | Où va un pion tué par le Massacre divin Épique ou Légendaire : il ne revient jamais |
 | Réaction | attaque avec déclencheur (cible) | Attaque jouée pendant le tour adverse, payée avec les actions en réserve |
 | Axe d'attaque | aucun (documentation seulement) | Crowd control, Mouvement, Kill, Invocation, Buff, Spécial : sert à l'équilibrage, pas au code. Toujours dire « axe d'attaque », pour ne pas confondre avec l'axe d'alignement. |
 
@@ -124,13 +135,14 @@ Le labo est entièrement en français, noms du code compris.
 | Contrôleur | `Panneau::controleur` | Qui joue un joueur : un humain (`None`) ou un bot (`BotKind`) |
 | Lecture automatique | `Panneau::attente_des_bots` | Les bots jouent seuls, avec une attente réglable entre deux coups ; elle s'arrête si le coup d'un bot est refusé |
 | Coup du bot | `Demande::CoupDuBot` | Un coup joué par un bot via `partie.rs` : une action, et toute la suite si c'est une attaque |
+| Jouer l'attaque | `Intention::FinirAttaque` | Le bouton qui joue l'attaque en cours de choix avec les cibles déjà choisies (`Action::FinishAttack` au bout de la suite) ; activé seulement si le moteur le permet sur la copie |
 | Revoir | `Intention::Revoir` | Ouvrir dans l'écran Partie une partie de l'arène (configuration, graine, bots), qui se rejoue à l'identique, même après une annulation |
 | Hasard avant chaque action | `Partie::hasard_avant` | L'état du hasard des bots avant chaque action enregistrée : annuler le remet, pour que les bots rejouent les mêmes coups |
 | Simulation | `Simulation` (écran Arène) | Ce qui est demandé à l'arène : configuration (et d'où elle vient), paires, nombre de parties |
 | Réglage de partie | `ReglageDePartie` | Une configuration qu'on règle à l'écran : on part d'une variante ou de la partie en cours, puis on retouche chaque réglage (plateau, pions, actions, catalogue, arsenaux). `GameConfig::validate` décide si elle se lance. Il y en a un par écran : la **prochaine partie** (que lance « Nouvelle partie ») et la **configuration simulée** (sur laquelle l'arène fait jouer les bots). |
 | Retouchée | `ReglageDePartie::retouchee` | La configuration réglée n'est plus exactement celle dont on est parti (variante ou partie en cours) |
 
-## Cartes avant la partie (cible, B10)
+## Cartes avant la partie (cible, B9)
 
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|

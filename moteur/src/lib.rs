@@ -43,7 +43,7 @@ pub use common::{Direction, Player, Position};
 pub use config::{ConfigError, GameConfig};
 pub use error::GameError;
 pub use game::{
-    Action, ArsenalSlot, Decision, EndReason, Event, Game, GameEnd, GameRecord, Outcome,
-    ReplayError,
+    Action, ActiveEffect, ArsenalSlot, Decision, EffectId, EffectKind, EndReason, Event, Game,
+    GameEnd, GameRecord, Outcome, Patient, ReplayError,
 };
 pub use rng::Rng;

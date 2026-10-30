@@ -67,6 +67,27 @@ fn main() {
                                 terminal::player_name(pion.owner()),
                                 at
                             ),
+                            Event::EffectStarted(effect) => println!(
+                                "Le pion {} est {} jusqu'à la fin du tour {} ({}).",
+                                effect.pion(),
+                                effect.kind(),
+                                effect.last_turn(),
+                                effect.source()
+                            ),
+                            Event::EffectEnded(effect) => {
+                                println!("Le pion {} n'est plus {}.", effect.pion(), effect.kind())
+                            }
+                            Event::InfirmaryEntered(patient) => println!(
+                                "Le pion {} de {} part à l'infirmerie jusqu'à la fin du tour {}.",
+                                patient.pion().id(),
+                                terminal::player_name(patient.pion().owner()),
+                                patient.last_turn()
+                            ),
+                            Event::InfirmaryLeft(patient) => println!(
+                                "Le pion {} de {} sort de l'infirmerie et revient dans la réserve.",
+                                patient.pion().id(),
+                                terminal::player_name(patient.pion().owner())
+                            ),
                             Event::TurnEnded { next } => {
                                 println!("Au tour de {}.", terminal::player_name(next));
                             }

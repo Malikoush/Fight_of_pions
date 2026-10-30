@@ -68,12 +68,14 @@ moteur/src/
   error.rs      GameError : toutes les raisons de refus
   common/       Player, Position, Direction
   board/        Board, Cell, Pion, PionId
-  game/         Game (state.rs), déroulement des attaques (attack_flow.rs), ArsenalSlot,
-                Action, Event, Decision, GameEnd, GameRecord
+  game/         Game (state.rs), déroulement des attaques (attack_flow.rs), ce qui dure
+                (lasting.rs : ActiveEffect, EffectKind, Patient) et son horloge (clock.rs),
+                ArsenalSlot, Action, Event, Decision, GameEnd, GameRecord
   rules/        règles pures qui lisent le plateau (alignement)
   rng.rs        Rng : générateur déterministe maison (SplitMix64), sans dépendance
   attacks/      attaques : données (Attack, AttackKind, Rarity, AttackStats), trait AttackRules,
-                Effect, et une famille par fichier (ours.rs)
+                Effect, portées partagées (reach.rs), et une famille par fichier
+                (ours.rs, beaute_fatale.rs, reine.rs, attila.rs)
 ```
 
 ### Le contrat d'une action : valider, puis exécuter
@@ -82,16 +84,16 @@ moteur/src/
 
 ### Chaque changement d'état est annoncé
 
-Tout ce qui change pour un observateur (un pion posé, tué, déplacé, qui change de camp, des actions dépensées ou gardées, un tour qui se termine…) produit un `Event`. Le labo, Godot et les bots ne lisent que ces événements pour animer. C'est vérifié par l'invariant du miroir (principe 5).
+Tout ce qui change pour un observateur (un pion posé, tué, déplacé, un effet continu qui commence ou s'arrête, un pion qui entre à l'infirmerie ou en sort, des actions dépensées ou gardées, un tour qui se termine…) produit un `Event`. Le labo, Godot et les bots ne lisent que ces événements pour animer. C'est vérifié par l'invariant du miroir (principe 5).
 
 ### Le modèle de décision
 
 Les attaques demandent plusieurs choix (carte, pion lanceur, cible, sauts enchaînés). Les réactions se jouent pendant le tour adverse, et le draft est une suite de choix. Au lieu d'une `Action` géante qui contiendrait tout, **le moteur expose à tout moment qui doit choisir quoi** :
 
 - `pending_decision()` : la décision attendue et le joueur concerné. Aujourd'hui `MainAction`, `ChooseLauncher` et `ChooseTarget` ; viendront la fenêtre de réaction et le draft.
-- `legal_actions()` : la liste exacte des actions acceptées maintenant, dans un ordre fixe. Elle est construite en passant chaque candidate par la validation elle-même : elle ne peut pas contredire `apply`. Un test le vérifie sur des parties aléatoires.
+- `legal_actions()` : la liste exacte des actions acceptées maintenant, dans un ordre fixe. Elle est construite en passant chaque candidate par la validation elle-même : elle ne peut pas contredire `apply`. Un test le vérifie sur des parties aléatoires. Les candidates sont seulement celles qui peuvent répondre à la décision attendue (pendant une attaque : ses pions pour le lanceur, puis les cibles proposées par la famille), pour ne pas valider tout le plateau à chaque coup.
 
-Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(pos)`, `EndTurn`, plus tard `Pass`…). Il n'y a **pas d'action « annuler »** : une attaque commencée va au bout, et le moteur ne propose jamais un choix qui mène à une impasse. Les clients font la sélection sur une **copie** de la partie et n'envoient la suite qu'une fois complète : annuler reste gratuit pour le joueur, et aucun bot ne peut boucler. Avantages :
+Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(pos)`, `FinishAttack`, `EndTurn`, plus tard `Pass`…). Il n'y a **pas d'action « annuler »** : une attaque commencée va au bout, et le moteur ne propose jamais un choix qui mène à une impasse. Les clients font la sélection sur une **copie** de la partie et n'envoient la suite qu'une fois complète : annuler reste gratuit pour le joueur, et aucun bot ne peut boucler. Avantages :
 
 - le labo surligne les cases jouables sans connaître aucune règle ;
 - les bots jouent en piochant dans `legal_actions()` ;
@@ -101,9 +103,29 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
 ### Les attaques
 
 - **Identité par données** : une `Attack` est une famille (`AttackKind`) dans une rareté (`Rarity`). Le coût et la recharge viennent du catalogue `attack_catalog` de `GameConfig`, jamais du code de la famille. Le coût n'est pas lié à la rareté. Les attaques de départ de chaque joueur (`starting_attacks`) sont aussi dans la configuration, en attendant le draft.
-- **Le déroulement est commun à toutes les familles** (`game/attack_flow.rs`) : validation de la carte (recharge, coût, au moins une attaque complète), du lanceur et de chaque cible, puis résolution d'un bloc au dernier choix (coût payé, carte en recharge, effets appliqués). Une famille ne fournit que ses raretés jouables, son nombre de cibles, ses cibles possibles et ses effets.
+- **Le déroulement est commun à toutes les familles** (`game/attack_flow.rs`) : validation de la carte (recharge, coût, au moins une attaque complète), du lanceur (ni posé ce tour, ni immobilisé) et de chaque cible, puis résolution d'un bloc (coût payé, carte en recharge, effets appliqués). L'attaque est jouée dès qu'il n'y a plus rien à choisir, ou plus tôt avec `FinishAttack` quand elle est déjà complète. Une famille ne fournit que ses raretés jouables, son nombre de cibles (de `min` à `max`, `AttackRules::target_count`), ses cibles possibles et ses effets ; une attaque n'est **complète** que si son nombre de cibles est permis et qu'elle a au moins un effet (`attacks/rules.rs`) : le moteur ne propose jamais de coup sans effet.
+- **Ce qu'une famille lit** passe par `AttackContext` : le plateau, les effets en jeu, et des lectures communes (`is_enemy`, `has`, `can_kill`), pour que toutes les familles lisent les statuts de la même façon. Les portées partagées (collé au lanceur, regard) sont dans `attacks/reach.rs`.
 - **Une famille par fichier** dans `attacks/`. Chaque famille implémente un trait interne sans état (les cibles légales, et les effets à produire), appelé via `AttackKind::rules()`. `Game` ne stocke que des données simples : pas de `Box<dyn>`, ce qui garde `Game` clonable, comparable et hachable ; la sauvegarde passe par `GameRecord`.
-- **Les effets primitifs** (`Effect`) sont le cœur DRY : tuer, déplacer, échanger, poser, changer de camp, ajouter un effet en cours, creuser un trou, gagner des actions. Une famille *décrit* ses effets. **Un résolveur central** les applique, émet les `Event` et déclenche les conséquences : retour en réserve, tombe, vengeance de Meilleurs amis, fenêtres de réaction. Les attaques changent souvent, les primitives rarement.
+- **Les effets primitifs** (`Effect`) sont le cœur DRY. Une famille *décrit* ses effets. **Un résolveur central** les applique, émet les `Event` et déclenche les conséquences : infirmerie, tombe, vengeance de Meilleurs amis, fenêtres de réaction. Les attaques changent souvent, les primitives rarement. Catalogue établi le 2026-10-30 à partir des [fiches attaques](FICHES_ATTAQUES.md) ; chaque primitive arrive avec la première tâche qui en a besoin, et son nom de code est fixé à ce moment-là :
+
+  | Primitive | Ce qu'elle fait | Cartes | Tâche |
+  |---|---|---|---|
+  | Tuer (`Effect::Kill`) | Le pion quitte le plateau, ses effets s'arrêtent, il part à l'infirmerie (ou au cimetière) et laisse une tombe ; un pion protégé ne peut pas être choisi comme cible | Ours, Saut du loup, Beauté fatale, Coup du taureau, tir de la reine, retour d'Interchange, Médecin, vengeance | B1 ; infirmerie en B3 |
+  | Donner un statut (`Effect::Apply`) | Immobilisé ou protégé, pour N tours | Ours Commune et Légendaire, Beauté fatale, Garde royal, Saut du loup Commune, Médecin Épique, Familia, Sentinelle Rare | B3 |
+  | Retirer des statuts (`Effect::RemoveEnemyEffects`) | Ceux qu'a placés l'adversaire, sur un pion | Attila Commune | B3 |
+  | Déplacer | Le pion change de case ; c'est la famille qui calcule le trajet (pas, saut, poussée, charge, téléportation) | Saut du loup, Lièvre, Coup du taureau, Interchange Commune, reine, Feintaille, Hibou | B4 |
+  | Échanger | Deux pions échangent leurs cases d'un coup | Interchange | B4 |
+  | Poser | Un pion de la réserve ou de l'infirmerie arrive sur une case, et compte comme posé ce tour | Pose, Beauté fatale, Reine, Familia, Meilleurs amis, Médecin, Sentinelle, Queue du lézard | B5 |
+  | Créer un effet continu | Couronne, gardes, jetons, pacte, retour programmé, famille, Terre brûlée | Reine, Massacre divin, Lièvre Épique, Meilleurs amis, Interchange Commune, Familia, Attila Légendaire | B3 à B6 |
+  | Annuler un effet | Un effet continu adverse entier | Attila Rare à Légendaire | B6 |
+  | Gagner des actions | Points rendus tout de suite | Massacre divin Commune et Rare | B6 |
+
+  - **Pas de « changer de camp »** : séduire (Beauté fatale), c'est tuer puis poser un des siens sur la même case. Ressusciter sur une tombe occupée (Médecin), c'est tuer l'occupant puis poser depuis l'infirmerie. Le retour d'Interchange, c'est tuer l'occupant puis déplacer.
+  - **Un effet continu** (`ActiveEffect`) retient qui l'a créé, la carte qui l'a créé, ce sur quoi il porte, et sa fin. Depuis B3 : il porte sur un pion (par son identité), et sa fin est une durée (`last_turn`, le numéro du dernier tour où il agit). Prévu ensuite : le **jeu de carte** qui l'a créé (tous les effets d'un même jeu forment l'« effet entier » qu'Attila Rare annule, B6), un effet porté par un joueur (jetons du Massacre divin), et trois autres sortes de fin : un nombre de jetons, une condition (l'enfant de Familia reste encadré), un déclencheur (bouclier, pacte, retour). Un statut est un effet continu : un pion est immobilisé tant qu'au moins un effet l'immobilise, donc pas de règle de cumul.
+  - **Une seule horloge** (`game/clock.rs`) : les durées et l'infirmerie se comptent en tours de l'adversaire de celui qui a joué l'effet, sans le tour en cours, et s'éteignent à la fin du dernier (carnet, 2026-10-30). Le dernier tour est calculé une fois, à la création : rien ne décompte à chaque tour, et la fin d'un tour arrête simplement ce dont c'était le dernier tour.
+  - **Déclencheurs** auxquels réagissent les effets continus et les réactions : pion tué, pion posé, pion déplacé, pion visé (avant la résolution), attaque terminée, début de tour, fin de tour.
+  - **Portées** (où sont les cibles), chaque famille dit la sienne, sans portée par défaut : collé au lanceur, regard (en ligne droite jusqu'à N cases, sans pion entre), ligne de tir (le premier pion rencontré), n'importe où. **Trajets** (comment un pion bouge) : pas, saut, charge.
+  - Le **mur** du Coup du taureau (creuser) n'est pas une primitive tant qu'il n'est pas gardé (B7).
 - **Les nombres d'une famille** (portée, nombre de cibles, durée) sont des constantes nommées dans son fichier. Ils passeront dans la configuration quand l'équilibrage par bots en aura besoin (principe 6).
 
 ### Les pions et les cases
@@ -117,7 +139,7 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
 - **Règle d'or** (`golden_rule`, en option) : une ligne ne gagne qu'au début du tour de son propriétaire. Le contrôle « une ligne au début de ton tour gagne » existe dans tous les cas : il couvre les lignes faites par une carte, sans avoir à suivre l'origine d'une ligne. Quand la partie s'arrête (figée, limite de tours), les lignes en attente sont vérifiées comme si les tours continuaient (`stop_game`).
 - **Fin garantie** : toute partie se termine (`GameEnd`), soit par alignement, soit **figée** (plus personne ne pourra jamais agir), soit par la **limite de tours** `max_turns`, filet de sécurité pour les bots.
 - Trois choses sont séparées pour rester modifiables : le **déclencheur** (`EndReason`, utile aux statistiques), le **résultat** (`Outcome`, calculé à un seul endroit : nul pour l'instant, départage possible plus tard) et la **limite** (réglage).
-- « Figée » veut dire *plus personne ne peut agir et rien de programmé ne peut changer la situation*. Une future mécanique anti-stagnation (Effondrement) devra être prise en compte dans ce test.
+- « Figée » veut dire *plus personne ne peut agir et rien de programmé ne peut changer la situation*. Depuis B3, un effet continu en jeu ou un pion à l'infirmerie compte comme « programmé » ; la vérification se fait aussi à la fin d'un tour où quelque chose a expiré. Un effet sans fin dans le temps (l'enfant de Familia, B5) devra être traité à part. Une future mécanique anti-stagnation (Effondrement) devra être prise en compte dans ce test.
 
 ## 5. Bots et machine learning
 

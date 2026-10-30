@@ -122,7 +122,7 @@ fn a_pion_placed_this_turn_cannot_launch_an_attack() {
     assert_eq!(refusal, Err(GameError::NoReadyLauncher(ours(Rarity::Rare))));
     assert_eq!(
         refusal.unwrap_err().to_string(),
-        "l'attaque Ours (Rare) n'a aucun lanceur prêt : un pion posé ce tour ne peut pas attaquer"
+        "l'attaque Ours (Rare) n'a aucun lanceur prêt : un pion posé ce tour ou immobilisé ne peut pas attaquer"
     );
 
     // Au tour suivant de J2, F5 n'est plus nouveau : il peut lancer.

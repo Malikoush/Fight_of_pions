@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{choose, game_with, ours, place, play};
+use common::{choose, game_with, ours, place, play, set_cooldown};
 use fight_of_pions::{
     Action, EndReason, Event, Game, GameConfig, GameEnd, Outcome, Player, Rarity,
 };
@@ -70,7 +70,7 @@ fn the_golden_rule_comes_before_the_cooldowns() {
         starting_attacks: [vec![ours(Rarity::Rare)], Vec::new()],
         ..golden(3)
     };
-    config.attack_catalog[0].stats.cooldown = 2;
+    set_cooldown(&mut config, ours(Rarity::Rare), 2);
     let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]); // J1 : A1
     play(&mut game, &[place(0, 1), place(4, 4)]); // J2 : B1, E5

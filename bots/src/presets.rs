@@ -80,8 +80,8 @@ pub fn current_rules() -> GameConfig {
 }
 
 /// Les règles cibles (carnet de règles, « Règles cibles ») : 1 pose gratuite par tour, 1
-/// action par tour gardée jusqu'à 3, la Pièce, le mal du débarquement et la règle d'or. Le
-/// reste suit la règle actuelle.
+/// action par tour gardée jusqu'à 3, la Pièce, le mal du débarquement, la règle d'or et
+/// l'infirmerie de 2 tours. Le reste suit la règle actuelle.
 pub fn target_rules() -> GameConfig {
     GameConfig {
         first_turn_actions: 1,
@@ -92,6 +92,7 @@ pub fn target_rules() -> GameConfig {
         max_placements_per_turn: Some(1),
         summoning_sickness: true,
         golden_rule: true,
+        infirmary_turns: 2,
         ..current_rules()
     }
 }
@@ -101,10 +102,12 @@ pub fn target_rules() -> GameConfig {
 /// l'arène et le labo la proposent aussitôt.
 pub fn variants() -> Vec<Variant> {
     let current = current_rules();
+    // Avec 3 actions au plus par tour, les Légendaires (4) ne sont plus payables.
     let bank_of_one = GameConfig {
         max_banked_actions: 1,
         ..current.clone()
-    };
+    }
+    .without_unaffordable_attacks();
     let ours_rare = Attack {
         kind: AttackKind::Ours,
         rarity: Rarity::Rare,

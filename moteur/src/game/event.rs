@@ -1,12 +1,12 @@
-use crate::{Attack, GameEnd, Pion, PionId, Player, Position};
+use crate::{ActiveEffect, Attack, GameEnd, Patient, Pion, PionId, Player, Position};
 
 /// Ce que le moteur annonce après une action acceptée.
 ///
 /// Les clients mettent leur affichage à jour à partir de ces événements. Ils suffisent à
-/// suivre tout l'état visible (plateau, réserves, actions, poses restantes, recharges,
-/// joueur courant, fin) sans recalculer aucune règle ; un test le vérifie sur des centaines de parties. Les
-/// choix intermédiaires d'une attaque (lanceur, cibles) n'en produisent aucun : l'attaque
-/// est annoncée quand elle est résolue.
+/// suivre tout l'état visible (plateau, réserves, infirmerie, effets continus, actions,
+/// poses restantes, recharges, joueur courant, fin) sans recalculer aucune règle ; un test
+/// le vérifie sur des centaines de parties. Les choix intermédiaires d'une attaque
+/// (lanceur, cibles) n'en produisent aucun : l'attaque est annoncée quand elle est résolue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Event {
     /// Un pion a été posé.
@@ -25,7 +25,9 @@ pub enum Event {
         /// La case du pion lanceur.
         launcher: Position,
     },
-    /// Un pion a été tué et retiré du plateau.
+    /// Un pion a été tué et retiré du plateau. Suivent la fin de ses effets continus
+    /// ([`Event::EffectEnded`]), puis son départ à l'infirmerie
+    /// ([`Event::InfirmaryEntered`]) ou dans la réserve ([`Event::ReserveChanged`]).
     PionKilled {
         /// Le pion tué.
         pion: Pion,
@@ -34,13 +36,24 @@ pub enum Event {
         /// Le pion qui l'a tué, s'il y en a un.
         by: Option<PionId>,
     },
-    /// La réserve de pions d'un joueur a changé (pose, pion tué…).
+    /// La réserve de pions d'un joueur a changé (pose, pion tué sans infirmerie, sortie de
+    /// l'infirmerie).
     ReserveChanged {
         /// Le joueur concerné.
         player: Player,
         /// Pions qu'il peut maintenant poser.
         pions: u32,
     },
+    /// Un effet continu commence (un pion immobilisé, protégé…).
+    EffectStarted(ActiveEffect),
+    /// Un effet continu s'arrête : sa durée est écoulée, une carte l'a retiré, ou son pion
+    /// a été tué.
+    EffectEnded(ActiveEffect),
+    /// Un pion tué entre à l'infirmerie, jusqu'à la fin du tour [`Patient::last_turn`].
+    InfirmaryEntered(Patient),
+    /// Un pion sort de l'infirmerie ; il revient dans la réserve de son propriétaire
+    /// ([`Event::ReserveChanged`] suit).
+    InfirmaryLeft(Patient),
     /// Les compteurs d'actions d'un joueur ont changé (pose, attaque, fin de tour…).
     /// N'est jamais émis si rien n'a changé. Quand la partie se termine, les compteurs
     /// restent tels qu'ils étaient.

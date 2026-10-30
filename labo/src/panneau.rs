@@ -118,12 +118,13 @@ impl Panneau {
         }
     }
 
+    /// `apercu` : la copie de la partie où se choisit une attaque, s'il y en a une.
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
         game: &Game,
         record: &GameRecord,
-        selection_en_cours: bool,
+        apercu: Option<&Game>,
         intentions: &mut Vec<Intention>,
     ) {
         egui::Panel::left("panneau")
@@ -135,7 +136,7 @@ impl Panneau {
                     .id_salt("panneau_defilant")
                     .auto_shrink(false)
                     .show(ui, |ui| {
-                        self.contenu(ui, game, record, selection_en_cours, intentions);
+                        self.contenu(ui, game, record, apercu, intentions);
                     });
             });
     }
@@ -145,7 +146,7 @@ impl Panneau {
         ui: &mut egui::Ui,
         game: &Game,
         record: &GameRecord,
-        selection_en_cours: bool,
+        apercu: Option<&Game>,
         intentions: &mut Vec<Intention>,
     ) {
         ui.heading(theme::TITRE);
@@ -161,7 +162,7 @@ impl Panneau {
         ui.separator();
         self.joueurs(ui, game, intentions);
         ui.separator();
-        attaques(ui, game, selection_en_cours, tour_humain, intentions);
+        attaques(ui, game, apercu, tour_humain, intentions);
         ui.separator();
         self.outils(ui, record, intentions);
         ui.separator();
@@ -317,13 +318,18 @@ impl Panneau {
 
 /// L'arsenal du joueur courant : chaque attaque, son coût, sa recharge, et un bouton
 /// « Lancer » activé seulement si le moteur l'autorise et que c'est à un humain de jouer.
+/// Pendant le choix d'une attaque (sur la copie `apercu`, ou dans la vraie partie si elle
+/// a été chargée en plein choix), « Jouer l'attaque » est activé si le moteur permet de la
+/// jouer avec les cibles déjà choisies.
 fn attaques(
     ui: &mut egui::Ui,
     game: &Game,
-    selection_en_cours: bool,
+    apercu: Option<&Game>,
     tour_humain: bool,
     intentions: &mut Vec<Intention>,
 ) {
+    let selection_en_cours = apercu.is_some();
+    let en_choix = apercu.unwrap_or(game);
     ui.label("Attaques");
     let player = game.current_player();
     if game.arsenal(player).is_empty() {
@@ -353,11 +359,23 @@ fn attaques(
             ui.label(format!("{attaque}{cout}{etat}"));
         });
     }
-    if selection_en_cours {
+    if en_choix.attack_in_progress() {
         ui.label("Clique le pion lanceur, puis la ou les cibles.");
-        if ui.button("Annuler l'attaque").clicked() {
-            intentions.push(Intention::AnnulerSelection);
-        }
+        // Une attaque « jusqu'à 2 » peut se jouer avant son nombre maximal de cibles.
+        let fin_possible = tour_humain && en_choix.legal_actions().contains(&Action::FinishAttack);
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(fin_possible, egui::Button::new("Jouer l'attaque"))
+                .on_hover_text("Jouer l'attaque avec les cibles déjà choisies.")
+                .clicked()
+            {
+                intentions.push(Intention::FinirAttaque);
+            }
+            // Seule une sélection se défait : une attaque déjà envoyée au moteur va au bout.
+            if selection_en_cours && ui.button("Annuler l'attaque").clicked() {
+                intentions.push(Intention::AnnulerSelection);
+            }
+        });
     }
 }
 
@@ -386,11 +404,20 @@ fn etat(ui: &mut egui::Ui, game: &Game) {
     if game.config().summoning_sickness {
         ui.label(theme::LEGENDE_MARQUE_NOUVEAU);
     }
+    if !game.active_effects().is_empty() {
+        ui.label(theme::LEGENDE_STATUTS);
+    }
     for player in [Player::One, Player::Two] {
+        let blesses = game
+            .infirmary()
+            .iter()
+            .filter(|patient| patient.pion().owner() == player)
+            .count();
         ui.label(format!(
-            "{} : {} pions en réserve, {} actions gardées",
+            "{} : {} pions en réserve, {} à l'infirmerie, {} actions gardées",
             theme::nom_joueur(player),
             game.reserve_pions(player),
+            blesses,
             game.banked_actions(player)
         ));
     }
@@ -426,6 +453,29 @@ fn decrire(event: &Event) -> Option<String> {
             pion.id(),
             theme::nom_joueur(pion.owner()),
             at
+        )),
+        Event::EffectStarted(effet) => Some(format!(
+            "Le pion {} est {} jusqu'à la fin du tour {} ({})",
+            effet.pion(),
+            effet.kind(),
+            effet.last_turn(),
+            effet.source()
+        )),
+        Event::EffectEnded(effet) => Some(format!(
+            "Le pion {} n'est plus {}",
+            effet.pion(),
+            effet.kind()
+        )),
+        Event::InfirmaryEntered(patient) => Some(format!(
+            "Le pion {} de {} part à l'infirmerie jusqu'à la fin du tour {}",
+            patient.pion().id(),
+            theme::nom_joueur(patient.pion().owner()),
+            patient.last_turn()
+        )),
+        Event::InfirmaryLeft(patient) => Some(format!(
+            "Le pion {} de {} sort de l'infirmerie et revient dans la réserve",
+            patient.pion().id(),
+            theme::nom_joueur(patient.pion().owner())
         )),
         Event::ActionsChanged { .. }
         | Event::PlacementsChanged { .. }

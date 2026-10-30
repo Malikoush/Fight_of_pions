@@ -22,6 +22,16 @@ pub fn config_with_attacks(player_one: Vec<Attack>, player_two: Vec<Attack>) -> 
     }
 }
 
+/// Change la recharge de cette attaque dans le catalogue de la configuration.
+pub fn set_cooldown(config: &mut GameConfig, attack: Attack, cooldown: u32) {
+    let entry = config
+        .attack_catalog
+        .iter_mut()
+        .find(|entry| entry.attack == attack)
+        .expect("l'attaque doit être au catalogue");
+    entry.stats.cooldown = cooldown;
+}
+
 /// L'action « choisir la case » (rangée, colonne) : lanceur ou cible d'une attaque.
 pub fn choose(row: usize, col: usize) -> Action {
     Action::Choose(Position { row, col })
@@ -71,8 +81,9 @@ pub fn random_below(rng: &mut Rng, len: usize) -> usize {
 
 /// Une configuration valide tirée au hasard, petite pour que les fins arrivent vite.
 /// Elle couvre les cas où il faut économiser ses actions pour poser ou attaquer, les poses
-/// limitées par tour (parfois gratuites), la banque de départ, le mal du débarquement et la règle d'or,
-/// et donne souvent des attaques aux joueurs (parfois deux fois la même carte).
+/// limitées par tour (parfois gratuites), la banque de départ, le mal du débarquement, la
+/// règle d'or et l'infirmerie, et donne souvent des attaques aux joueurs, prises parmi
+/// toutes celles que le moteur sait jouer (parfois deux fois la même carte).
 pub fn random_config(rng: &mut Rng) -> GameConfig {
     let board_size = 2 + random_below(rng, 4);
     let actions_per_turn = 1 + random_below(rng, 2) as u32;
@@ -84,7 +95,7 @@ pub fn random_config(rng: &mut Rng) -> GameConfig {
     let cheapest_place = usize::from(max_placements_per_turn.is_none());
     let mut random_bank = || random_below(rng, max_banked_actions as usize + 1) as u32;
     let starting_banked_actions = [random_bank(), random_bank()];
-    let attacks = [ours(Rarity::Rare), ours(Rarity::Epic)];
+    let attacks = GameConfig::default().catalog_attacks();
     let attack_catalog = attacks
         .iter()
         .map(|&attack| CatalogEntry {
@@ -114,6 +125,7 @@ pub fn random_config(rng: &mut Rng) -> GameConfig {
         max_placements_per_turn,
         summoning_sickness: random_below(rng, 2) == 1,
         golden_rule: random_below(rng, 2) == 1,
+        infirmary_turns: random_below(rng, 3) as u32,
         max_turns: 1 + random_below(rng, 60) as u32,
         attack_catalog,
         starting_attacks,

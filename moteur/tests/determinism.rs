@@ -4,8 +4,8 @@ mod common;
 
 use common::{SEED, game_with, new_game, place, random_config};
 use fight_of_pions::{
-    Action, Event, Game, GameConfig, GameEnd, GameError, GameRecord, Pion, PionId, Player,
-    Position, Rarity, ReplayError, Rng,
+    Action, ActiveEffect, AttackKind, Event, Game, GameConfig, GameEnd, GameError, GameRecord,
+    Patient, Pion, PionId, Player, Position, Rarity, ReplayError, Rng,
 };
 
 /// Ce qu'un client sait de la partie s'il ne suit **que** les événements, en partant de
@@ -26,6 +26,11 @@ struct EventMirror {
     /// Les pions posés depuis le début du tour en cours (un fait, pas une règle).
     arrived: Vec<PionId>,
     summoning_sickness: bool,
+    /// Les effets continus en jeu, dans l'ordre de leur création.
+    effects: Vec<ActiveEffect>,
+    /// Les pions à l'infirmerie, dans l'ordre d'arrivée.
+    infirmary: Vec<Patient>,
+    pions_per_player: u32,
 }
 
 impl EventMirror {
@@ -47,7 +52,14 @@ impl EventMirror {
             placements: [game.placements_left(), 0],
             arrived: Vec::new(),
             summoning_sickness: config.summoning_sickness,
+            effects: Vec::new(),
+            infirmary: Vec::new(),
+            pions_per_player: config.pions_per_player,
         }
+    }
+
+    fn is_on_board(&self, pion: PionId) -> bool {
+        self.cells.iter().flatten().any(|cell| cell.id() == pion)
     }
 
     fn cell(&mut self, at: Position) -> &mut Option<Pion> {
@@ -107,6 +119,34 @@ impl EventMirror {
                 assert_ne!(*cooldown, turns_left, "annonce inutile : {event:?}");
                 *cooldown = turns_left;
             }
+            Event::EffectStarted(effect) => {
+                assert!(
+                    self.is_on_board(effect.pion()),
+                    "effet sur un pion absent : {event:?}"
+                );
+                assert!(
+                    self.effects.iter().all(|known| known.id() != effect.id()),
+                    "identité d'effet réutilisée : {event:?}"
+                );
+                self.effects.push(effect);
+            }
+            Event::EffectEnded(effect) => {
+                let index = self.effects.iter().position(|known| *known == effect);
+                let index = index.unwrap_or_else(|| panic!("effet inconnu : {event:?}"));
+                self.effects.remove(index);
+            }
+            Event::InfirmaryEntered(patient) => {
+                assert!(
+                    !self.is_on_board(patient.pion().id()),
+                    "pion encore sur le plateau : {event:?}"
+                );
+                self.infirmary.push(patient);
+            }
+            Event::InfirmaryLeft(patient) => {
+                let index = self.infirmary.iter().position(|known| *known == patient);
+                let index = index.unwrap_or_else(|| panic!("patient inconnu : {event:?}"));
+                self.infirmary.remove(index);
+            }
             // L'attaque elle-même ne change rien : ses effets sont annoncés à part.
             Event::AttackUsed { .. } => {}
             Event::TurnEnded { next } => {
@@ -157,6 +197,26 @@ impl EventMirror {
         }
         assert_eq!(self.current_player, game.current_player());
         assert_eq!(self.end, game.end());
+        assert_eq!(self.effects, game.active_effects(), "effets continus");
+        assert_eq!(self.infirmary, game.infirmary(), "infirmerie");
+        // Aucun effet ne survit à son pion.
+        for effect in &self.effects {
+            assert!(self.is_on_board(effect.pion()), "{effect:?}");
+        }
+        // Aucun pion ne se perd : plateau, réserve et infirmerie font toujours le compte.
+        for player in [Player::One, Player::Two] {
+            let on_board = self.cells.iter().flatten();
+            let on_board = on_board.filter(|pion| pion.owner() == player).count() as u32;
+            let wounded = self.infirmary.iter();
+            let wounded = wounded
+                .filter(|patient| patient.pion().owner() == player)
+                .count() as u32;
+            assert_eq!(
+                on_board + self.reserves[player.index()] + wounded,
+                self.pions_per_player,
+                "pions de {player:?}"
+            );
+        }
     }
 }
 
@@ -204,6 +264,8 @@ fn play_random_game(config: GameConfig, seed: u64, rng: &mut Rng) -> PlayedGame 
 #[test]
 fn events_are_enough_to_follow_the_board() {
     let (mut attacks, mut epics, mut kills) = (0, 0, 0);
+    let (mut effects_ended, mut healed) = (0, 0);
+    let mut kinds_played = Vec::new();
     for seed in 0..300 {
         let mut rng = Rng::new(seed);
         let config = if seed % 2 == 0 {
@@ -217,11 +279,35 @@ fn events_are_enough_to_follow_the_board() {
             matches!(event, Event::AttackUsed { attack, .. } if attack.rarity == Rarity::Epic)
         });
         kills += played.count(|event| matches!(event, Event::PionKilled { .. }));
+        effects_ended += played.count(|event| matches!(event, Event::EffectEnded(_)));
+        healed += played.count(|event| matches!(event, Event::InfirmaryLeft(_)));
+        for (events, _) in &played.steps {
+            for event in events {
+                if let Event::AttackUsed { attack, .. } = event
+                    && !kinds_played.contains(&attack.kind)
+                {
+                    kinds_played.push(attack.kind);
+                }
+            }
+        }
     }
     // Sans attaques jouées, ce test ne prouverait rien sur elles.
     assert!(attacks > 100, "seulement {attacks} attaques jouées");
-    assert!(epics > 20, "seulement {epics} Ours Épique joués");
+    assert!(epics > 20, "seulement {epics} Épiques jouées");
     assert!(kills > 100, "seulement {kills} pions tués");
+    assert!(effects_ended > 50, "seulement {effects_ended} effets finis");
+    assert!(
+        healed > 20,
+        "seulement {healed} pions sortis de l'infirmerie"
+    );
+    for kind in [
+        AttackKind::BeauteFatale,
+        AttackKind::Reine,
+        AttackKind::Attila,
+        AttackKind::Ours,
+    ] {
+        assert!(kinds_played.contains(&kind), "{kind} jamais jouée");
+    }
 }
 
 #[test]

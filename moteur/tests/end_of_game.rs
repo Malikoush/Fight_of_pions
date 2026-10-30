@@ -4,8 +4,8 @@ mod common;
 
 use common::{game_with, new_game, place, play, random_config};
 use fight_of_pions::{
-    Action, Attack, Decision, Direction, EndReason, Event, Game, GameConfig, GameEnd, Outcome,
-    Player, Rarity, Rng,
+    Action, Attack, AttackKind, Decision, Direction, EndReason, Event, Game, GameConfig, GameEnd,
+    Outcome, Player, Position, Rarity, Rng,
 };
 
 fn draw(reason: EndReason) -> Event {
@@ -34,9 +34,13 @@ fn assert_placed_then(events: &[Event], end: Event) {
 }
 
 /// La définition du carnet, écrite indépendamment du moteur : une partie est figée quand
-/// aucun des deux joueurs ne peut plus ni poser (plateau plein ou réserve vide), ni lancer
-/// une attaque qui a une cible.
+/// rien n'est programmé (aucun effet continu, personne à l'infirmerie) et qu'aucun des deux
+/// joueurs ne peut plus ni poser (plateau plein ou réserve vide), ni lancer une attaque qui
+/// a une cible.
 fn frozen_by_the_rules(game: &Game) -> bool {
+    if !game.active_effects().is_empty() || !game.infirmary().is_empty() {
+        return false;
+    }
     let board_full = game
         .board()
         .positions()
@@ -47,29 +51,50 @@ fn frozen_by_the_rules(game: &Game) -> bool {
             || game
                 .arsenal(player)
                 .iter()
-                .any(|slot| ours_has_a_target(game, player, slot.attack()))
+                .any(|slot| has_a_target_without_effects(game, player, slot.attack()))
     };
     !can_act(Player::One) && !can_act(Player::Two)
 }
 
-/// L'Ours a une cible si l'un des pions du joueur a assez d'ennemis sur ses 8 cases voisines
-/// (1 pour la Rare, 2 pour l'Épique). Écrit sans réutiliser le moteur.
-fn ours_has_a_target(game: &Game, player: Player, attack: Attack) -> bool {
-    let needed = match attack.rarity {
-        Rarity::Epic => 2,
-        _ => 1,
-    };
+/// Vrai si l'attaque a une cible depuis un des pions du joueur, sur un plateau où aucun
+/// pion n'a de statut. Écrit sans réutiliser le moteur, d'après les fiches :
+/// - l'Ours (toutes raretés) vise un ennemi collé au lanceur ;
+/// - la Beauté fatale vise par le regard (2 cases en ligne droite, sans pion entre) :
+///   1 ennemi pour la Commune, 2 pour la Rare ;
+/// - le Garde royal (Reine Commune) protège le lanceur : toujours possible ;
+/// - Attila Commune retire des statuts : sans statut, jamais possible.
+fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> bool {
     let board = game.board();
+    let enemy = |pos: Position| board.owner(pos) == Some(player.opponent());
+    let in_sight = |launcher: Position| -> usize {
+        Direction::ALL
+            .iter()
+            .filter_map(|&dir| {
+                let first = board.neighbor(launcher, dir)?;
+                if board.owner(first).is_some() {
+                    return Some(first);
+                }
+                board.neighbor(first, dir)
+            })
+            .filter(|&pos| enemy(pos))
+            .count()
+    };
+    let adjacent = |launcher: Position| {
+        Direction::ALL
+            .iter()
+            .filter_map(|&dir| board.neighbor(launcher, dir))
+            .filter(|&pos| enemy(pos))
+            .count()
+    };
     board
         .positions()
         .filter(|&pos| board.owner(pos) == Some(player))
-        .any(|launcher| {
-            let enemies = Direction::ALL
-                .iter()
-                .filter_map(|&dir| board.neighbor(launcher, dir))
-                .filter(|&pos| board.owner(pos) == Some(player.opponent()))
-                .count();
-            enemies >= needed
+        .any(|launcher| match (attack.kind, attack.rarity) {
+            (AttackKind::Ours, _) => adjacent(launcher) >= 1,
+            (AttackKind::BeauteFatale, Rarity::Rare) => in_sight(launcher) >= 2,
+            (AttackKind::BeauteFatale, _) => in_sight(launcher) >= 1,
+            (AttackKind::Reine, _) => true,
+            (AttackKind::Attila, _) => false,
         })
 }
 

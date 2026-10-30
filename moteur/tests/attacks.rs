@@ -1,8 +1,9 @@
-//! Règles des attaques (carnet de règles, « Attaques ») et de l'Ours Rare et Épique.
+//! Règles des attaques (carnet de règles, « Attaques ») et de l'Ours Rare et Épique (qui
+//! tue « jusqu'à 2 »). Les statuts et les autres cartes de B3 sont dans `statuses.rs`.
 
 mod common;
 
-use common::{choose, config_with_attacks, game_with, ours, place, play};
+use common::{choose, config_with_attacks, game_with, ours, place, play, set_cooldown};
 use fight_of_pions::{
     Action, Decision, Event, Game, GameConfig, GameError, Pion, Player, Position, Rarity,
 };
@@ -193,18 +194,62 @@ fn ours_epic_kills_two_adjacent_enemies() {
 }
 
 #[test]
-fn ours_epic_is_not_offered_with_a_single_adjacent_enemy() {
+fn ours_epic_with_a_single_adjacent_enemy_kills_it_at_once() {
     let mut game = duel();
     play(&mut game, &[place(4, 4)]);
     play(&mut game, &[place(4, 5), place(9, 9)]); // un seul ennemi à côté de E5
     play(&mut game, &[Action::EndTurn, Action::EndTurn]); // le joueur 1 a 4 actions
     assert_eq!(game.actions_left(), 4);
-    // L'Épique demande deux cibles : elle n'a aucune attaque complète possible.
-    assert_eq!(
-        game.apply(Action::UseAttack(EPIC)),
-        Err(GameError::NoTarget(ours(Rarity::Epic)))
+    // L'Épique tue « jusqu'à 2 » : avec un seul voisin, elle est jouée dès qu'il est
+    // choisi, sans attendre une seconde cible qui n'existe pas.
+    let events = play(
+        &mut game,
+        &[Action::UseAttack(EPIC), choose(4, 4), choose(4, 5)],
     );
-    assert!(!game.legal_actions().contains(&Action::UseAttack(EPIC)));
+    assert!(matches!(events[0], Event::AttackUsed { .. }));
+    assert!(!game.attack_in_progress());
+    assert_eq!(game.board().owner(Position { row: 4, col: 5 }), None);
+}
+
+#[test]
+fn ours_epic_can_stop_after_one_of_two_enemies() {
+    let mut game = with_four_actions();
+    play(
+        &mut game,
+        &[Action::UseAttack(EPIC), choose(4, 4), choose(4, 5)],
+    );
+    // Une seconde cible est possible : on choisit de ne pas la prendre.
+    assert!(game.attack_in_progress());
+    assert!(game.legal_actions().contains(&Action::FinishAttack));
+    let events = play(&mut game, &[Action::FinishAttack]);
+
+    let kills = events
+        .iter()
+        .filter(|event| matches!(event, Event::PionKilled { .. }))
+        .count();
+    assert_eq!(kills, 1);
+    assert_eq!(
+        game.board().owner(Position { row: 5, col: 5 }),
+        Some(Player::Two)
+    );
+}
+
+#[test]
+fn finishing_an_attack_needs_its_least_number_of_targets() {
+    let mut game = with_four_actions();
+    play(&mut game, &[Action::UseAttack(EPIC)]);
+    // Pas encore de lanceur : ce n'est pas le moment.
+    assert_eq!(
+        game.apply(Action::FinishAttack),
+        Err(GameError::UnexpectedAction)
+    );
+    play(&mut game, &[choose(4, 4)]);
+    // L'Épique tue au moins un pion.
+    assert_eq!(
+        game.apply(Action::FinishAttack),
+        Err(GameError::TargetsMissing(ours(Rarity::Epic)))
+    );
+    assert!(!game.legal_actions().contains(&Action::FinishAttack));
 }
 
 #[test]
@@ -252,7 +297,7 @@ fn a_used_attack_recharges_until_your_next_turn() {
 #[test]
 fn a_two_turn_cooldown_skips_one_of_your_turns() {
     let mut config = config_with_attacks(vec![ours(Rarity::Rare)], Vec::new());
-    config.attack_catalog[0].stats.cooldown = 2;
+    set_cooldown(&mut config, ours(Rarity::Rare), 2);
     let mut game = game_with(config);
     play(&mut game, &[place(4, 4)]);
     play(&mut game, &[place(4, 5), place(5, 5)]);

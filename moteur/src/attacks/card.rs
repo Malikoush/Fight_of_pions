@@ -1,17 +1,27 @@
 use std::fmt;
 
 /// Une famille d'attaques (Ours, Lièvre, Beauté fatale…). Ses règles vivent dans un
-/// fichier à son nom, dans `attacks/`.
+/// fichier à son nom, dans `attacks/`. Les numéros sont ceux des fiches attaques du
+/// 2026-10-29 (`docs/FICHES_ATTAQUES.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AttackKind {
-    /// Attaque de corps à corps sur les 8 cases autour du lanceur (GDD n°09).
+    /// Le charme qui fige les pions adverses, puis les séduit (fiche n°01).
+    BeauteFatale,
+    /// La reine et sa garde (fiche n°03).
+    Reine,
+    /// Le contre des effets en cours (fiche n°04).
+    Attila,
+    /// Le corps à corps, sur les 8 cases collées au lanceur (fiche n°09).
     Ours,
 }
 
 impl fmt::Display for AttackKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AttackKind::BeauteFatale => write!(f, "Beauté fatale"),
+            AttackKind::Reine => write!(f, "Reine"),
+            AttackKind::Attila => write!(f, "Attila"),
             AttackKind::Ours => write!(f, "Ours"),
         }
     }

@@ -281,7 +281,7 @@ fn graine_du_moment() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fight_of_pions::{Player, Position};
+    use fight_of_pions::{Attack, AttackKind, Player, Position, Rarity};
 
     /// Une graine fixe : un test qui échoue rejoue exactement la même partie.
     const GRAINE: u64 = 42;
@@ -417,9 +417,21 @@ mod tests {
         partie
     }
 
-    /// L'Ours Rare (emplacement 0) depuis E5 sur F5.
+    /// L'emplacement de l'Ours Rare dans l'arsenal de départ du joueur 1.
+    fn ours_rare() -> usize {
+        let ours = Attack {
+            kind: AttackKind::Ours,
+            rarity: Rarity::Rare,
+        };
+        config_initiale().starting_attacks[Player::One.index()]
+            .iter()
+            .position(|&attaque| attaque == ours)
+            .unwrap()
+    }
+
+    /// L'Ours Rare depuis E5 sur F5.
     fn attaque_complete() -> Vec<Action> {
-        vec![Action::UseAttack(0), choisir(4, 4), choisir(4, 5)]
+        vec![Action::UseAttack(ours_rare()), choisir(4, 4), choisir(4, 5)]
     }
 
     #[test]
@@ -443,7 +455,7 @@ mod tests {
         let (game_avant, record_avant) = (partie.game().clone(), partie.record().clone());
         // La cible J10 n'est pas à côté du lanceur : toute la suite est refusée.
         let nouvelles = partie.traiter(Demande::Jouer(vec![
-            Action::UseAttack(0),
+            Action::UseAttack(ours_rare()),
             choisir(4, 4),
             choisir(9, 9),
         ]));
@@ -545,6 +557,7 @@ mod tests {
             "max_placements_per_turn",
             "summoning_sickness",
             "golden_rule",
+            "infirmary_turns",
         ] {
             assert!(config.remove(champ).is_some(), "{champ}");
         }

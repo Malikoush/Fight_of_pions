@@ -1,4 +1,4 @@
-use crate::{Cell, Direction, GameError, Player, Position};
+use crate::{Cell, Direction, GameError, PionId, Player, Position};
 
 /// Le damier carré de `size × size` cases.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -60,6 +60,16 @@ impl Board {
             return Some(i);
         }
         None
+    }
+
+    /// La case où se trouve ce pion, ou `None` s'il n'est pas sur le plateau. Un effet
+    /// continu vise un pion par son identité : c'est ainsi qu'on retrouve sa case.
+    pub fn position_of(&self, pion: PionId) -> Option<Position> {
+        self.positions().find(|&pos| {
+            self.get(pos)
+                .and_then(Cell::pion)
+                .is_some_and(|found| found.id() == pion)
+        })
     }
 }
 

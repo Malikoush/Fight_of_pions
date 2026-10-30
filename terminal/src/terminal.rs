@@ -18,6 +18,7 @@ Commandes :
   p C5   poser un pion en C5
   a 1    lancer l'attaque n°1 de son arsenal
   c C5   choisir C5 comme lanceur ou comme cible de l'attaque en cours
+  v      jouer l'attaque en cours avec les cibles déjà choisies (« jusqu'à 2 »)
   f      finir le tour (les actions restantes sont gardées, {} maximum)
   h      afficher l'aide
   q      quitter",
@@ -90,12 +91,31 @@ pub fn render(game: &Game) -> String {
             state
         ));
     }
+    for effect in game.active_effects() {
+        if let Some(at) = board.position_of(effect.pion()) {
+            out.push_str(&format!(
+                "\n  {at} : {} jusqu'à la fin du tour {}",
+                effect.kind(),
+                effect.last_turn()
+            ));
+        }
+    }
+    for patient in game.infirmary() {
+        out.push_str(&format!(
+            "\n  à l'infirmerie : pion {} de {}, jusqu'à la fin du tour {}",
+            patient.pion().id(),
+            player_name(patient.pion().owner()),
+            patient.last_turn()
+        ));
+    }
     match game.pending_decision() {
         Some(Decision::ChooseLauncher { attack, .. }) => {
             out.push_str(&format!("\n{attack} : choisis le pion lanceur (c C5)"));
         }
         Some(Decision::ChooseTarget { attack, .. }) => {
-            out.push_str(&format!("\n{attack} : choisis une cible (c C5)"));
+            let can_finish = game.legal_actions().contains(&Action::FinishAttack);
+            let or_finish = if can_finish { ", ou joue-la (v)" } else { "" };
+            out.push_str(&format!("\n{attack} : choisis une cible (c C5){or_finish}"));
         }
         Some(Decision::MainAction { .. }) | None => {}
     }
@@ -114,6 +134,7 @@ pub fn parse_command(line: &str) -> Result<Command, String> {
                 "« {number} » : il faut le numéro d'une attaque, à partir de 1"
             )),
         },
+        ["v"] => Ok(Command::Play(Action::FinishAttack)),
         ["f"] => Ok(Command::Play(Action::EndTurn)),
         ["h"] => Ok(Command::Help),
         ["q"] => Ok(Command::Quit),

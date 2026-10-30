@@ -13,6 +13,8 @@ pub enum Intention {
     CommencerAttaque(usize),
     /// Une case cliquée : pose, ou lanceur et cibles pendant une attaque.
     ChoisirCase(Position),
+    /// Jouer l'attaque en cours de choix avec les cibles déjà choisies (« jusqu'à 2 »).
+    FinirAttaque,
     /// Abandonner l'attaque en cours de choix (rien n'a encore été joué).
     AnnulerSelection,
     /// Revoir dans l'écran Partie une partie de l'arène : même configuration, même

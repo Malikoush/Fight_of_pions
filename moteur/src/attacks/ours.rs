@@ -1,41 +1,70 @@
-//! L'Ours (GDD n°09) : une attaque de corps à corps sur les 8 cases autour du lanceur.
+//! L'Ours (fiche n°09) : le corps à corps, sur les 8 cases collées au lanceur.
 //!
-//! - Rare : élimine 1 ennemi adjacent.
-//! - Épique : élimine 2 ennemis adjacents.
+//! - Commune, le Grognement : les pions adverses collés au lanceur sont immobilisés 1 tour.
+//! - Rare : tue 1 pion adverse collé au lanceur.
+//! - Épique : tue jusqu'à 2 pions adverses collés au lanceur.
+//! - Légendaire, le Rugissement : tue jusqu'à 2 pions adverses collés au lanceur ; les
+//!   autres pions adverses collés à lui sont immobilisés 2 tours.
 //!
-//! La Commune et la Légendaire repoussent : elles viendront avec le déplacement (B4).
+//! Un pion protégé ne peut pas être choisi pour être tué ; il est immobilisé comme les autres.
+
+use std::ops::RangeInclusive;
 
 use super::Effect;
+use super::reach::around;
 use super::rules::{AttackContext, AttackRules};
-use crate::{Direction, Position, Rarity};
+use crate::{EffectKind, Position, Rarity};
+
+/// Durée de l'immobilisation du Grognement : la seule d'1 tour, car il fige toute la zone.
+const GROWL_TURNS: u32 = 1;
+/// Durée de l'immobilisation du Rugissement.
+const ROAR_TURNS: u32 = 2;
 
 pub(crate) struct Ours;
 
 impl AttackRules for Ours {
     fn rarities(&self) -> &'static [Rarity] {
-        &[Rarity::Rare, Rarity::Epic]
+        &[
+            Rarity::Common,
+            Rarity::Rare,
+            Rarity::Epic,
+            Rarity::Legendary,
+        ]
     }
 
-    fn target_count(&self, rarity: Rarity) -> usize {
+    fn target_count(&self, rarity: Rarity) -> RangeInclusive<usize> {
         match rarity {
-            Rarity::Epic => 2,
-            Rarity::Common | Rarity::Rare | Rarity::Legendary => 1,
+            Rarity::Common => 0..=0,
+            Rarity::Rare => 1..=1,
+            Rarity::Epic => 1..=2,
+            // Tuer « jusqu'à 2 » : même aucun, si l'on veut seulement immobiliser.
+            Rarity::Legendary => 0..=2,
         }
     }
 
-    /// Les ennemis sur les 8 cases autour du lanceur, pas encore choisis.
+    /// Les pions adverses collés au lanceur qu'on peut tuer, pas encore choisis.
     fn candidate_targets(&self, context: &AttackContext, chosen: &[Position]) -> Vec<Position> {
-        let enemy = context.player.opponent();
-        Direction::ALL
-            .iter()
-            .filter_map(|&dir| context.board.neighbor(context.launcher, dir))
-            .filter(|pos| context.board.owner(*pos) == Some(enemy))
-            .filter(|pos| !chosen.contains(pos))
+        around(context.board, context.launcher)
+            .filter(|&pos| context.can_kill(pos) && !chosen.contains(&pos))
             .collect()
     }
 
-    fn effects(&self, _context: &AttackContext, targets: &[Position]) -> Vec<Effect> {
-        targets.iter().map(|&at| Effect::Kill { at }).collect()
+    fn effects(&self, context: &AttackContext, targets: &[Position]) -> Vec<Effect> {
+        let kills = targets.iter().map(|&at| Effect::Kill { at });
+        let immobilize = |turns| {
+            around(context.board, context.launcher)
+                .filter(|pos| context.is_enemy(*pos) && !targets.contains(pos))
+                .map(move |at| Effect::Apply {
+                    at,
+                    kind: EffectKind::Immobilized,
+                    turns,
+                })
+        };
+        match context.rarity {
+            Rarity::Common => immobilize(GROWL_TURNS).collect(),
+            Rarity::Rare | Rarity::Epic => kills.collect(),
+            Rarity::Legendary => kills.chain(immobilize(ROAR_TURNS)).collect(),
+        }
     }
 }
 
@@ -62,6 +91,7 @@ mod tests {
 
         let context = AttackContext {
             board: &board,
+            effects: &[],
             player: Player::One,
             launcher: Position { row: 2, col: 2 },
             rarity: Rarity::Rare,
