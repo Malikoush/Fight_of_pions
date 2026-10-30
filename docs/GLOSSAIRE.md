@@ -35,6 +35,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Réserve annoncée | `Event::ReserveChanged` | Pions en réserve d'un joueur, émis à chaque changement (pose, kill sans infirmerie, sortie de l'infirmerie) |
 | Effet annoncé | `Event::EffectStarted`, `Event::EffectEnded` | Un effet continu commence, ou s'arrête (durée écoulée, retiré par une carte, pion tué) |
 | Infirmerie annoncée | `Event::InfirmaryEntered`, `Event::InfirmaryLeft` | Un pion tué entre à l'infirmerie, ou en sort pour revenir dans la réserve |
+| Pion déplacé, pions échangés | `Event::PionMoved`, `Event::PionsSwapped` | Un pion change de case (saut, pas), ou deux pions échangent leurs cases d'un coup ; ils gardent leur identité, leurs effets et leur ancienneté |
 | Refus | `GameError` | Pourquoi une action ou une configuration est refusée |
 | Configuration incohérente | `ConfigError` | La raison précise du refus d'une configuration (`GameError::InvalidConfig`) |
 | Décision attendue | `Decision`, `pending_decision()` | Qui doit choisir quoi, maintenant : `MainAction`, `ChooseLauncher`, `ChooseTarget` |
@@ -77,7 +78,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
 | Attaque | `Attack` | Une carte : une famille dans une rareté (« Ours (Rare) ») |
-| Famille d'attaque | `AttackKind` | `BeauteFatale`, `Reine`, `Attila`, `Ours`, et plus tard Lièvre… Le nom de la carte, tel quel (« Beauté fatale »). Une famille par fichier dans `attacks/`. |
+| Famille d'attaque | `AttackKind` | `BeauteFatale`, `SautDuLoup`, `Reine`, `Attila`, `Interchange`, `Ours`, `Lievre`, et plus tard Médecin… Le nom de la carte, tel quel (« Beauté fatale »). Une famille par fichier dans `attacks/`. |
 | Rareté | `Rarity` | `Common`, `Rare`, `Epic`, `Legendary` : la variante de l'attaque et sa place dans le draft, **sans lien imposé avec le coût** |
 | Caractéristiques | `AttackStats` | Coût et recharge d'une attaque |
 | Catalogue | `attack_catalog`, `CatalogEntry` | Dans `GameConfig` : les attaques jouables et leurs caractéristiques |
@@ -87,11 +88,13 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Choisir une case | `Action::Choose(pos)` | Le lanceur, puis chaque cible de l'attaque en cours ; l'attaque est jouée dès qu'il n'y a plus rien à choisir |
 | Jouer l'attaque | `Action::FinishAttack`, `GameError::TargetsMissing` | Jouer l'attaque en cours avec les cibles déjà choisies, avant son maximum (« jusqu'à 2 ») ; refusé tant qu'elle n'en a pas assez |
 | Nombre de cibles | `AttackRules::target_count` (interne) | De combien à combien de cibles une variante choisit (`1..=2` : « jusqu'à 2 » ; `0..=0` : aucune, jouée dès le choix du lanceur) |
-| Portée | `attacks/reach.rs` : `around`, `in_sight` (interne) | Où une carte trouve ses cibles, partagé entre familles : collé au lanceur, regard (ligne droite, sans pion entre). Pas de portée par défaut. |
+| Peut s'arrêter | `AttackRules::can_stop` (interne) | Vrai si l'attaque peut être jouée après ces choix, quand leur nombre le permet ; par défaut toujours. Le Lièvre attend que le dernier pion choisi ait bougé. |
+| Portée | `attacks/reach.rs` : `around`, `in_sight`, `in_line` (interne) | Où une carte trouve ses cibles, partagé entre familles : collé au lanceur, regard (ligne droite, sans pion entre : Beauté fatale), ligne droite (même derrière un pion : Interchange Rare). Pas de portée par défaut. |
+| Pion prêt à agir | `ready_now`, `AttackContext::can_act`, `Launch` (interne) | La seule définition d'un lanceur prêt : ni immobilisé, ni arrivé ce tour quand le mal du débarquement compte. Partagée par la partie (le lanceur) et par les familles qui font agir plusieurs de tes pions (Lièvre). `Launch::Someday` l'ignore, pour la partie figée. |
 | Recharge | `cooldown`, `cooldown_left`, `Event::CooldownChanged` | Tours du propriétaire avant de pouvoir relancer une attaque (1 = une fois par tour) |
 | Cible | case choisie | Une case visée par l'attaque en cours, proposée par la famille |
 | Attaque lancée | `Event::AttackUsed` | Annonce d'une attaque résolue ; ses effets suivent |
-| Effet primitif | `Effect` (interne au moteur) | Opération de base produite par une famille : `Kill` (tuer), `Apply` (donner un effet continu), `RemoveEnemyEffects` (retirer les effets adverses d'un pion), et plus tard déplacer, échanger, poser… (catalogue dans l'architecture). Seul le résolveur l'applique. Il n'y a pas de « changer de camp » : séduire, c'est tuer puis poser. |
+| Effet primitif | `Effect` (interne au moteur) | Opération de base produite par une famille : `Kill` (tuer), `Apply` (donner un effet continu), `RemoveEnemyEffects` (retirer les effets adverses d'un pion), `Move` (déplacer), `Swap` (échanger), et plus tard poser… (catalogue dans l'architecture). Seul le résolveur l'applique. Il n'y a pas de « changer de camp » : séduire, c'est tuer puis poser. |
 | Effet continu | `ActiveEffect`, `EffectId`, `Game::active_effects()` | Ce qu'une carte laisse en jeu après avoir été jouée : pour l'instant les statuts ; plus tard couronne, gardes, jetons, pacte, retour programmé, famille. Il vise un pion par son identité, retient son créateur (`creator`), sa carte (`source`) et son dernier tour (`last_turn`). Les fiches disaient aussi « effet en cours ». Les pions, l'infirmerie, les tombes et les cases creusées n'en sont pas. |
 | Statut | `EffectKind::Immobilized`, `EffectKind::Protected`, `Game::has_effect(pos, kind)` | Immobilisé (ne lance pas d'attaque, donc ne bouge pas par une carte de son propriétaire) ou protégé (ne peut pas être choisi comme cible d'un kill) : un effet continu sur un pion |
 | Durée, dernier tour | `last_turn` | Une durée de N tours se compte en tours de l'adversaire de celui qui a joué l'effet, sans le tour en cours ; l'effet s'arrête à la fin de son dernier tour (`clock.rs`) |

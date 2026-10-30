@@ -454,6 +454,25 @@ fn decrire(event: &Event) -> Option<String> {
             theme::nom_joueur(pion.owner()),
             at
         )),
+        Event::PionMoved { pion, from, to } => Some(format!(
+            "Le pion {} de {} va de {} en {}",
+            pion.id(),
+            theme::nom_joueur(pion.owner()),
+            from,
+            to
+        )),
+        Event::PionsSwapped {
+            first,
+            first_at,
+            second,
+            second_at,
+        } => Some(format!(
+            "Les pions {} ({}) et {} ({}) échangent leurs cases",
+            first.id(),
+            first_at,
+            second.id(),
+            second_at
+        )),
         Event::EffectStarted(effet) => Some(format!(
             "Le pion {} est {} jusqu'à la fin du tour {} ({})",
             effet.pion(),

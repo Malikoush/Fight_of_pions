@@ -8,21 +8,30 @@ use std::fmt;
 pub enum AttackKind {
     /// Le charme qui fige les pions adverses, puis les séduit (fiche n°01).
     BeauteFatale,
+    /// Des sauts de 2 cases qui frappent le pion survolé (fiche n°02).
+    SautDuLoup,
     /// La reine et sa garde (fiche n°03).
     Reine,
     /// Le contre des effets en cours (fiche n°04).
     Attila,
+    /// L'échange de cases avec un pion adverse (fiche n°06).
+    Interchange,
     /// Le corps à corps, sur les 8 cases collées au lanceur (fiche n°09).
     Ours,
+    /// Le mouvement pur, pas à pas (fiche n°10).
+    Lievre,
 }
 
 impl fmt::Display for AttackKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AttackKind::BeauteFatale => write!(f, "Beauté fatale"),
+            AttackKind::SautDuLoup => write!(f, "Saut du loup"),
             AttackKind::Reine => write!(f, "Reine"),
             AttackKind::Attila => write!(f, "Attila"),
+            AttackKind::Interchange => write!(f, "Interchange"),
             AttackKind::Ours => write!(f, "Ours"),
+            AttackKind::Lievre => write!(f, "Lièvre"),
         }
     }
 }

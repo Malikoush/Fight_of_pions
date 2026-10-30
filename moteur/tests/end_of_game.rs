@@ -62,7 +62,11 @@ fn frozen_by_the_rules(game: &Game) -> bool {
 /// - la Beauté fatale vise par le regard (2 cases en ligne droite, sans pion entre) :
 ///   1 ennemi pour la Commune, 2 pour la Rare ;
 /// - le Garde royal (Reine Commune) protège le lanceur : toujours possible ;
-/// - Attila Commune retire des statuts : sans statut, jamais possible.
+/// - Attila Commune retire des statuts : sans statut, jamais possible ;
+/// - le Saut du loup a besoin d'une case libre à 2 cases en ligne droite ;
+/// - l'Interchange Rare vise un ennemi à 1 ou 2 cases en ligne droite, même derrière un
+///   pion ; l'Épique, n'importe quel ennemi ;
+/// - le Lièvre a besoin d'une case libre collée au lanceur.
 fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> bool {
     let board = game.board();
     let enemy = |pos: Position| board.owner(pos) == Some(player.opponent());
@@ -86,6 +90,29 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             .filter(|&pos| enemy(pos))
             .count()
     };
+    let free = |pos: Position| board.owner(pos).is_none();
+    let free_two_away = |launcher: Position| {
+        Direction::ALL.iter().any(|&dir| {
+            board
+                .neighbor(launcher, dir)
+                .and_then(|over| board.neighbor(over, dir))
+                .is_some_and(free)
+        })
+    };
+    let enemy_in_line = |launcher: Position| {
+        Direction::ALL.iter().any(|&dir| {
+            let first = board.neighbor(launcher, dir);
+            let second = first.and_then(|pos| board.neighbor(pos, dir));
+            first.is_some_and(enemy) || second.is_some_and(enemy)
+        })
+    };
+    let free_neighbor = |launcher: Position| {
+        Direction::ALL
+            .iter()
+            .filter_map(|&dir| board.neighbor(launcher, dir))
+            .any(free)
+    };
+    let any_enemy = board.positions().any(enemy);
     board
         .positions()
         .filter(|&pos| board.owner(pos) == Some(player))
@@ -95,6 +122,10 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             (AttackKind::BeauteFatale, _) => in_sight(launcher) >= 1,
             (AttackKind::Reine, _) => true,
             (AttackKind::Attila, _) => false,
+            (AttackKind::SautDuLoup, _) => free_two_away(launcher),
+            (AttackKind::Interchange, Rarity::Rare) => enemy_in_line(launcher),
+            (AttackKind::Interchange, _) => any_enemy,
+            (AttackKind::Lievre, _) => free_neighbor(launcher),
         })
 }
 

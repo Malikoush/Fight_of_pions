@@ -7,19 +7,10 @@
 //! est déjà complète (« jusqu'à 2 »).
 
 use super::state::{Game, PendingAttack};
-use crate::attacks::{AttackContext, Effect, can_choose_more, can_complete, is_complete};
-use crate::{
-    Attack, AttackStats, Cell, EffectKind, Event, GameError, Pion, PionId, Player, Position,
+use crate::attacks::{
+    AttackContext, Effect, Launch, can_act, can_choose_more, can_complete, is_complete,
 };
-
-/// Quand un pion doit pouvoir lancer une attaque.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Launch {
-    /// Maintenant : le mal du débarquement et l'immobilisation comptent.
-    Now,
-    /// Un jour : un pion posé ce tour ou immobilisé pourra lancer plus tard.
-    Someday,
-}
+use crate::{Attack, AttackStats, Cell, Event, GameError, Pion, PionId, Player, Position};
 
 impl Game {
     pub(super) fn validate_use_attack(&self, slot: usize) -> Result<(), GameError> {
@@ -58,11 +49,11 @@ impl Game {
             // aller au bout.
             None => {
                 self.can_launch(player, pos, Launch::Now)
-                    && self.can_complete_from(player, attack, pos, &mut Vec::new())
+                    && self.can_complete_from(player, attack, pos, Launch::Now)
             }
             // Une cible : proposée par la famille, et après laquelle on peut encore finir.
             Some(launcher) => {
-                let context = self.context(player, attack, launcher);
+                let context = self.context(player, attack, launcher, Launch::Now);
                 let rules = attack.kind.rules();
                 let mut chosen = pending.targets.clone();
                 let candidate = rules.candidate_targets(&context, &chosen).contains(&pos);
@@ -89,7 +80,7 @@ impl Game {
                 .filter(|&pos| self.board.owner(pos) == Some(player))
                 .collect(),
             Some(launcher) => {
-                let context = self.context(player, pending.attack, launcher);
+                let context = self.context(player, pending.attack, launcher, Launch::Now);
                 pending
                     .attack
                     .kind
@@ -107,7 +98,7 @@ impl Game {
             return Err(GameError::UnexpectedAction);
         };
         let attack = pending.attack;
-        let context = self.context(self.current_player, attack, launcher);
+        let context = self.context(self.current_player, attack, launcher, Launch::Now);
         if is_complete(attack.kind.rules(), &context, &pending.targets) {
             Ok(())
         } else {
@@ -121,15 +112,16 @@ impl Game {
         self.board
             .positions()
             .filter(|&pos| self.can_launch(player, pos, when))
-            .any(|launcher| self.can_complete_from(player, attack, launcher, &mut Vec::new()))
+            .any(|launcher| self.can_complete_from(player, attack, launcher, when))
     }
 
     /// Vrai si le pion de cette case est à ce joueur et peut lancer une attaque `when` :
     /// maintenant, ni posé ce tour (mal du débarquement), ni immobilisé.
     fn can_launch(&self, player: Player, pos: Position, when: Launch) -> bool {
-        let held_back = when == Launch::Now
-            && (self.is_summoning_sick(pos) || self.has_effect(pos, EffectKind::Immobilized));
-        self.board.owner(pos) == Some(player) && !held_back
+        self.board
+            .get(pos)
+            .and_then(Cell::pion)
+            .is_some_and(|pion| can_act(pion, player, when, &self.effects, self.sick_from()))
     }
 
     pub(super) fn start_attack(&mut self, slot: usize) {
@@ -169,7 +161,7 @@ impl Game {
         };
         let attack = pending.attack;
         let rules = attack.kind.rules();
-        let context = self.context(self.current_player, attack, launcher);
+        let context = self.context(self.current_player, attack, launcher, Launch::Now);
         let mut chosen = pending.targets.clone();
         is_complete(rules, &context, &chosen) && !can_choose_more(rules, &context, &mut chosen)
     }
@@ -177,8 +169,10 @@ impl Game {
     /// Joue l'attaque dont les choix sont faits : paie le coût, met la carte en recharge,
     /// applique les effets, puis vérifie la fin du tour ou de la partie.
     ///
-    /// Tuer ou donner un statut ne peut compléter aucune ligne : l'alignement n'est pas
-    /// vérifié ici. Il le sera pour les attaques qui posent ou déplacent des pions.
+    /// L'alignement n'est pas vérifié ici : une ligne faite par une carte (un déplacement,
+    /// un échange), pour l'un ou l'autre joueur, gagne au début du tour de son
+    /// propriétaire si elle y est encore, avec ou sans la règle d'or (carnet, « Fin de
+    /// partie »).
     pub(super) fn resolve_attack(&mut self, events: &mut Vec<Event>) {
         let Some(pending) = self.pending_attack.take() else {
             return;
@@ -189,10 +183,10 @@ impl Game {
         let player = self.current_player;
         let attack = pending.attack;
         let stats = self.attack_stats(attack);
-        let effects = attack
-            .kind
-            .rules()
-            .effects(&self.context(player, attack, launcher), &pending.targets);
+        let effects = attack.kind.rules().effects(
+            &self.context(player, attack, launcher, Launch::Now),
+            &pending.targets,
+        );
         let killer = self.board.get(launcher).and_then(Cell::pion).map(Pion::id);
 
         // Le coût a été vérifié au début de l'attaque, et rien ne l'a changé depuis.
@@ -248,6 +242,31 @@ impl Game {
                 let enemy = self.current_player.opponent();
                 self.end_effects(|effect| effect.is_on_by(pion.id(), enemy), events);
             }
+            Effect::Move { from, to } => {
+                let Some(pion) = self.board.get(from).and_then(Cell::pion) else {
+                    return;
+                };
+                if self.board.move_pion(from, to).is_ok() {
+                    events.push(Event::PionMoved { pion, from, to });
+                }
+            }
+            Effect::Swap { a, b } => {
+                let pions = (
+                    self.board.get(a).and_then(Cell::pion),
+                    self.board.get(b).and_then(Cell::pion),
+                );
+                let (Some(first), Some(second)) = pions else {
+                    return;
+                };
+                if self.board.swap(a, b).is_ok() {
+                    events.push(Event::PionsSwapped {
+                        first,
+                        first_at: a,
+                        second,
+                        second_at: b,
+                    });
+                }
+            }
         }
     }
 
@@ -260,24 +279,34 @@ impl Game {
         })
     }
 
-    fn context(&self, player: Player, attack: Attack, launcher: Position) -> AttackContext<'_> {
+    fn context(
+        &self,
+        player: Player,
+        attack: Attack,
+        launcher: Position,
+        launch: Launch,
+    ) -> AttackContext<'_> {
         AttackContext {
             board: &self.board,
             effects: &self.effects,
             player,
             launcher,
             rarity: attack.rarity,
+            launch,
+            sick_from: self.sick_from(),
         }
     }
 
+    /// Vrai si l'attaque peut aller au bout depuis ce lanceur, ses autres pions devant
+    /// pouvoir agir `when`.
     fn can_complete_from(
         &self,
         player: Player,
         attack: Attack,
         launcher: Position,
-        chosen: &mut Vec<Position>,
+        when: Launch,
     ) -> bool {
-        let context = self.context(player, attack, launcher);
-        can_complete(attack.kind.rules(), &context, chosen)
+        let context = self.context(player, attack, launcher, when);
+        can_complete(attack.kind.rules(), &context, &mut Vec::new())
     }
 }

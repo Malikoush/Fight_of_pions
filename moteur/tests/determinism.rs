@@ -86,6 +86,27 @@ impl EventMirror {
                 assert_eq!(*self.cell(at), Some(pion), "pion tué absent : {event:?}");
                 *self.cell(at) = None;
             }
+            Event::PionMoved { pion, from, to } => {
+                assert_eq!(
+                    *self.cell(from),
+                    Some(pion),
+                    "pion déplacé absent : {event:?}"
+                );
+                assert_eq!(*self.cell(to), None, "arrivée occupée : {event:?}");
+                *self.cell(from) = None;
+                *self.cell(to) = Some(pion);
+            }
+            Event::PionsSwapped {
+                first,
+                first_at,
+                second,
+                second_at,
+            } => {
+                assert_eq!(*self.cell(first_at), Some(first), "{event:?}");
+                assert_eq!(*self.cell(second_at), Some(second), "{event:?}");
+                *self.cell(first_at) = Some(second);
+                *self.cell(second_at) = Some(first);
+            }
             Event::ReserveChanged { player, pions } => {
                 let reserve = &mut self.reserves[player.index()];
                 assert_ne!(*reserve, pions, "annonce inutile : {event:?}");
@@ -264,7 +285,7 @@ fn play_random_game(config: GameConfig, seed: u64, rng: &mut Rng) -> PlayedGame 
 #[test]
 fn events_are_enough_to_follow_the_board() {
     let (mut attacks, mut epics, mut kills) = (0, 0, 0);
-    let (mut effects_ended, mut healed) = (0, 0);
+    let (mut effects_ended, mut healed, mut moved, mut swapped) = (0, 0, 0, 0);
     let mut kinds_played = Vec::new();
     for seed in 0..300 {
         let mut rng = Rng::new(seed);
@@ -281,6 +302,8 @@ fn events_are_enough_to_follow_the_board() {
         kills += played.count(|event| matches!(event, Event::PionKilled { .. }));
         effects_ended += played.count(|event| matches!(event, Event::EffectEnded(_)));
         healed += played.count(|event| matches!(event, Event::InfirmaryLeft(_)));
+        moved += played.count(|event| matches!(event, Event::PionMoved { .. }));
+        swapped += played.count(|event| matches!(event, Event::PionsSwapped { .. }));
         for (events, _) in &played.steps {
             for event in events {
                 if let Event::AttackUsed { attack, .. } = event
@@ -294,6 +317,8 @@ fn events_are_enough_to_follow_the_board() {
     // Sans attaques jouées, ce test ne prouverait rien sur elles.
     assert!(attacks > 100, "seulement {attacks} attaques jouées");
     assert!(epics > 20, "seulement {epics} Épiques jouées");
+    assert!(moved > 50, "seulement {moved} pions déplacés");
+    assert!(swapped > 10, "seulement {swapped} échanges");
     assert!(kills > 100, "seulement {kills} pions tués");
     assert!(effects_ended > 50, "seulement {effects_ended} effets finis");
     assert!(
@@ -302,9 +327,12 @@ fn events_are_enough_to_follow_the_board() {
     );
     for kind in [
         AttackKind::BeauteFatale,
+        AttackKind::SautDuLoup,
         AttackKind::Reine,
         AttackKind::Attila,
+        AttackKind::Interchange,
         AttackKind::Ours,
+        AttackKind::Lievre,
     ] {
         assert!(kinds_played.contains(&kind), "{kind} jamais jouée");
     }

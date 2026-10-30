@@ -75,7 +75,8 @@ moteur/src/
   rng.rs        Rng : générateur déterministe maison (SplitMix64), sans dépendance
   attacks/      attaques : données (Attack, AttackKind, Rarity, AttackStats), trait AttackRules,
                 Effect, portées partagées (reach.rs), et une famille par fichier
-                (ours.rs, beaute_fatale.rs, reine.rs, attila.rs)
+                (ours.rs, beaute_fatale.rs, saut_du_loup.rs, reine.rs, attila.rs,
+                interchange.rs, lievre.rs)
 ```
 
 ### Le contrat d'une action : valider, puis exécuter
@@ -104,7 +105,8 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
 
 - **Identité par données** : une `Attack` est une famille (`AttackKind`) dans une rareté (`Rarity`). Le coût et la recharge viennent du catalogue `attack_catalog` de `GameConfig`, jamais du code de la famille. Le coût n'est pas lié à la rareté. Les attaques de départ de chaque joueur (`starting_attacks`) sont aussi dans la configuration, en attendant le draft.
 - **Le déroulement est commun à toutes les familles** (`game/attack_flow.rs`) : validation de la carte (recharge, coût, au moins une attaque complète), du lanceur (ni posé ce tour, ni immobilisé) et de chaque cible, puis résolution d'un bloc (coût payé, carte en recharge, effets appliqués). L'attaque est jouée dès qu'il n'y a plus rien à choisir, ou plus tôt avec `FinishAttack` quand elle est déjà complète. Une famille ne fournit que ses raretés jouables, son nombre de cibles (de `min` à `max`, `AttackRules::target_count`), ses cibles possibles et ses effets ; une attaque n'est **complète** que si son nombre de cibles est permis et qu'elle a au moins un effet (`attacks/rules.rs`) : le moteur ne propose jamais de coup sans effet.
-- **Ce qu'une famille lit** passe par `AttackContext` : le plateau, les effets en jeu, et des lectures communes (`is_enemy`, `has`, `can_kill`), pour que toutes les familles lisent les statuts de la même façon. Les portées partagées (collé au lanceur, regard) sont dans `attacks/reach.rs`.
+- **Ce qu'une famille lit** passe par `AttackContext` : le plateau, les effets en jeu, et des lectures communes (`is_enemy`, `has`, `can_kill`, `can_act`), pour que toutes les familles lisent les statuts et les lanceurs de la même façon. Un lanceur prêt se définit à un seul endroit (`ready_now`), partagé par la partie et par les familles qui font agir plusieurs pions. Les portées partagées (collé au lanceur, regard, ligne droite) sont dans `attacks/reach.rs`.
+- **Les attaques à trajet** (sauts enchaînés, pas du Lièvre) rejouent les choix déjà faits sur une copie du plateau (`Walk` dans leur fichier) : c'est là qu'elles voient où en est le pion, qui est déjà mort ou survolé. Les effets s'appliquent ensuite dans l'ordre ; chaque case désigne le pion qui s'y trouve à ce moment-là. Une famille peut refuser de s'arrêter à un choix intermédiaire (`AttackRules::can_stop`).
 - **Une famille par fichier** dans `attacks/`. Chaque famille implémente un trait interne sans état (les cibles légales, et les effets à produire), appelé via `AttackKind::rules()`. `Game` ne stocke que des données simples : pas de `Box<dyn>`, ce qui garde `Game` clonable, comparable et hachable ; la sauvegarde passe par `GameRecord`.
 - **Les effets primitifs** (`Effect`) sont le cœur DRY. Une famille *décrit* ses effets. **Un résolveur central** les applique, émet les `Event` et déclenche les conséquences : infirmerie, tombe, vengeance de Meilleurs amis, fenêtres de réaction. Les attaques changent souvent, les primitives rarement. Catalogue établi le 2026-10-30 à partir des [fiches attaques](FICHES_ATTAQUES.md) ; chaque primitive arrive avec la première tâche qui en a besoin, et son nom de code est fixé à ce moment-là :
 
@@ -113,8 +115,8 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
   | Tuer (`Effect::Kill`) | Le pion quitte le plateau, ses effets s'arrêtent, il part à l'infirmerie (ou au cimetière) et laisse une tombe ; un pion protégé ne peut pas être choisi comme cible | Ours, Saut du loup, Beauté fatale, Coup du taureau, tir de la reine, retour d'Interchange, Médecin, vengeance | B1 ; infirmerie en B3 |
   | Donner un statut (`Effect::Apply`) | Immobilisé ou protégé, pour N tours | Ours Commune et Légendaire, Beauté fatale, Garde royal, Saut du loup Commune, Médecin Épique, Familia, Sentinelle Rare | B3 |
   | Retirer des statuts (`Effect::RemoveEnemyEffects`) | Ceux qu'a placés l'adversaire, sur un pion | Attila Commune | B3 |
-  | Déplacer | Le pion change de case ; c'est la famille qui calcule le trajet (pas, saut, poussée, charge, téléportation) | Saut du loup, Lièvre, Coup du taureau, Interchange Commune, reine, Feintaille, Hibou | B4 |
-  | Échanger | Deux pions échangent leurs cases d'un coup | Interchange | B4 |
+  | Déplacer (`Effect::Move`) | Le pion change de case ; c'est la famille qui calcule le trajet (pas, saut, poussée, charge, téléportation) | Saut du loup, Lièvre, Coup du taureau, Interchange Commune, reine, Feintaille, Hibou | B4 |
+  | Échanger (`Effect::Swap`) | Deux pions échangent leurs cases d'un coup | Interchange | B4 |
   | Poser | Un pion de la réserve ou de l'infirmerie arrive sur une case, et compte comme posé ce tour | Pose, Beauté fatale, Reine, Familia, Meilleurs amis, Médecin, Sentinelle, Queue du lézard | B5 |
   | Créer un effet continu | Couronne, gardes, jetons, pacte, retour programmé, famille, Terre brûlée | Reine, Massacre divin, Lièvre Épique, Meilleurs amis, Interchange Commune, Familia, Attila Légendaire | B3 à B6 |
   | Annuler un effet | Un effet continu adverse entier | Attila Rare à Légendaire | B6 |

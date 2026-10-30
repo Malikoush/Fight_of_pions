@@ -141,6 +141,13 @@ impl Patient {
     }
 }
 
+/// Vrai si ce pion a un effet de cette sorte : la seule lecture d'un statut.
+pub(crate) fn has_effect_of(effects: &[ActiveEffect], pion: PionId, kind: EffectKind) -> bool {
+    effects
+        .iter()
+        .any(|effect| effect.pion == pion && effect.kind == kind)
+}
+
 /// Vrai si le pion de cette case a un effet de cette sorte. Partagé par la partie et par
 /// les familles d'attaques, pour qu'elles lisent les statuts de la même façon.
 pub(crate) fn pion_has(
@@ -149,9 +156,8 @@ pub(crate) fn pion_has(
     pos: Position,
     kind: EffectKind,
 ) -> bool {
-    board.get(pos).and_then(Cell::pion).is_some_and(|pion| {
-        effects
-            .iter()
-            .any(|effect| effect.pion == pion.id() && effect.kind == kind)
-    })
+    board
+        .get(pos)
+        .and_then(Cell::pion)
+        .is_some_and(|pion| has_effect_of(effects, pion.id(), kind))
 }

@@ -10,6 +10,31 @@ pub(crate) fn around(board: &Board, from: Position) -> impl Iterator<Item = Posi
         .filter_map(move |&dir| board.neighbor(from, dir))
 }
 
+/// Les cases de `from` vers le bord, dans une direction, sans `from`, jusqu'à `distance`.
+fn ray(
+    board: &Board,
+    from: Position,
+    dir: Direction,
+    distance: usize,
+) -> impl Iterator<Item = Position> + '_ {
+    std::iter::successors(board.neighbor(from, dir), move |&pos| {
+        board.neighbor(pos, dir)
+    })
+    .take(distance)
+}
+
+/// Les cases en ligne droite depuis `from` (8 directions), jusqu'à `distance` cases, même
+/// derrière un pion (l'Interchange Rare).
+pub(crate) fn in_line(
+    board: &Board,
+    from: Position,
+    distance: usize,
+) -> impl Iterator<Item = Position> + '_ {
+    Direction::ALL
+        .iter()
+        .flat_map(move |&dir| ray(board, from, dir, distance))
+}
+
 /// Le regard : les cases en ligne droite depuis `from` (8 directions), jusqu'à `distance`
 /// cases, sans pion entre `from` et la case. Dans chaque direction, le regard s'arrête au
 /// premier pion, qui en fait partie.
@@ -20,11 +45,7 @@ pub(crate) fn in_sight(
 ) -> impl Iterator<Item = Position> + '_ {
     Direction::ALL.iter().flat_map(move |&dir| {
         let mut blocked = false;
-        std::iter::successors(board.neighbor(from, dir), move |&pos| {
-            board.neighbor(pos, dir)
-        })
-        .take(distance)
-        .take_while(move |&pos| {
+        ray(board, from, dir, distance).take_while(move |&pos| {
             let visible = !blocked;
             blocked = board.owner(pos).is_some();
             visible
@@ -77,5 +98,16 @@ mod tests {
         assert!(seen.contains(&at(2, 0)) && seen.contains(&at(2, 4)));
         // 7 directions × 2 cases + la direction bloquée (1 case) = 15.
         assert_eq!(seen.len(), 15);
+    }
+
+    #[test]
+    fn a_straight_line_reaches_behind_a_pion() {
+        // Même plateau : en ligne droite, C1 est atteinte malgré le pion en C2.
+        let board = board_with(&[at(1, 2), at(0, 2), at(4, 4)]);
+        let reached = sorted(in_line(&board, at(2, 2), 2));
+        assert!(reached.contains(&at(0, 2)));
+        assert_eq!(reached.len(), 16);
+        // Pas au-delà de la distance : un pion à 3 cases n'est pas atteint.
+        assert!(!sorted(in_line(&board, at(4, 4), 2)).contains(&at(1, 1)));
     }
 }

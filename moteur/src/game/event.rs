@@ -36,6 +36,28 @@ pub enum Event {
         /// Le pion qui l'a tué, s'il y en a un.
         by: Option<PionId>,
     },
+    /// Un pion a changé de case (saut, pas…). Il garde son identité, ses effets et son
+    /// ancienneté.
+    PionMoved {
+        /// Le pion déplacé.
+        pion: Pion,
+        /// La case qu'il quitte.
+        from: Position,
+        /// La case où il arrive, libre jusque-là.
+        to: Position,
+    },
+    /// Deux pions ont échangé leurs cases, d'un coup : `first` était en `first_at` et
+    /// arrive en `second_at`, et inversement.
+    PionsSwapped {
+        /// Le premier pion.
+        first: Pion,
+        /// Sa case avant l'échange.
+        first_at: Position,
+        /// Le second pion.
+        second: Pion,
+        /// Sa case avant l'échange.
+        second_at: Position,
+    },
     /// La réserve de pions d'un joueur a changé (pose, pion tué sans infirmerie, sortie de
     /// l'infirmerie).
     ReserveChanged {

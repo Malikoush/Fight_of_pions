@@ -119,6 +119,37 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
 - **Commune** : sur tout le plateau, retire d'un pion tous les effets placés par l'adversaire (immobilisé, protégé), quelle que soit la carte qui les a posés. Le pion peut être à toi (le libérer) ou à l'adversaire (lui ôter sa protection). Un pion qui ne porte que tes propres effets ne peut pas être visé.
 - La Rare, l'Épique et la Légendaire (effets entiers, Terre brûlée) viendront avec l'annulation (B6).
 
+### Mouvement (2026-10-30)
+
+- Un pion **déplacé** ou **échangé** garde son identité, ses effets continus et son ancienneté (mal du débarquement). Chaque déplacement et chaque échange est annoncé.
+- Une ligne faite en bougeant (pour l'un ou l'autre joueur) suit la règle des lignes faites par une carte : elle gagne au début du tour de son propriétaire si elle y est encore, avec ou sans la règle d'or.
+- Un pion immobilisé ne peut pas lancer, donc pas bouger par une carte de son propriétaire ; l'adversaire peut encore l'échanger.
+
+### Saut du loup (2026-10-30)
+
+- Un **saut** fait toujours 2 cases en ligne droite (8 directions), même dans le vide, et atterrit sur une case libre, par-dessus n'importe quoi : du vide, un de tes pions, un pion adverse.
+- **Commune** : 1 saut ; un pion adverse survolé est immobilisé 2 tours.
+- **Rare** : 1 saut meurtrier. **Épique** : jusqu'à 2. **Légendaire** : jusqu'à 3.
+- **Saut meurtrier** : le pion adverse survolé est tué tout de suite ; sa case est libre pour la suite. Un pion protégé peut être survolé, mais il n'est pas tué.
+- **Sauts enchaînés** : chaque saut part de la case d'arrivée du précédent ; on peut s'arrêter avant le maximum, et repasser par une case déjà visitée, mais jamais survoler deux fois le même pion.
+- Les choix : le lanceur, puis chaque case d'arrivée.
+
+### Lièvre (2026-10-30)
+
+- Un **pas** va vers une case libre collée (8 directions) ; on peut tourner en chemin, jamais passer par-dessus un pion.
+- **Commune** : 1 de tes pions avance de jusqu'à 2 pas. **Rare** : jusqu'à 2 pions, de jusqu'à 2 pas chacun. **Légendaire** : jusqu'à 3 pions, de jusqu'à 3 pas chacun. « Jusqu'à 2 (3) pions » est une hypothèse, en attendant la réponse à la question ouverte (voir les questions bloquantes) ; « jusqu'à 2 (3) pas » est décidé.
+- Chaque pion qui avance finit sur une autre case que sa case de départ.
+- Le premier pion est le lanceur ; les suivants sont des lanceurs aussi (posés avant ce tour, non immobilisés), différents, et bougent l'un après l'autre : le deuxième voit la nouvelle place du premier.
+- Les choix : le lanceur, ses pas, puis le pion suivant et ses pas… Un pas se choisit sur une case libre, un pion suivant sur un de tes pions : les deux ne se confondent jamais.
+- L'Épique (jetons) viendra avec les jetons (B6).
+
+### Interchange (2026-10-30)
+
+- **Rare** : le lanceur échange sa case avec un pion adverse à 1 ou 2 cases en ligne droite, même derrière un autre pion.
+- **Épique** : avec n'importe quel pion adverse.
+- Le pion adverse peut être protégé ou immobilisé.
+- La Commune (téléportation avec retour) et la Légendaire viendront avec les retours programmés (B6).
+
 ### Fin de partie (2026-10-26)
 
 Une partie se termine dans l'un de ces trois cas, vérifiés dans cet ordre :
@@ -136,7 +167,7 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 
 ## Pas encore implémenté
 
-- Les autres attaques que l'Ours, la Beauté fatale Commune et Rare, le Garde royal et Attila Commune, et les réactions.
+- Les autres attaques que l'Ours, la Beauté fatale Commune et Rare, le Saut du loup, le Garde royal, Attila Commune, l'Interchange Rare et Épique, et le Lièvre Commune, Rare et Légendaire ; et les réactions.
 - La défaite par manque de pions (avec le cimetière, B6).
 - Le draft et la cache secrète.
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
@@ -207,7 +238,17 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B4 | Le déplacement est-il retiré des actions de base ? | Oui (proposition du GDD) | **2026-10-29** (fiches, Hibou) : oui, il n'y a plus de déplacement de base. |
 | B4 | Peut-on sauter par-dessus un allié (Saut du loup) ? | Non | **2026-10-29** (fiches) : oui, et dans le vide aussi. |
 | B4 | « Viser » : un pion survolé, traversé par une charge ou pris dans une zone est-il visé (bouclier du garde, Feintaille) ? | Oui : visé = choisi comme cible ou atteint par l'attaque, de quelque façon que ce soit | |
-| B4 | La Beauté fatale (regard, 2 cases sans pion entre) et l'Interchange Rare (2 cases en ligne droite) ont presque la même portée : une seule portée « Regard » pour les deux ? | Oui, sans pion entre | |
+| B4 | La Beauté fatale (regard, 2 cases sans pion entre) et l'Interchange Rare (2 cases en ligne droite) ont presque la même portée : une seule portée « Regard » pour les deux ? | Oui, sans pion entre | **2026-10-30** : non. L'Interchange Rare vise n'importe quel pion adverse à 1 ou 2 cases en ligne droite, **même derrière un autre pion**. Deux portées distinctes. |
+| B4 | Saut du loup, sauts enchaînés : le pion survolé meurt-il tout de suite, ou à la fin de tous les sauts ? | Tout de suite | **2026-10-30** : tout de suite ; sa case est libre pour la suite. Un saut fait **toujours 2 cases**, même dans le vide. Le loup peut repasser par une case déjà visitée ; seul interdit : survoler deux fois le même pion. |
+| B4 | Lièvre : « avance de 2 pas », exactement 2 ou jusqu'à 2 ? | Jusqu'à 2, sans finir sur sa case de départ | **2026-10-30** : jusqu'à 2 pas (3 pour la Légendaire), et le pion finit sur une autre case que sa case de départ. |
+| B4 | Lièvre Rare et Légendaire : plusieurs pions | Des pions différents, l'un après l'autre ; chacun est un lanceur | **2026-10-30** : oui. Le deuxième pion voit la nouvelle place du premier. |
+| B4 | Lièvre Rare et Légendaire : « 2 (3) de tes pions » : exactement, ou jusqu'à ? | Jusqu'à : on peut jouer l'attaque après un seul pion, comme pour les pas | |
+| B4 | Saut du loup Épique ou Légendaire : le loup peut-il finir sur sa case de départ sans avoir survolé de pion (aller et retour dans le vide) ? Ce n'est pas « sans effet » au sens décidé (deux déplacements), mais rien ne change, pour 3 ou 4 actions. Le Lièvre, lui, ne peut pas finir sur sa case de départ. | Non, comme le Lièvre | |
+| B7 | Coup du taureau Rare : le pion adverse ne peut faire qu'une partie de son recul de 2 cases | Écrasé | **2026-10-30** : un pion non protégé est écrasé (infirmerie) s'il ne peut pas reculer des 2 cases. Un pion **protégé** recule aussi loin que possible et n'est jamais tué ; s'il ne peut pas reculer d'au moins une case, la charge est impossible dans cette direction. |
+| B7 | Coup du taureau : que choisit le joueur ? | La direction seulement | **2026-10-30** : la direction seulement ; la charge va aussi loin que sa rareté le permet. Le bord ne l'arrête pas : **à toutes les raretés, le taureau creuse le mur** (fiche). Seuls ses propres pions et un pion adverse protégé (Épique, Légendaire) l'arrêtent. |
+| B7 | Le mur : jusqu'où le plateau peut-il grandir ? (La fiche propose un plateau 14 × 14, soit 2 rangées de mur autour du 10 × 10.) Au-delà, la charge s'arrête-t-elle ? | Épaisseur du mur réglable (2 par défaut) ; au-delà, la limite est infranchissable et arrête la charge | |
+| B7 | Les noms des cases avec le mur : le 10 × 10 garde-t-il « A1 » à « J10 » (les cases creusées ont alors des noms nouveaux), ou le plateau entier, mur compris, est-il nommé de A1 à N14 (le 10 × 10 devient C3 à L12) ? | Le plateau entier est nommé (A1 à N14) : un seul système de noms, sans coordonnées négatives | |
+| B7 | Le mur arrête-t-il le regard (Beauté fatale), l'Interchange Rare et le saut du loup (sauter par-dessus du mur vers une case creusée) ? | Oui : le mur n'est pas une case du plateau tant qu'il n'est pas creusé | |
 | B5 | Les pions invoqués (Familia, Meilleurs amis, Sentinelle…) viennent-ils de la réserve ? Réserve vide = impossible ? | Oui, ils viennent de la réserve | **2026-10-29** (fiches) : oui ; réserve vide, l'invocation pose ce qu'elle peut. Seul le Médecin ressuscite depuis l'infirmerie. |
 | B5 | Un pion séduit qui meurt retourne dans la réserve de quel joueur ? | Son camp actuel | **2026-10-29** (fiches) : la question disparaît. Personne ne change de camp : séduire, c'est tuer le pion adverse puis poser un des siens à sa place. |
 | B5 | Qu'est-ce qu'un kill (pour le Massacre divin, la Queue du lézard, la vengeance et les tombes) ? | Tout pion envoyé à l'infirmerie ou au cimetière : séduction, charme fatal, écrasement, tir de la reine, retour d'Interchange, résurrection sur une tombe occupée, vengeance | |
@@ -220,7 +261,7 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B6 | Un pion tué par une carte de son propriétaire (le retour d'Interchange Commune tue « tout pion qui occupe » la case) : l'infirmerie se compte-t-elle en tours de son propriétaire, ou de l'adversaire de celui qui a joué la carte ? Aujourd'hui c'est pareil : on ne tue que des pions adverses. | En tours de son propriétaire | **2026-10-30** : en tours de son **propriétaire**, toujours. Le moteur compte aujourd'hui en tours de l'adversaire du tueur, ce qui revient au même tant qu'on ne tue que des pions adverses ; le cas d'un pion tué par une carte de son propriétaire sera codé et testé avec la première carte qui le permet (B6). |
 | Statuts | Une attaque « sans effet » n'est jamais proposée : mais une immobilisation qui se superpose à une autre plus longue (Grognement juste après un Rugissement), ou une seconde protection sur un pion déjà protégé, compte-t-elle comme un effet ? Elle ne change rien en jeu. | Oui, elle compte (c'est ce que fait le moteur depuis B3) : « sans effet » veut dire « aucune primitive », pas « rien ne change ». Plus simple à expliquer et à calculer. | **2026-10-30** : oui, elle compte. |
 | B6 | Interchange Légendaire : double échange, ou une des autres pistes de la fiche ? | Échange protégé (fait seulement de briques existantes : échanger + protéger) | |
-| B7 | Qu'est-ce que le « mur » du Coup du taureau ? Un trou est-il permanent ? | À définir | **2026-10-29** (fiches) : le lanceur creuse le bord, la case creusée devient normale pour toujours (plateau 14 × 14 dont le tour est du mur). Proposé le 2026-10-30 : coder d'abord la charge qui s'arrête au bord (B4), le mur ensuite s'il est gardé (B7). |
+| B7 | Qu'est-ce que le « mur » du Coup du taureau ? Un trou est-il permanent ? | À définir | **2026-10-29** (fiches) : le lanceur creuse le bord, la case creusée devient normale pour toujours (plateau 14 × 14 dont le tour est du mur). Proposé le 2026-10-30 : coder d'abord la charge qui s'arrête au bord (B4), le mur ensuite s'il est gardé (B7). **2026-10-30** : le mur est gardé, à toutes les raretés ; tout le Coup du taureau passe donc en B7, avec le mur. |
 | B8 | Quand plusieurs effets réagissent au même événement, dans quel ordre ? | D'abord le joueur qui subit, puis l'autre | |
 | B8 | Avec le mal du débarquement, un pion posé à son dernier tour peut-il **réagir** pendant le tour adverse ? (Aujourd'hui, l'ancienneté se compte depuis le début du tour en cours : il n'est déjà plus « nouveau » au tour adverse.) | Oui | |
 | B8 | Le Perroquet peut-il copier le tir d'un garde (« une attaque de 1 point ») ? | Non : il ne copie que des cartes | |
@@ -248,3 +289,4 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-10-29 | B2 : la règle d'or, en option (`golden_rule`, activée dans les règles cibles). Une ligne présente au début de son tour gagne, dans tous les cas ; une ligne en attente gagne aussi quand la partie s'arrête (figée ou limite de tours). Par défaut, une ligne faite en posant gagne toujours aussitôt. |
 | 2026-10-30 | Fiches attaques validées du 2026-10-29 copiées dans [FICHES_ATTAQUES.md](FICHES_ATTAQUES.md). Règles cibles mises à jour (infirmerie, défaite par manque de pions) ; règles communes des attaques décidées (cibles, le lanceur est le pion qui agit, pas de portée par défaut, une carte qui pose agit comme une pose, fin d'une durée, protégé, recharge, banque). Pas encore codé. |
 | 2026-10-30 | B3 : statuts immobilisé et protégé, durées comptées en tours de l'adversaire, infirmerie en option (`infirmary_turns`, 2 dans les règles cibles), nombre de cibles « jusqu'à N » (`Action::FinishAttack`), attaques sans effet jamais proposées ; Ours Commune et Légendaire, Ours Épique « jusqu'à 2 », Beauté fatale Commune et Rare, Garde royal, Attila Commune ; coûts des fiches par défaut. Une partie n'est pas figée tant qu'un effet ou l'infirmerie est en cours. |
+| 2026-10-30 | B4 : déplacer et échanger (`PionMoved`, `PionsSwapped`) ; Saut du loup (Commune à Légendaire, sauts enchaînés, kill immédiat), Lièvre Commune, Rare et Légendaire (jusqu'à N pas ; jusqu'à N pions en attendant la réponse à la question ouverte), Interchange Rare (en ligne droite, même derrière un pion) et Épique. Le Coup du taureau passe en B7 avec le mur. |

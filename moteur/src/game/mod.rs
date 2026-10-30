@@ -14,7 +14,7 @@ pub use arsenal::ArsenalSlot;
 pub use decision::Decision;
 pub use end::{EndReason, GameEnd, Outcome};
 pub use event::Event;
-pub(crate) use lasting::pion_has;
 pub use lasting::{ActiveEffect, EffectId, EffectKind, Patient};
+pub(crate) use lasting::{has_effect_of, pion_has};
 pub use record::{GameRecord, ReplayError};
 pub use state::Game;

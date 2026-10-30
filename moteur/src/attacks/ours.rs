@@ -71,6 +71,7 @@ impl AttackRules for Ours {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::attacks::Launch;
     use crate::{Board, Cell, Pion, PionId, Player};
 
     fn put(board: &mut Board, row: usize, col: usize, player: Player) {
@@ -95,6 +96,8 @@ mod tests {
             player: Player::One,
             launcher: Position { row: 2, col: 2 },
             rarity: Rarity::Rare,
+            launch: Launch::Now,
+            sick_from: None,
         };
         let mut targets = Ours.candidate_targets(&context, &[]);
         targets.sort_by_key(|pos| (pos.row, pos.col));

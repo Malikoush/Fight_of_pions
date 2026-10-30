@@ -6,23 +6,31 @@ mod attila;
 mod beaute_fatale;
 mod card;
 mod effect;
+mod interchange;
+mod lievre;
 mod ours;
 mod reach;
 mod reine;
 mod rules;
+mod saut_du_loup;
 
 pub use card::{Attack, AttackKind, AttackStats, CatalogEntry, Rarity};
 pub(crate) use effect::Effect;
-pub(crate) use rules::{AttackContext, AttackRules, can_choose_more, can_complete, is_complete};
+pub(crate) use rules::{
+    AttackContext, AttackRules, Launch, can_act, can_choose_more, can_complete, is_complete, is_new,
+};
 
 impl AttackKind {
     /// Les règles de cette famille.
     pub(crate) fn rules(self) -> &'static dyn AttackRules {
         match self {
-            AttackKind::Ours => &ours::Ours,
             AttackKind::BeauteFatale => &beaute_fatale::BeauteFatale,
+            AttackKind::SautDuLoup => &saut_du_loup::SautDuLoup,
             AttackKind::Reine => &reine::Reine,
             AttackKind::Attila => &attila::Attila,
+            AttackKind::Interchange => &interchange::Interchange,
+            AttackKind::Ours => &ours::Ours,
+            AttackKind::Lievre => &lievre::Lievre,
         }
     }
 }

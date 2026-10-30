@@ -67,6 +67,25 @@ fn main() {
                                 terminal::player_name(pion.owner()),
                                 at
                             ),
+                            Event::PionMoved { pion, from, to } => println!(
+                                "Le pion {} de {} va de {} en {}.",
+                                pion.id(),
+                                terminal::player_name(pion.owner()),
+                                from,
+                                to
+                            ),
+                            Event::PionsSwapped {
+                                first,
+                                first_at,
+                                second,
+                                second_at,
+                            } => println!(
+                                "Les pions {} ({}) et {} ({}) échangent leurs cases.",
+                                first.id(),
+                                first_at,
+                                second.id(),
+                                second_at
+                            ),
                             Event::EffectStarted(effect) => println!(
                                 "Le pion {} est {} jusqu'à la fin du tour {} ({}).",
                                 effect.pion(),

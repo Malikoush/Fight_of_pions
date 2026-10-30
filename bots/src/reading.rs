@@ -37,21 +37,39 @@ pub(crate) struct AttackPlan {
     pub after: Game,
 }
 
-/// Toutes les attaques possibles maintenant, jouées jusqu'au bout sur des copies : depuis
-/// chaque carte utilisable si aucune attaque n'est en cours, sinon la suite de l'attaque
-/// commencée. Le moteur ne propose jamais d'impasse : chaque branche va au bout.
+/// Le plus d'attaques complètes essayées à partir d'une même première action. Sans limite,
+/// certaines cartes en ont des milliards (le Lièvre Légendaire : 3 pions, jusqu'à 3 pas
+/// chacun, 8 directions par pas) : le bot ne déciderait jamais. Les bots sont en pause
+/// (feuille de route, 2026-10-30) : ce plafond est une réparation minimale, pas un choix
+/// de jeu. Les premières suites essayées sont toujours les mêmes (ordre de `legal_actions`).
+const PLANS_PER_FIRST_ACTION: usize = 64;
+
+/// Les attaques possibles maintenant, jouées jusqu'au bout sur des copies : depuis chaque
+/// carte utilisable si aucune attaque n'est en cours, sinon la suite de l'attaque
+/// commencée. Le moteur ne propose jamais d'impasse : chaque branche va au bout. Au plus
+/// [`PLANS_PER_FIRST_ACTION`] par première action.
 pub(crate) fn attack_plans(game: &Game) -> Vec<AttackPlan> {
     let choosing = game.attack_in_progress();
     let mut plans = Vec::new();
     for first in game.legal_actions() {
         if choosing || matches!(first, Action::UseAttack(_)) {
-            play_to_the_end(game, first, first, &mut plans);
+            let mut budget = PLANS_PER_FIRST_ACTION;
+            play_to_the_end(game, first, first, &mut budget, &mut plans);
         }
     }
     plans
 }
 
-fn play_to_the_end(game: &Game, first: Action, next: Action, plans: &mut Vec<AttackPlan>) {
+fn play_to_the_end(
+    game: &Game,
+    first: Action,
+    next: Action,
+    budget: &mut usize,
+    plans: &mut Vec<AttackPlan>,
+) {
+    if *budget == 0 {
+        return;
+    }
     let mut copy = game.clone();
     // `next` vient de `legal_actions` : le moteur ne peut pas la refuser.
     if copy.apply(next).is_err() {
@@ -59,9 +77,10 @@ fn play_to_the_end(game: &Game, first: Action, next: Action, plans: &mut Vec<Att
     }
     if copy.attack_in_progress() {
         for action in copy.legal_actions() {
-            play_to_the_end(&copy, first, action, plans);
+            play_to_the_end(&copy, first, action, budget, plans);
         }
     } else {
+        *budget -= 1;
         plans.push(AttackPlan { first, after: copy });
     }
 }

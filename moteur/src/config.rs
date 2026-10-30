@@ -94,12 +94,21 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
     vec![
         entry(AttackKind::BeauteFatale, Rarity::Common, 1),
         entry(AttackKind::BeauteFatale, Rarity::Rare, 2),
+        entry(AttackKind::SautDuLoup, Rarity::Common, 1),
+        entry(AttackKind::SautDuLoup, Rarity::Rare, 2),
+        entry(AttackKind::SautDuLoup, Rarity::Epic, 3),
+        entry(AttackKind::SautDuLoup, Rarity::Legendary, 4),
         entry(AttackKind::Reine, Rarity::Common, 1),
         entry(AttackKind::Attila, Rarity::Common, 1),
+        entry(AttackKind::Interchange, Rarity::Rare, 2),
+        entry(AttackKind::Interchange, Rarity::Epic, 3),
         entry(AttackKind::Ours, Rarity::Common, 1),
         entry(AttackKind::Ours, Rarity::Rare, 2),
         entry(AttackKind::Ours, Rarity::Epic, 3),
         entry(AttackKind::Ours, Rarity::Legendary, 4),
+        entry(AttackKind::Lievre, Rarity::Common, 1),
+        entry(AttackKind::Lievre, Rarity::Rare, 2),
+        entry(AttackKind::Lievre, Rarity::Legendary, 4),
     ]
 }
 

@@ -48,6 +48,28 @@ impl Board {
         Ok(())
     }
 
+    /// Déplace le pion de `from` vers `to`, une case libre. Erreur, sans rien changer, si
+    /// `from` n'a pas de pion ou si `to` n'est pas libre ou hors du plateau.
+    pub(crate) fn move_pion(&mut self, from: Position, to: Position) -> Result<(), GameError> {
+        let pion = self.get(from).and_then(Cell::pion);
+        let target = self.get(to).ok_or(GameError::OutOfBounds(to))?;
+        let (Some(pion), None) = (pion, target.pion()) else {
+            return Err(GameError::CellOccupied(to));
+        };
+        self.set(to, Cell::with_pion(pion))?;
+        self.set(from, Cell::EMPTY)
+    }
+
+    /// Échange le contenu de deux cases. Erreur, sans rien changer, si l'une est hors du
+    /// plateau. Aujourd'hui une case ne contient qu'un pion ; quand d'autres couches
+    /// arriveront (tombes, B5), `swap` et `move_pion` ne devront déplacer que les pions.
+    pub(crate) fn swap(&mut self, a: Position, b: Position) -> Result<(), GameError> {
+        let cell_a = self.get(a).ok_or(GameError::OutOfBounds(a))?;
+        let cell_b = self.get(b).ok_or(GameError::OutOfBounds(b))?;
+        self.set(a, cell_b)?;
+        self.set(b, cell_a)
+    }
+
     /// Le propriétaire du pion sur la case, ou `None` (case libre ou hors plateau).
     pub fn owner(&self, pos: Position) -> Option<Player> {
         let j = self.index(pos)?;

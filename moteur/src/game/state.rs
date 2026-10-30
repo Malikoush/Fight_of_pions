@@ -1,6 +1,6 @@
 use super::arsenal::ArsenalSlot;
-use super::attack_flow::Launch;
 use super::lasting::{ActiveEffect, EffectId, Patient};
+use crate::attacks::{Launch, is_new};
 use crate::{
     Action, Attack, Board, Cell, Decision, EndReason, Event, GameConfig, GameEnd, GameError,
     Outcome, Pion, PionId, Player, Position, rules,
@@ -124,15 +124,18 @@ impl Game {
     /// Vrai si le pion de cette case ne peut pas encore lancer d'attaque à cause du mal du
     /// débarquement ([`GameConfig::summoning_sickness`]) : il a été posé ce tour.
     pub fn is_summoning_sick(&self, pos: Position) -> bool {
-        self.config.summoning_sickness && self.arrived_this_turn(pos)
-    }
-
-    /// Vrai si le pion de cette case a été posé ce tour.
-    fn arrived_this_turn(&self, pos: Position) -> bool {
         self.board
             .get(pos)
             .and_then(Cell::pion)
-            .is_some_and(|pion| pion.id() >= self.turn_start_pion_id)
+            .is_some_and(|pion| is_new(pion, self.sick_from()))
+    }
+
+    /// L'identité du premier pion arrivé ce tour, si le mal du débarquement compte : tout
+    /// pion d'identité supérieure ou égale ne peut pas encore lancer d'attaque.
+    pub(super) fn sick_from(&self) -> Option<PionId> {
+        self.config
+            .summoning_sickness
+            .then_some(self.turn_start_pion_id)
     }
 
     /// Le joueur qui doit jouer.

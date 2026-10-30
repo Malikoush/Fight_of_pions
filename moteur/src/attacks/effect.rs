@@ -3,8 +3,11 @@ use crate::{EffectKind, Position};
 /// Une opération de base produite par une attaque. Les familles décrivent leurs effets avec
 /// ces primitives ; seul le résolveur de la partie les applique, émet les événements et
 /// déclenche les conséquences (infirmerie, fin des effets d'un pion tué…). De nouvelles
-/// primitives (déplacer, échanger, poser…) s'ajouteront avec les familles qui en ont
-/// besoin (catalogue dans l'architecture).
+/// primitives (poser…) s'ajouteront avec les familles qui en ont besoin (catalogue dans
+/// l'architecture).
+///
+/// Les effets s'appliquent dans l'ordre : chaque case désigne le pion qui s'y trouve au
+/// moment où l'effet s'applique (après les déplacements et les kills qui le précèdent).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Effect {
     /// Tuer le pion de cette case. Les familles ne le produisent jamais sur un pion protégé
@@ -28,5 +31,20 @@ pub(crate) enum Effect {
     RemoveEnemyEffects {
         /// La case du pion visé.
         at: Position,
+    },
+    /// Déplacer le pion de `from` vers la case libre `to`. C'est la famille qui calcule le
+    /// trajet (pas, saut…) ; seule l'arrivée compte pour la partie.
+    Move {
+        /// La case du pion, au moment où l'effet s'applique.
+        from: Position,
+        /// La case d'arrivée.
+        to: Position,
+    },
+    /// Échanger les pions de deux cases, d'un coup.
+    Swap {
+        /// La case du premier pion.
+        a: Position,
+        /// La case du second pion.
+        b: Position,
     },
 }
