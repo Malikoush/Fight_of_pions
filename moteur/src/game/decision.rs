@@ -7,8 +7,8 @@ use crate::{Attack, Player, Position};
 /// le draft.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Decision {
-    /// Le joueur choisit sa prochaine action du tour : poser un pion, lancer une attaque
-    /// ou finir son tour.
+    /// Le joueur choisit sa prochaine action du tour : poser un pion, lancer une attaque,
+    /// faire avancer sa reine ou tirer avec un de ses gardes, ou finir son tour.
     MainAction {
         /// Le joueur qui doit choisir.
         player: Player,

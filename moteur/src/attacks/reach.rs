@@ -35,6 +35,14 @@ pub(crate) fn in_line(
         .flat_map(move |&dir| ray(board, from, dir, distance))
 }
 
+/// La ligne de tir : dans chaque direction depuis `from`, le premier pion rencontré, sans
+/// limite de distance (le tir d'un garde de la reine).
+pub(crate) fn first_in_lines(board: &Board, from: Position) -> impl Iterator<Item = Position> + '_ {
+    Direction::ALL.iter().filter_map(move |&dir| {
+        ray(board, from, dir, board.size()).find(|&pos| board.owner(pos).is_some())
+    })
+}
+
 /// Le regard : les cases en ligne droite depuis `from` (8 directions), jusqu'à `distance`
 /// cases, sans pion entre `from` et la case. Dans chaque direction, le regard s'arrête au
 /// premier pion, qui en fait partie.

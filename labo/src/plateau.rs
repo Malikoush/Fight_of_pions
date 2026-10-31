@@ -6,7 +6,7 @@
 use crate::intention::Intention;
 use crate::theme;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
-use fight_of_pions::{Action, Decision, EffectKind, Game, Position};
+use fight_of_pions::{Action, Decision, EffectKind, Game, Player, Position};
 
 /// Où se trouve le damier à l'écran pour cette image.
 struct Geometrie {
@@ -171,6 +171,32 @@ fn statuts(painter: &egui::Painter, geo: &Geometrie, game: &Game, pos: Position)
             geo.cote * theme::RAYON_ANNEAU_PROTEGE,
             Stroke::new(theme::EPAISSEUR_ANNEAU, theme::ANNEAU_PROTEGE),
         );
+    }
+    let reine = [Player::One, Player::Two]
+        .into_iter()
+        .any(|joueur| game.queen_of(joueur) == Some(pos));
+    if reine {
+        let coin =
+            centre + Vec2::splat(geo.cote * theme::DECALAGE_COURONNE) * Vec2::new(-1.0, -1.0);
+        painter.circle_filled(
+            coin,
+            geo.cote * theme::RAYON_COURONNE,
+            theme::COULEUR_COURONNE,
+        );
+        let gardes = game
+            .board()
+            .get(pos)
+            .and_then(|case| case.pion())
+            .map_or(0, |pion| game.guards_of(pion.id()));
+        if gardes > 0 {
+            painter.text(
+                coin,
+                Align2::CENTER_CENTER,
+                gardes.to_string(),
+                FontId::proportional(geo.cote * theme::TAILLE_GARDES),
+                theme::TEXTE_GARDES,
+            );
+        }
     }
     if game.pact_friend(pos).is_some() {
         painter.circle_filled(

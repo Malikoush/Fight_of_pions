@@ -18,6 +18,7 @@ mod saut_du_loup;
 
 pub use card::{Attack, AttackKind, AttackStats, CatalogEntry, Rarity};
 pub(crate) use effect::Effect;
+pub(crate) use reach::{around, first_in_lines};
 pub(crate) use rules::{
     AttackContext, AttackRules, Launch, can_act, can_choose_more, can_complete, is_complete, is_new,
 };

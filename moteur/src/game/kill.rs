@@ -3,11 +3,23 @@
 //! fait venger.
 //!
 //! Est un kill tout pion envoyé à l'infirmerie ou au cimetière ; l'assassin est le pion
-//! qui a lancé l'attaque, même s'il a bougé (carnet, 2026-10-30).
+//! qui a lancé l'attaque, même s'il a bougé (carnet, 2026-10-30). Un garde de la reine la
+//! sauve de ce qui la tuerait, une fois (carnet, 2026-10-31).
 
 use super::lasting::EffectKind;
 use super::state::Game;
-use crate::{Event, PionId, Position};
+use crate::{Cell, Event, PionId, Position};
+
+/// Ce qu'a donné un kill.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Hit {
+    /// Le pion est mort ; de quoi décider de sa vengeance.
+    Killed(Death),
+    /// Un garde a sauvé la reine : l'attaque ne lui fait plus rien.
+    Shielded,
+    /// Il n'y avait pas de pion.
+    Missed,
+}
 
 /// Un pion tué pendant une attaque, de quoi décider de sa vengeance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,15 +32,23 @@ pub(super) struct Death {
 
 impl Game {
     /// Tue le pion de cette case : il quitte le plateau, ses effets s'arrêtent, il part à
-    /// l'infirmerie ou dans la réserve. Renvoie de quoi le venger ; `None` s'il n'y avait
-    /// pas de pion.
+    /// l'infirmerie ou dans la réserve. Une reine gardée dépense un garde à la place, et
+    /// survit.
     pub(super) fn kill(
         &mut self,
         at: Position,
         by: Option<PionId>,
         events: &mut Vec<Event>,
-    ) -> Option<Death> {
-        let pion = self.board.remove_pion(at)?;
+    ) -> Hit {
+        let Some(pion) = self.board.get(at).and_then(Cell::pion) else {
+            return Hit::Missed;
+        };
+        if self.use_guard(pion.id(), events) {
+            return Hit::Shielded;
+        }
+        if self.board.remove_pion(at).is_none() {
+            return Hit::Missed;
+        }
         let friend = self
             .effects
             .iter()
@@ -36,7 +56,7 @@ impl Game {
         events.push(Event::PionKilled { pion, at, by });
         self.end_effects_on(pion.id(), events);
         self.send_to_infirmary(pion, at, events);
-        Some(Death { friend, killer: by })
+        Hit::Killed(Death { friend, killer: by })
     }
 
     /// Les vengeances des pactes, à la fin d'une attaque (carnet, 2026-10-30) : pour chaque
@@ -67,7 +87,7 @@ impl Game {
                 if self.has_effect(assassin_at, EffectKind::Protected) {
                     continue;
                 }
-                if let Some(revenge) = self.kill(assassin_at, Some(friend), events) {
+                if let Hit::Killed(revenge) = self.kill(assassin_at, Some(friend), events) {
                     next.push(revenge);
                 }
             }

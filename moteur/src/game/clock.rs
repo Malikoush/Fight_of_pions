@@ -88,6 +88,46 @@ impl Game {
         self.add_effect(second.id(), pact(first), source, None, events);
     }
 
+    /// Couronne le pion de cette case (il devient une reine) et lui donne ces gardes, sans
+    /// durée : ils s'arrêtent quand la reine meurt, ou un garde quand il sert.
+    pub(super) fn crown(
+        &mut self,
+        at: Position,
+        guards: u32,
+        source: Attack,
+        events: &mut Vec<Event>,
+    ) {
+        let Some(queen) = self.board.get(at).and_then(Cell::pion) else {
+            return;
+        };
+        self.add_effect(queen.id(), EffectKind::Crown, source, None, events);
+        for _ in 0..guards {
+            self.add_effect(queen.id(), EffectKind::Guard, source, None, events);
+        }
+    }
+
+    /// Le nombre de gardes de ce pion.
+    pub fn guards_of(&self, pion: PionId) -> usize {
+        self.effects
+            .iter()
+            .filter(|effect| effect.pion() == pion && effect.kind() == EffectKind::Guard)
+            .count()
+    }
+
+    /// Dépense le plus ancien garde de ce pion. Faux s'il n'en a pas.
+    pub(super) fn use_guard(&mut self, pion: PionId, events: &mut Vec<Event>) -> bool {
+        let Some(index) = self
+            .effects
+            .iter()
+            .position(|effect| effect.pion() == pion && effect.kind() == EffectKind::Guard)
+        else {
+            return false;
+        };
+        let guard = self.effects.remove(index);
+        events.push(Event::EffectEnded(guard));
+        true
+    }
+
     /// Crée un effet continu du joueur courant sur ce pion, et l'annonce.
     fn add_effect(
         &mut self,

@@ -359,6 +359,7 @@ fn attaques(
             ui.label(format!("{attaque}{cout}{etat}"));
         });
     }
+    reine(ui, &legales, tour_humain && !selection_en_cours, intentions);
     if en_choix.attack_in_progress() {
         ui.label("Clique le pion lanceur, puis la ou les cibles.");
         // Une attaque « jusqu'à 2 » peut se jouer avant son nombre maximal de cibles.
@@ -377,6 +378,31 @@ fn attaques(
             }
         });
     }
+}
+
+/// Les gestes de la reine que le moteur permet maintenant, un bouton chacun : son pas
+/// gratuit vers une case, ou le tir d'un garde sur un pion. Cliquer une case libre sert
+/// déjà à poser : un bouton évite toute confusion.
+fn reine(ui: &mut egui::Ui, legales: &[Action], permis: bool, intentions: &mut Vec<Intention>) {
+    let gestes: Vec<(Action, String)> = legales
+        .iter()
+        .filter_map(|&action| match action {
+            Action::StepQueen(vers) => Some((action, format!("Reine → {vers}"))),
+            Action::Shoot(cible) => Some((action, format!("Tir sur {cible}"))),
+            _ => None,
+        })
+        .collect();
+    if gestes.is_empty() {
+        return;
+    }
+    ui.label("Reine");
+    ui.horizontal_wrapped(|ui| {
+        for (action, texte) in gestes {
+            if ui.add_enabled(permis, egui::Button::new(texte)).clicked() {
+                intentions.push(Intention::Demande(Demande::Agir(action)));
+            }
+        }
+    });
 }
 
 fn etat(ui: &mut egui::Ui, game: &Game) {
@@ -447,6 +473,10 @@ fn decrire(event: &Event) -> Option<String> {
             theme::nom_joueur(*player),
             attack,
             launcher
+        )),
+        Event::QueenShot { queen, target } => Some(format!(
+            "Un garde de la reine en {} tire sur {}",
+            queen, target
         )),
         Event::PionKilled { pion, at, .. } => Some(format!(
             "Le pion {} de {} est tué en {}",

@@ -37,7 +37,8 @@ fn assert_placed_then(events: &[Event], end: Event) {
 /// rien n'est programmé (aucun effet continu qui s'arrêtera à un tour donné, personne à
 /// l'infirmerie ; un pacte, sans durée, ne programme rien) et qu'aucun des deux joueurs ne
 /// peut plus ni poser (plateau plein ou réserve vide), ni lancer une attaque qui a une
-/// cible.
+/// cible, ni faire agir sa reine (un pas vers une case libre collée, ou un tir s'il lui
+/// reste un garde et un ennemi au bout d'une ligne droite).
 fn frozen_by_the_rules(game: &Game) -> bool {
     let timed_effect = game
         .active_effects()
@@ -53,12 +54,41 @@ fn frozen_by_the_rules(game: &Game) -> bool {
     let can_act = |player: Player| {
         let can_place = !board_full && game.reserve_pions(player) > 0;
         can_place
+            || queen_can_act(game, player)
             || game
                 .arsenal(player)
                 .iter()
                 .any(|slot| has_a_target_without_effects(game, player, slot.attack()))
     };
     !can_act(Player::One) && !can_act(Player::Two)
+}
+
+/// Vrai si la reine de ce joueur peut encore agir, sans statut sur le plateau : une case
+/// libre collée à elle, ou un garde et un ennemi comme premier pion d'une ligne droite.
+fn queen_can_act(game: &Game, player: Player) -> bool {
+    let board = game.board();
+    let Some(queen) = game.queen_of(player) else {
+        return false;
+    };
+    let free_step = Direction::ALL
+        .iter()
+        .filter_map(|&dir| board.neighbor(queen, dir))
+        .any(|pos| board.owner(pos).is_none());
+    let guards = board
+        .get(queen)
+        .and_then(|cell| cell.pion())
+        .map_or(0, |pion| game.guards_of(pion.id()));
+    let enemy_in_a_line = Direction::ALL.iter().any(|&dir| {
+        let mut pos = queen;
+        while let Some(next) = board.neighbor(pos, dir) {
+            match board.owner(next) {
+                Some(owner) => return owner == player.opponent(),
+                None => pos = next,
+            }
+        }
+        false
+    });
+    free_step || (guards > 0 && enemy_in_a_line)
 }
 
 /// Vrai si l'attaque a une cible depuis un des pions du joueur, sur un plateau où aucun
@@ -68,7 +98,8 @@ fn frozen_by_the_rules(game: &Game) -> bool {
 ///   1 ennemi pour la Commune, 2 pour la Rare ; l'Épique séduit dans le regard et la
 ///   Légendaire n'importe où, s'il reste un pion en réserve ;
 /// - Meilleurs amis pose 2 pions de la réserve sur 2 cases libres ;
-/// - le Garde royal (Reine Commune) protège le lanceur : toujours possible ;
+/// - le Garde royal (Reine Commune) protège le lanceur : toujours possible ; les autres
+///   Reines posent une reine, s'il reste un pion en réserve, une case libre, et pas de reine ;
 /// - Attila Commune retire des statuts : sans statut, jamais possible ;
 /// - le Médecin ressuscite sur une tombe : personne à l'infirmerie, donc aucune tombe ;
 /// - le Saut du loup a besoin d'une case libre à 2 cases en ligne droite ;
@@ -133,7 +164,10 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             (AttackKind::BeauteFatale, Rarity::Legendary) => reserve > 0 && any_enemy,
             (AttackKind::BeauteFatale, _) => in_sight(launcher) >= 1,
             (AttackKind::MeilleursAmis, _) => reserve >= 2 && free_cells >= 2,
-            (AttackKind::Reine, _) => true,
+            (AttackKind::Reine, Rarity::Common) => true,
+            (AttackKind::Reine, _) => {
+                reserve > 0 && free_cells > 0 && game.queen_of(player).is_none()
+            }
             (AttackKind::Attila, _) => false,
             (AttackKind::Medecin, _) => false,
             (AttackKind::SautDuLoup, _) => free_two_away(launcher),

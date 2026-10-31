@@ -182,7 +182,7 @@ impl EventMirror {
                 self.infirmary.remove(index);
             }
             // L'attaque elle-même ne change rien : ses effets sont annoncés à part.
-            Event::AttackUsed { .. } => {}
+            Event::AttackUsed { .. } | Event::QueenShot { .. } => {}
             Event::TurnEnded { next } => {
                 self.current_player = next;
                 self.arrived.clear();
@@ -321,7 +321,7 @@ fn events_are_enough_to_follow_the_board() {
     let (mut attacks, mut epics, mut kills) = (0, 0, 0);
     let (mut effects_ended, mut healed, mut moved, mut swapped) = (0, 0, 0, 0);
     let mut kinds_played = Vec::new();
-    for seed in 0..300 {
+    for seed in 0..500 {
         let mut rng = Rng::new(seed);
         let config = if seed % 2 == 0 {
             GameConfig::default()

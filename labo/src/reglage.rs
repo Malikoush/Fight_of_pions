@@ -133,6 +133,7 @@ impl ReglageDePartie {
                 .on_hover_text("Une ligne ne gagne qu'au début du tour de son propriétaire.");
             ui.end_row();
             ligne(ui, "Tours à l'infirmerie", &mut config.infirmary_turns);
+            ligne(ui, "Coût du tir d'un garde", &mut config.guard_shot_cost);
             ligne(ui, "Limite de tours", &mut config.max_turns);
         });
     }

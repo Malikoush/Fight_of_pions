@@ -24,6 +24,10 @@ impl AttackRules for MeilleursAmis {
         &[Rarity::Epic]
     }
 
+    fn ignores_launcher(&self, _rarity: Rarity) -> bool {
+        true
+    }
+
     fn target_count(&self, _rarity: Rarity) -> RangeInclusive<usize> {
         FRIENDS..=FRIENDS
     }

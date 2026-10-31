@@ -25,6 +25,11 @@ impl AttackRules for Interchange {
         &[Rarity::Rare, Rarity::Epic]
     }
 
+    /// L'Épique vise n'importe où ; la Rare, en ligne droite depuis le lanceur.
+    fn ignores_launcher(&self, rarity: Rarity) -> bool {
+        rarity == Rarity::Epic
+    }
+
     fn target_count(&self, _rarity: Rarity) -> RangeInclusive<usize> {
         1..=1
     }

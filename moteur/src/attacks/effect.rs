@@ -57,6 +57,13 @@ pub(crate) enum Effect {
         /// La case où il revient.
         at: Position,
     },
+    /// Couronner le pion de cette case (il devient une reine), avec ce nombre de gardes.
+    Crown {
+        /// La case de la nouvelle reine.
+        at: Position,
+        /// Ses gardes.
+        guards: u32,
+    },
     /// Lier par un pacte (Meilleurs amis) les pions de ces deux cases.
     Bind {
         /// La case du premier ami.
@@ -71,4 +78,21 @@ pub(crate) enum Effect {
         /// La case du second pion.
         b: Position,
     },
+}
+
+impl Effect {
+    /// La case du seul pion que vise cet effet, s'il n'en vise qu'un : si une attaque y a
+    /// été annulée par un garde, elle ne lui fait plus rien d'autre. `None` pour les effets
+    /// qui touchent plusieurs cases (déplacer, échanger, lier).
+    pub(crate) fn single_target(self) -> Option<Position> {
+        match self {
+            Effect::Kill { at }
+            | Effect::Apply { at, .. }
+            | Effect::RemoveEnemyStatuses { at }
+            | Effect::Place { at }
+            | Effect::Resurrect { at, .. }
+            | Effect::Crown { at, .. } => Some(at),
+            Effect::Move { .. } | Effect::Swap { .. } | Effect::Bind { .. } => None,
+        }
+    }
 }

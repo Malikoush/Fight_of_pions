@@ -58,7 +58,8 @@ Une action est refusée, sans rien modifier, si :
 - l'attaque n'existe pas dans l'arsenal, est en recharge, ou n'a aucune cible possible ;
 - (2026-10-28, complété le 2026-10-30) ses seuls lanceurs possibles ont été posés ce tour (avec le mal du débarquement) ou sont immobilisés ;
 - le lanceur ou la cible choisie n'est pas permis ;
-- (2026-10-30) on veut jouer l'attaque en cours (`FinishAttack`) avant d'avoir choisi son lanceur, ou sans avoir assez de cibles.
+- (2026-10-30) on veut jouer l'attaque en cours (`FinishAttack`) avant d'avoir choisi son lanceur, ou sans avoir assez de cibles ;
+- (2026-10-31) la reine ne peut pas faire ce pas (`QueenCannotStep`) ou ce tir (`QueenCannotShoot`) : pas de reine ou de garde, déjà fait ce tour, posée ce tour, immobilisée, case ou cible non permise.
 
 ### Attaques (2026-10-27)
 
@@ -113,7 +114,17 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
 
 - **Commune** : le lanceur est protégé pendant 2 tours. Comme toute carte qui agit sur un de tes pions, elle s'applique au lanceur, qui doit donc être posé avant ce tour et non immobilisé. Pas de cible à choisir.
 - Un joueur qui l'a dans son arsenal peut toujours agir tant qu'il a un pion sur le plateau (un pion posé ce tour ou immobilisé pourra la lancer plus tard) : une telle partie ne se fige jamais, la limite de tours la termine.
-- La Rare, l'Épique et la Légendaire (la reine) viendront en B5c.
+- (2026-10-31) **Rare** : pose une reine. **Épique** : une reine avec 1 garde. **Légendaire** : une reine avec 2 gardes.
+
+### La reine (2026-10-31)
+
+- **Pose** : un pion de ta réserve, sur une case libre, n'importe où, en plus de ta pose normale, avec une couronne. Elle compte pour l'alignement. Impossible si ta réserve est vide ou si tu as déjà une reine : **une seule reine à la fois** (rejouer la carte redevient possible quand elle est morte).
+- **Pas gratuit** (`Action::StepQueen`) : 1 case dans les 8 directions vers une case libre, une fois par tour, à n'importe quel moment du tour entre deux actions (pas pendant le choix d'une attaque), sans coût ; ce n'est pas une attaque. Pas le tour de sa pose, ni quand elle est immobilisée. Le tour ne se termine pas tout seul tant que ce pas reste possible. Une ligne faite par ce pas gagne au début du tour suivant de son propriétaire.
+- **Gardes** : des jetons sur la reine, qui n'occupent aucune case et ne comptent pas pour l'alignement. Chacun sert une fois :
+  - **bouclier** : il sauve la reine de la prochaine attaque qui la **tuerait** (kill, séduction, tir, vengeance…). Le garde est dépensé, la reine survit, et l'attaque ne lui fait plus rien d'autre (une séduction Légendaire ne la protège pas, par exemple) ; les autres pions sont touchés normalement. Une immobilisation, un échange ou un survol sans kill ne consomment pas de garde ;
+  - **tir** (`Action::Shoot`) : une attaque, une fois par tour, qui coûte `guard_shot_cost` (1 par défaut) et un garde. Il tue le premier pion rencontré en ligne droite depuis la reine (8 directions, portée illimitée), seulement s'il est adverse et non protégé. Pas le tour de sa pose, ni quand elle est immobilisée. C'est un kill, dont l'assassin est la reine.
+- **Mort de la reine** : elle part à l'infirmerie comme un pion normal, sans couronne, et ses gardes disparaissent. Le Médecin la ramène comme un pion normal.
+- La couronne et les gardes la suivent si elle est déplacée ou échangée. Attila Commune ne les retire pas (ce ne sont pas des statuts) ; Attila Rare (B6) le fera.
 
 ### Attila Commune (2026-10-30)
 
@@ -196,7 +207,7 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 
 ## Pas encore implémenté
 
-- Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, le Garde royal, Attila Commune, le Médecin, l'Interchange Rare et Épique, le Lièvre Commune, Rare et Légendaire, et Meilleurs amis ; et les réactions.
+- Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, la Reine, Attila Commune, le Médecin, l'Interchange Rare et Épique, le Lièvre Commune, Rare et Légendaire, et Meilleurs amis ; et les réactions.
 - La défaite par manque de pions (avec le cimetière, B6).
 - Le draft et la cache secrète.
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
@@ -285,11 +296,15 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B5b | Médecin Épique ou Légendaire sur une tombe occupée par un pion adverse **protégé** | L'Épique ne peut pas viser cette tombe ; la Légendaire saute ce pion, qui reste à l'infirmerie | **2026-10-30** : oui. |
 | B5b | Médecin Légendaire (« obligatoirement tous ») quand certains pions ne peuvent pas revenir (tombe occupée par ton pion ou par un pion protégé) | Il ressuscite tous ceux qu'il peut ; il en faut au moins un pour jouer la carte | **2026-10-30** : oui. |
 | B5b | Une tombe reste-t-elle sur sa case quand un pion bouge ou est échangé ? Sans infirmerie, le Médecin est-il jouable ? | La tombe reste sur sa case ; sans infirmerie (0 tour), pas de tombe, donc pas de Médecin | **2026-10-30** : oui pour les deux : le Médecin ne sert qu'avec l'infirmerie. |
-| B5 | Rejouer une carte dont l'effet est encore en jeu : 2 reines, 2 pactes, 2 piles de jetons Massacre qui comptent pour le même kill ? | À trancher | **2026-10-30**, pour les pactes : permis, chaque pacte est indépendant. Reste à trancher pour la reine (B5c) et le Massacre divin (B6). |
+| B5 | Rejouer une carte dont l'effet est encore en jeu : 2 reines, 2 pactes, 2 piles de jetons Massacre qui comptent pour le même kill ? | À trancher | **2026-10-30**, pour les pactes : permis, chaque pacte est indépendant. **2026-10-31**, pour la reine : une seule à la fois. Reste à trancher pour le Massacre divin (B6). |
 | B5 | Meilleurs amis : quand la vengeance a-t-elle lieu ? (Un Saut du loup peut tuer un ami au premier saut et l'autre au deuxième.) | À la fin de l'attaque | **2026-10-30** : à la fin de l'attaque. Si un seul des deux amis est mort pendant l'attaque, l'autre tue l'assassin ; si les deux sont morts, personne ne se venge. |
 | B5 | Vengeance en chaîne : si l'assassin est lui-même lié par un pacte, son ami le venge-t-il ? | Oui | **2026-10-30** : oui, la vengeance est un kill comme un autre. La chaîne s'arrête forcément : chaque pacte prend fin après sa vengeance. |
 | B5 | Meilleurs amis avec un seul pion en réserve (la règle commune dit qu'une invocation « pose ce qu'elle peut ») | Carte impossible | **2026-10-30** : impossible, un pacte demande deux amis. |
-| B5 | Le pas gratuit de la reine (puis le jeton du Lièvre Épique) est-il une attaque ? | Non : un « geste gratuit », sans coût, une fois par tour ; il déclenche quand même le Hibou | |
+| B5 | Le pas gratuit de la reine (puis le jeton du Lièvre Épique) est-il une attaque ? | Non : un « geste gratuit », sans coût, une fois par tour ; il déclenche quand même le Hibou | **2026-10-31** : non, ce n'est pas une attaque. 1 case dans les 8 directions vers une case libre, une fois par tour, à n'importe quel moment du tour, gratuit ; à partir du tour suivant la pose de la reine, jamais si elle est immobilisée. Il déclenchera le Hibou (B8). |
+| B5c | Contre quoi le bouclier d'un garde protège-t-il la reine ? | Seulement contre ce qui la tuerait | **2026-10-31** : seulement contre ce qui la tuerait (kill, séduction, tir, vengeance…). Le garde est dépensé, la reine survit, et l'attaque ne lui fait rien d'autre ; les autres pions sont touchés normalement. Une immobilisation, un échange ou un survol sans kill ne consomment pas de garde. |
+| B5c | Combien de tirs de garde par tour ? | Un au plus | **2026-10-31** : un tir par tour au plus, comme une carte. Il coûte 1 point (réglable), demande un garde, et tue le premier pion rencontré en ligne droite (8 directions, portée illimitée), seulement s'il est adverse et non protégé. Impossible si la reine a été posée ce tour ou est immobilisée (le tir est une attaque). C'est un kill, dont l'assassin est la reine. |
+| B5c | Saut du loup sur une reine gardée : le garde la sauve, elle reste sur sa case. Le loup peut-il la survoler une seconde fois pendant ses sauts enchaînés ? (Aujourd'hui, le chemin rejoué la traite comme morte ; sans conséquence, car un loup ne peut jamais repasser au-dessus d'une case qu'il a survolée.) | Non, comme tout pion : jamais deux fois le même pion | |
+| B5c | Plusieurs reines en même temps ? | Une seule à la fois | **2026-10-31** : une seule reine à la fois par joueur ; la Reine Rare, Épique ou Légendaire n'est pas jouable tant que ta reine est en vie. |
 | B6 | Le retour d'Interchange Commune est-il un effet continu (Attila peut l'annuler) ? La fiche dit « elle ne peut pas faire gagner », or le retour peut compléter une ligne de 5 avant la vérification. | Oui, c'est un effet continu ; le retour qui complète une ligne gagne (l'adversaire a eu un tour pour casser les 5 autres pions) : corriger la phrase de la fiche | |
 | B6 | Terre brûlée : « les cartes adverses s'appliquent sans leur partie continue » rend Interchange Commune plus forte (téléportation sans retour) | « Pendant Terre brûlée, l'adversaire ne peut jouer aucune carte qui crée un effet continu » | |
 | B6 | Garder le mot-clé Inébranlable, qui ne sert qu'à une carte ? | Le retirer (principe de simplicité) | |
@@ -328,3 +343,4 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-10-30 | B4 : déplacer et échanger (`PionMoved`, `PionsSwapped`) ; Saut du loup (Commune à Légendaire, sauts enchaînés, kill immédiat), Lièvre Commune, Rare et Légendaire (jusqu'à N pas et jusqu'à N pions, confirmé par Martin), Interchange Rare (en ligne droite, même derrière un pion) et Épique. Le Coup du taureau passe en B7 avec le mur. |
 | 2026-10-30 | B5a : une carte qui pose ; kill et assassin définis ; l'infirmerie se compte en tours du propriétaire, même tué pendant son tour ; séduction (Beauté fatale Épique et Légendaire = tuer + poser) ; Meilleurs amis (pacte sans durée, vengeance à la fin de l'attaque, en chaîne) ; Attila Commune ne retire que les statuts. |
 | 2026-10-30 | B5b : tombes (une par case, la plus récente remplace l'autre, elles restent sur leur case quand les pions bougent) ; le Médecin (Commune à Légendaire) ressuscite depuis l'infirmerie, sur sa propre tombe. Sans infirmerie, ni tombe ni Médecin. |
+| 2026-10-31 | B5c : la reine (Reine Rare à Légendaire) : pose n'importe où, une seule à la fois ; pas gratuit une fois par tour (le tour l'attend) ; gardes qui la sauvent d'un kill ou tirent (un tir par tour, `guard_shot_cost`). |

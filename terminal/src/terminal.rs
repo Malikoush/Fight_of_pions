@@ -19,6 +19,8 @@ Commandes :
   a 1    lancer l'attaque n°1 de son arsenal
   c C5   choisir C5 comme lanceur ou comme cible de l'attaque en cours
   v      jouer l'attaque en cours avec les cibles déjà choisies (« jusqu'à 2 »)
+  r C5   faire avancer sa reine en C5 (son pas gratuit, une fois par tour)
+  t C5   faire tirer un garde de sa reine sur le pion en C5
   f      finir le tour (les actions restantes sont gardées, {} maximum)
   Sur le plateau : X et O les pions, + une tombe libre (le Médecin y ressuscite).
   h      afficher l'aide
@@ -101,6 +103,11 @@ pub fn render(game: &Game) -> String {
             state
         ));
     }
+    for player in [Player::One, Player::Two] {
+        if let Some(at) = game.queen_of(player) {
+            out.push_str(&format!("\n  reine de {} en {at}", player_name(player)));
+        }
+    }
     for effect in game.active_effects() {
         if let Some(at) = board.position_of(effect.pion()) {
             out.push_str(&format!("\n  {at} : {}{}", effect.kind(), until(*effect)));
@@ -144,6 +151,8 @@ pub fn parse_command(line: &str) -> Result<Command, String> {
             )),
         },
         ["v"] => Ok(Command::Play(Action::FinishAttack)),
+        ["r", pos] => Ok(Command::Play(Action::StepQueen(pos.parse()?))),
+        ["t", pos] => Ok(Command::Play(Action::Shoot(pos.parse()?))),
         ["f"] => Ok(Command::Play(Action::EndTurn)),
         ["h"] => Ok(Command::Help),
         ["q"] => Ok(Command::Quit),

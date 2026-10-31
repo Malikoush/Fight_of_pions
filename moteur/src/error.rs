@@ -43,6 +43,13 @@ pub enum GameError {
     InvalidChoice(Position),
     /// L'attaque en cours ne peut pas encore être jouée : il faut choisir d'autres cibles.
     TargetsMissing(Attack),
+    /// La reine ne peut pas faire son pas vers cette case : pas de reine, déjà fait ce tour,
+    /// posée ce tour, immobilisée, ou case ni libre ni collée à elle.
+    QueenCannotStep(Position),
+    /// La reine ne peut pas tirer sur cette case : pas de reine ni de garde, déjà tiré ce
+    /// tour, posée ce tour, immobilisée, ou pas un pion adverse non protégé au bout d'une
+    /// ligne droite depuis elle.
+    QueenCannotShoot(Position),
 }
 
 impl fmt::Display for GameError {
@@ -81,6 +88,12 @@ impl fmt::Display for GameError {
                 attack
             ),
             GameError::InvalidChoice(pos) => write!(f, "la case {} ne peut pas être choisie", pos),
+            GameError::QueenCannotStep(pos) => {
+                write!(f, "la reine ne peut pas avancer en {}", pos)
+            }
+            GameError::QueenCannotShoot(pos) => {
+                write!(f, "aucun garde de la reine ne peut tirer sur {}", pos)
+            }
             GameError::TargetsMissing(attack) => {
                 write!(f, "l'attaque {} attend encore une cible", attack)
             }

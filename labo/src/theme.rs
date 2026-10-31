@@ -92,12 +92,20 @@ pub const LARGEUR_TOMBE: f32 = 0.3;
 pub const HAUTEUR_TOMBE: f32 = 0.22;
 pub const MARGE_TOMBE: f32 = 0.06;
 pub const ARRONDI_TOMBE: f32 = 3.0;
+/// La couronne de la reine : un point doré en haut à gauche du pion (rayon et décalage en
+/// fraction du côté d'une case), avec le nombre de ses gardes dessus.
+pub const COULEUR_COURONNE: Color32 = Color32::from_rgb(255, 193, 7);
+pub const RAYON_COURONNE: f32 = 0.13;
+pub const DECALAGE_COURONNE: f32 = 0.28;
+pub const TAILLE_GARDES: f32 = 0.2;
+pub const TEXTE_GARDES: Color32 = Color32::from_rgb(60, 30, 50);
 /// La légende des effets continus, sous l'état de la partie : elle nomme les couleurs
 /// ci-dessus.
 pub const LEGENDE_STATUTS: &str = "Croix bleue : pion immobilisé, il ne peut pas attaquer. \
      Anneau vert : pion protégé, il ne peut pas être tué. \
      Point rouge : pion lié par un pacte, son ami le vengera. \
-     Pierre grise : tombe d'un pion à l'infirmerie, le Médecin peut le ressusciter.";
+     Pierre grise : tombe d'un pion à l'infirmerie, le Médecin peut le ressusciter. \
+     Point doré : la reine, avec le nombre de ses gardes.";
 
 pub fn couleur_joueur(player: Player) -> Color32 {
     match player {

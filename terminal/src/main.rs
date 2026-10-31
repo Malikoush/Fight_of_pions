@@ -61,6 +61,9 @@ fn main() {
                                 attack,
                                 launcher
                             ),
+                            Event::QueenShot { queen, target } => {
+                                println!("Un garde de la reine en {} tire sur {}.", queen, target)
+                            }
                             Event::PionKilled { pion, at, .. } => println!(
                                 "Le pion {} de {} est tué en {}.",
                                 pion.id(),

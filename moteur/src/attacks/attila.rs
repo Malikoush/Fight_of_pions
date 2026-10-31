@@ -20,6 +20,10 @@ impl AttackRules for Attila {
         &[Rarity::Common]
     }
 
+    fn ignores_launcher(&self, _rarity: Rarity) -> bool {
+        true
+    }
+
     fn target_count(&self, _rarity: Rarity) -> RangeInclusive<usize> {
         1..=1
     }

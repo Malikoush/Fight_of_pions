@@ -6,7 +6,7 @@
 //! plus aucune cible utile), ou plus tôt avec [`crate::Action::FinishAttack`] quand elle
 //! est déjà complète (« jusqu'à 2 »).
 
-use super::kill::Death;
+use super::kill::{Death, Hit};
 use super::state::{Game, PendingAttack};
 use crate::attacks::{
     AttackContext, Effect, Launch, can_act, can_choose_more, can_complete, is_complete,
@@ -110,10 +110,17 @@ impl Game {
     /// Vrai si ce joueur a, quelque part sur le plateau, un lanceur prêt (`when`) depuis
     /// lequel cette attaque peut aller au bout. Ne regarde ni le coût ni la recharge.
     pub(super) fn attack_has_a_target(&self, player: Player, attack: Attack, when: Launch) -> bool {
-        self.board
+        let mut launchers = self
+            .board
             .positions()
-            .filter(|&pos| self.can_launch(player, pos, when))
-            .any(|launcher| self.can_complete_from(player, attack, launcher, when))
+            .filter(|&pos| self.can_launch(player, pos, when));
+        if attack.kind.rules().ignores_launcher(attack.rarity) {
+            // Les cibles ne dépendent pas du lanceur : le premier lanceur prêt suffit.
+            return launchers
+                .next()
+                .is_some_and(|launcher| self.can_complete_from(player, attack, launcher, when));
+        }
+        launchers.any(|launcher| self.can_complete_from(player, attack, launcher, when))
     }
 
     /// Vrai si le pion de cette case est à ce joueur et peut lancer une attaque `when` :
@@ -208,8 +215,20 @@ impl Game {
         });
 
         let mut deaths = Vec::new();
+        // Les pions sauvés par un garde : l'attaque ne leur fait plus rien. Ils sont reconnus
+        // par leur case, ce qui suffit tant qu'aucune famille ne pose ou ne pousse un autre
+        // pion sur cette case après le kill (à revoir avec le Coup du taureau, B7).
+        let mut shielded = Vec::new();
         for effect in effects {
-            self.apply_effect(effect, attack, killer, &mut deaths, events);
+            if effect
+                .single_target()
+                .is_some_and(|at| shielded.contains(&at))
+            {
+                continue;
+            }
+            if let Some(at) = self.apply_effect(effect, attack, killer, &mut deaths, events) {
+                shielded.push(at);
+            }
         }
         // Les vengeances, une fois l'attaque entière jouée (carnet, 2026-10-30).
         self.avenge(deaths, events);
@@ -217,7 +236,8 @@ impl Game {
     }
 
     /// Le résolveur central : le seul endroit où un effet d'attaque modifie la partie. Les
-    /// pions tués s'ajoutent à `deaths`, pour les vengeances de fin d'attaque.
+    /// pions tués s'ajoutent à `deaths`, pour les vengeances de fin d'attaque. Renvoie la
+    /// case d'une reine qu'un garde vient de sauver.
     fn apply_effect(
         &mut self,
         effect: Effect,
@@ -225,16 +245,18 @@ impl Game {
         by: Option<PionId>,
         deaths: &mut Vec<Death>,
         events: &mut Vec<Event>,
-    ) {
+    ) -> Option<Position> {
         match effect {
-            Effect::Kill { at } => deaths.extend(self.kill(at, by, events)),
+            Effect::Kill { at } => match self.kill(at, by, events) {
+                Hit::Killed(death) => deaths.push(death),
+                Hit::Shielded => return Some(at),
+                Hit::Missed => {}
+            },
             Effect::Apply { at, kind, turns } => {
                 self.start_effect(at, kind, turns, source, events);
             }
             Effect::RemoveEnemyStatuses { at } => {
-                let Some(pion) = self.board.get(at).and_then(Cell::pion) else {
-                    return;
-                };
+                let pion = self.board.get(at).and_then(Cell::pion)?;
                 let enemy = self.current_player.opponent();
                 self.end_effects(|effect| effect.is_status_on_by(pion.id(), enemy), events);
             }
@@ -242,6 +264,7 @@ impl Game {
                 self.put_pion(at, events);
             }
             Effect::Bind { a, b } => self.bind(a, b, source, events),
+            Effect::Crown { at, guards } => self.crown(at, guards, source, events),
             Effect::Resurrect { pion, at } => {
                 let ours = self.infirmary.iter().any(|patient| {
                     patient.pion().id() == pion && patient.pion().owner() == self.current_player
@@ -251,9 +274,7 @@ impl Game {
                 }
             }
             Effect::Move { from, to } => {
-                let Some(pion) = self.board.get(from).and_then(Cell::pion) else {
-                    return;
-                };
+                let pion = self.board.get(from).and_then(Cell::pion)?;
                 if self.board.move_pion(from, to).is_ok() {
                     events.push(Event::PionMoved { pion, from, to });
                 }
@@ -264,7 +285,7 @@ impl Game {
                     self.board.get(b).and_then(Cell::pion),
                 );
                 let (Some(first), Some(second)) = pions else {
-                    return;
+                    return None;
                 };
                 if self.board.swap(a, b).is_ok() {
                     events.push(Event::PionsSwapped {
@@ -276,6 +297,7 @@ impl Game {
                 }
             }
         }
+        None
     }
 
     /// Le coût et la recharge d'une attaque. La configuration validée garantit que toute
@@ -317,5 +339,53 @@ impl Game {
     ) -> bool {
         let context = self.context(player, attack, launcher, when);
         can_complete(attack.kind.rules(), &context, &mut Vec::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{GameConfig, Rng};
+
+    /// Une famille qui dit ignorer la case du lanceur doit avoir la même réponse depuis
+    /// chacun de ses lanceurs prêts, à chaque coup de parties jouées au hasard.
+    #[test]
+    fn families_that_ignore_the_launcher_really_do() {
+        let config = GameConfig {
+            infirmary_turns: 2,
+            ..GameConfig::default().with_full_arsenals()
+        };
+        let mut checked = 0;
+        for seed in 0..20 {
+            let mut game = Game::new(config.clone(), seed).unwrap();
+            let mut rng = Rng::new(seed);
+            for _ in 0..150 {
+                if game.end().is_some() {
+                    break;
+                }
+                let player = game.current_player();
+                for attack in config.catalog_attacks() {
+                    if !attack.kind.rules().ignores_launcher(attack.rarity) {
+                        continue;
+                    }
+                    let answers: Vec<bool> = game
+                        .board
+                        .positions()
+                        .filter(|&pos| game.can_launch(player, pos, Launch::Now))
+                        .map(|launcher| {
+                            game.can_complete_from(player, attack, launcher, Launch::Now)
+                        })
+                        .collect();
+                    assert!(
+                        answers.windows(2).all(|pair| pair[0] == pair[1]),
+                        "{attack} dépend du lanceur (partie {seed})"
+                    );
+                    checked += 1;
+                }
+                let legal = game.legal_actions();
+                game.apply(*rng.pick(&legal).unwrap()).unwrap();
+            }
+        }
+        assert!(checked > 1000, "seulement {checked} vérifications");
     }
 }

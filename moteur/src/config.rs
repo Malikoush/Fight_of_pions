@@ -50,6 +50,10 @@ pub struct GameConfig {
     /// aussitôt.
     #[cfg_attr(feature = "serde", serde(default))]
     pub infirmary_turns: u32,
+    /// Actions que coûte le tir d'un garde de la reine (fiche n°03), au moins 1, et au plus
+    /// ce qu'un tour peut payer en économisant.
+    #[cfg_attr(feature = "serde", serde(default = "default_guard_shot_cost"))]
+    pub guard_shot_cost: u32,
     /// La partie s'arrête (match nul) à la fin de ce tour, au moins 1. Filet de sécurité
     /// pour les bots : une vraie partie ne doit pas l'atteindre.
     pub max_turns: u32,
@@ -76,11 +80,17 @@ impl Default for GameConfig {
             summoning_sickness: false,
             golden_rule: false,
             infirmary_turns: 0,
+            guard_shot_cost: default_guard_shot_cost(),
             max_turns: 200,
             attack_catalog: default_attack_catalog(),
             starting_attacks: [Vec::new(), Vec::new()],
         }
     }
+}
+
+/// Le coût du tir d'un garde selon la fiche n°03 : 1 point.
+fn default_guard_shot_cost() -> u32 {
+    1
 }
 
 /// Les variantes que le moteur sait jouer, avec les coûts des fiches attaques du
@@ -101,6 +111,9 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
         entry(AttackKind::SautDuLoup, Rarity::Epic, 3),
         entry(AttackKind::SautDuLoup, Rarity::Legendary, 4),
         entry(AttackKind::Reine, Rarity::Common, 1),
+        entry(AttackKind::Reine, Rarity::Rare, 2),
+        entry(AttackKind::Reine, Rarity::Epic, 3),
+        entry(AttackKind::Reine, Rarity::Legendary, 4),
         entry(AttackKind::Attila, Rarity::Common, 1),
         entry(AttackKind::Medecin, Rarity::Common, 1),
         entry(AttackKind::Medecin, Rarity::Rare, 2),
@@ -155,6 +168,8 @@ pub enum ConfigError {
     NoCooldown(Attack),
     /// Un joueur commencerait avec une attaque absente du catalogue.
     AttackNotInCatalog(Attack),
+    /// Le tir d'un garde ne coûterait rien, ou plus que ce qu'un tour peut payer.
+    GuardShotCostOutOfRange,
 }
 
 impl fmt::Display for ConfigError {
@@ -218,6 +233,10 @@ impl fmt::Display for ConfigError {
             ConfigError::AttackNotInCatalog(attack) => {
                 write!(f, "l'attaque {} n'est pas dans le catalogue", attack)
             }
+            ConfigError::GuardShotCostOutOfRange => write!(
+                f,
+                "le tir d'un garde doit coûter au moins une action, et au plus le maximum d'un tour"
+            ),
         }
     }
 }
@@ -309,6 +328,9 @@ impl GameConfig {
         }
         if self.max_turns == 0 {
             return Some(ConfigError::NoTurnLimit);
+        }
+        if !(1..=self.max_actions_in_a_turn()).contains(&self.guard_shot_cost) {
+            return Some(ConfigError::GuardShotCostOutOfRange);
         }
         self.find_attack_problem()
     }
@@ -617,6 +639,22 @@ mod tests {
             },
             config
         );
+    }
+
+    #[test]
+    fn a_guard_shot_costs_at_least_one_reachable_action() {
+        let with_cost = |guard_shot_cost| GameConfig {
+            guard_shot_cost,
+            ..GameConfig::default()
+        };
+        // 2 actions par tour + 2 gardées = 4 au plus.
+        assert_eq!(problem(with_cost(4)), None);
+        for cost in [0, 5] {
+            assert_eq!(
+                problem(with_cost(cost)),
+                Some(ConfigError::GuardShotCostOutOfRange)
+            );
+        }
     }
 
     #[test]

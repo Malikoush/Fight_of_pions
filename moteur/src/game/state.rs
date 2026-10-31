@@ -37,6 +37,10 @@ pub struct Game {
     pub(super) next_effect_id: EffectId,
     /// Les pions tués qui attendent de revenir dans la réserve, dans l'ordre d'arrivée.
     pub(super) infirmary: Vec<Patient>,
+    /// Vrai si la reine du joueur courant a déjà fait son pas gratuit ce tour.
+    pub(super) queen_stepped: bool,
+    /// Vrai si un garde de la reine du joueur courant a déjà tiré ce tour.
+    pub(super) queen_shot: bool,
 }
 
 /// Une attaque commencée dont les choix ne sont pas finis. Rien n'est modifié tant que le
@@ -211,8 +215,9 @@ impl Game {
 
     /// Toutes les actions que [`Game::apply`] accepterait maintenant, dans un ordre
     /// toujours identique : les poses rangée par rangée (A1, B1… puis A2…), les attaques
-    /// dans l'ordre de l'arsenal, puis `EndTurn` ; pendant une attaque, les choix de case
-    /// rangée par rangée, puis `FinishAttack`. Vide si la partie est finie.
+    /// dans l'ordre de l'arsenal, les pas de la reine puis ses tirs (dans l'ordre des
+    /// directions, [`crate::Direction::ALL`]), puis `EndTurn` ; pendant une attaque, les
+    /// choix de case rangée par rangée, puis `FinishAttack`. Vide si la partie est finie.
     ///
     /// La liste est construite en passant chaque action candidate par la validation
     /// elle-même : elle ne peut pas contredire `apply`. Les candidates sont seulement
@@ -229,6 +234,8 @@ impl Game {
                     .positions()
                     .map(Action::Place)
                     .chain(slots.map(Action::UseAttack))
+                    .chain(self.queen_steps().into_iter().map(Action::StepQueen))
+                    .chain(self.queen_shots().into_iter().map(Action::Shoot))
                     .chain([Action::EndTurn])
                     .collect()
             }
@@ -278,6 +285,8 @@ impl Game {
             effects: Vec::new(),
             next_effect_id: EffectId::FIRST,
             infirmary: Vec::new(),
+            queen_stepped: false,
+            queen_shot: false,
             config,
         })
     }
@@ -297,6 +306,8 @@ impl Game {
         match (&self.pending_attack, action) {
             (None, Action::Place(pos)) => self.validate_place(pos),
             (None, Action::UseAttack(slot)) => self.validate_use_attack(slot),
+            (None, Action::StepQueen(to)) => self.validate_step(to),
+            (None, Action::Shoot(at)) => self.validate_shot(at),
             (None, Action::EndTurn) => Ok(()),
             (Some(pending), Action::Choose(pos)) => self.validate_choice(pending, pos),
             (Some(pending), Action::FinishAttack) => self.validate_finish(pending),
@@ -344,6 +355,8 @@ impl Game {
             Action::UseAttack(slot) => self.start_attack(slot),
             Action::Choose(pos) => self.execute_choice(pos, &mut events),
             Action::FinishAttack => self.resolve_attack(&mut events),
+            Action::StepQueen(to) => self.execute_step(to, &mut events),
+            Action::Shoot(at) => self.execute_shot(at, &mut events),
             Action::EndTurn => self.finish_turn(&mut events),
         }
         self.announce_placements(placements_before, &mut events);
@@ -428,11 +441,15 @@ impl Game {
     }
 
     /// Ce qui suit toute action qui a modifié le plateau sans faire gagner : la partie peut
-    /// se figer, ou le tour se terminer quand il ne reste ni action ni pose.
+    /// se figer, ou le tour se terminer quand il ne reste ni action, ni pose, ni pas de reine.
     pub(super) fn after_action(&mut self, events: &mut Vec<Event>) {
         if self.is_frozen() {
             self.stop_game(EndReason::Frozen, events);
-        } else if self.actions_left == 0 && self.placements_left() == 0 {
+        } else if self.actions_left == 0
+            && self.placements_left() == 0
+            && self.queen_steps().is_empty()
+        {
+            // Plus rien à faire, pas même le pas gratuit de la reine : le tour se termine.
             self.finish_turn(events);
         }
     }
@@ -486,6 +503,8 @@ impl Game {
         // Le nouveau tour commence ici, même s'il s'arrête aussitôt sur la règle d'or :
         // plus aucun pion n'est « posé ce tour ».
         self.placements_this_turn = 0;
+        self.queen_stepped = false;
+        self.queen_shot = false;
         self.turn_start_pion_id = self.next_pion_id;
         if ending_counters_change {
             events.push(self.actions_changed(ending));
@@ -587,6 +606,7 @@ impl Game {
     fn can_ever_act(&self, player: Player) -> bool {
         let can_place = self.reserve_pions[player.index()] > 0 && self.has_free_cell();
         can_place
+            || self.queen_can_ever_act(player)
             || self
                 .arsenal(player)
                 .iter()

@@ -41,6 +41,11 @@ impl AttackRules for BeauteFatale {
         ]
     }
 
+    /// Seule la Légendaire vise n'importe où ; les autres, par le regard du lanceur.
+    fn ignores_launcher(&self, rarity: Rarity) -> bool {
+        rarity == Rarity::Legendary
+    }
+
     fn target_count(&self, rarity: Rarity) -> RangeInclusive<usize> {
         match rarity {
             Rarity::Rare => 2..=2,

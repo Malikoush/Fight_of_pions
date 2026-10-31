@@ -102,6 +102,14 @@ pub(crate) trait AttackRules {
     fn can_stop(&self, _context: &AttackContext, _chosen: &[Position]) -> bool {
         true
     }
+
+    /// Vrai si, dans cette rareté, ce que l'attaque peut viser ne dépend pas de la case du
+    /// lanceur (ses cibles sont n'importe où) : savoir si elle a une cible demande alors un
+    /// seul lanceur prêt, au lieu de tous les essayer. Par défaut, faux. Un test vérifie, sur
+    /// des parties au hasard, que chaque famille qui le dit a raison.
+    fn ignores_launcher(&self, _rarity: Rarity) -> bool {
+        false
+    }
 }
 
 /// Vrai si l'attaque peut être résolue avec ces cibles : leur nombre est permis, elle peut

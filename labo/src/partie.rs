@@ -558,6 +558,7 @@ mod tests {
             "summoning_sickness",
             "golden_rule",
             "infirmary_turns",
+            "guard_shot_cost",
         ] {
             assert!(config.remove(champ).is_some(), "{champ}");
         }

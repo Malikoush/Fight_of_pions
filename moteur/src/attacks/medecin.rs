@@ -35,6 +35,10 @@ impl AttackRules for Medecin {
         ]
     }
 
+    fn ignores_launcher(&self, _rarity: Rarity) -> bool {
+        true
+    }
+
     fn target_count(&self, rarity: Rarity) -> RangeInclusive<usize> {
         match rarity {
             Rarity::Common | Rarity::Epic => 1..=1,

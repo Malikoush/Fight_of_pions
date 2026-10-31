@@ -25,6 +25,14 @@ pub enum Event {
         /// La case du pion lanceur.
         launcher: Position,
     },
+    /// Un garde de la reine tire sur un pion ; suivent le coût, le garde dépensé
+    /// ([`Event::EffectEnded`]), puis le kill (ou le garde de la cible, s'il la sauve).
+    QueenShot {
+        /// La case de la reine.
+        queen: Position,
+        /// La case du pion visé.
+        target: Position,
+    },
     /// Un pion a été tué et retiré du plateau. Suivent la fin de ses effets continus
     /// ([`Event::EffectEnded`]), puis son départ à l'infirmerie
     /// ([`Event::InfirmaryEntered`], puis sa tombe : [`Event::TombRemoved`] pour celle

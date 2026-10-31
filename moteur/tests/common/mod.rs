@@ -126,6 +126,7 @@ pub fn random_config(rng: &mut Rng) -> GameConfig {
         summoning_sickness: random_below(rng, 2) == 1,
         golden_rule: random_below(rng, 2) == 1,
         infirmary_turns: random_below(rng, 3) as u32,
+        guard_shot_cost: 1 + random_below(rng, max_actions) as u32,
         max_turns: 1 + random_below(rng, 60) as u32,
         attack_catalog,
         starting_attacks,

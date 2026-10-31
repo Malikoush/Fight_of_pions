@@ -24,6 +24,13 @@ pub enum Action {
     /// (« jusqu'à 2 ») et qu'on n'en veut pas d'autre. Permis seulement si l'attaque est
     /// déjà complète.
     FinishAttack,
+    /// Faire avancer sa reine d'une case, vers cette case libre collée à elle : le pas
+    /// gratuit de la couronne, une fois par tour. Ce n'est pas une attaque.
+    StepQueen(Position),
+    /// Faire tirer un garde de sa reine sur ce pion, le premier rencontré en ligne droite
+    /// depuis elle : une attaque, une fois par tour, qui coûte
+    /// [`crate::GameConfig::guard_shot_cost`] et le garde.
+    Shoot(Position),
     /// Finir son tour, gratuitement ; les actions restantes sont gardées dans la limite
     /// de [`crate::GameConfig::max_banked_actions`].
     EndTurn,

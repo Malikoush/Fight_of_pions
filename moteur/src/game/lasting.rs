@@ -29,7 +29,7 @@ impl fmt::Display for EffectId {
 }
 
 /// Ce que fait un effet continu. D'autres sortes viendront avec les cartes qui en ont
-/// besoin (couronne, jetons…).
+/// besoin (jetons…).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EffectKind {
     /// Statut immobilisé : le pion ne peut pas lancer d'attaque, donc pas non plus bouger
@@ -43,6 +43,12 @@ pub enum EffectKind {
         /// L'autre ami.
         friend: PionId,
     },
+    /// La couronne : ce pion est une reine. Elle avance d'une case gratuitement à chaque
+    /// tour ([`crate::Action::StepQueen`]). Sans durée.
+    Crown,
+    /// Un garde de la reine : il la sauve de la prochaine attaque qui la tuerait, ou tire
+    /// ([`crate::Action::Shoot`]). Chaque garde sert une fois. Sans durée.
+    Guard,
 }
 
 impl EffectKind {
@@ -52,13 +58,15 @@ impl EffectKind {
     }
 }
 
-/// « immobilisé », « protégé », « lié par un pacte avec #3 ».
+/// « immobilisé », « protégé », « lié par un pacte avec #3 », « couronné », « gardé ».
 impl fmt::Display for EffectKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             EffectKind::Immobilized => write!(f, "immobilisé"),
             EffectKind::Protected => write!(f, "protégé"),
             EffectKind::Pact { friend } => write!(f, "lié par un pacte avec {friend}"),
+            EffectKind::Crown => write!(f, "couronné"),
+            EffectKind::Guard => write!(f, "gardé"),
         }
     }
 }
@@ -170,6 +178,20 @@ pub(crate) fn has_effect_of(effects: &[ActiveEffect], pion: PionId, kind: Effect
     effects
         .iter()
         .any(|effect| effect.pion == pion && effect.kind == kind)
+}
+
+/// La case de la reine de ce joueur, s'il en a une : le pion couronné qui est à lui.
+/// Partagé par la partie et par la carte Reine (une seule reine à la fois).
+pub(crate) fn queen_of(
+    board: &Board,
+    effects: &[ActiveEffect],
+    player: Player,
+) -> Option<Position> {
+    effects
+        .iter()
+        .filter(|effect| effect.kind == EffectKind::Crown)
+        .filter_map(|effect| board.position_of(effect.pion))
+        .find(|&pos| board.owner(pos) == Some(player))
 }
 
 /// Vrai si le pion de cette case a un effet de cette sorte. Partagé par la partie et par
