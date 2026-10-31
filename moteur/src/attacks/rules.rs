@@ -51,6 +51,9 @@ pub(crate) struct AttackContext<'a> {
     pub launch: Launch,
     /// L'identité du premier pion arrivé ce tour, si le mal du débarquement compte.
     pub sick_from: Option<PionId>,
+    /// Les pions que le joueur qui attaque a en réserve (les cartes qui posent en ont
+    /// besoin).
+    pub reserve: u32,
 }
 
 impl AttackContext<'_> {

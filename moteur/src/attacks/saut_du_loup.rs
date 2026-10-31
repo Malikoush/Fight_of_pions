@@ -9,8 +9,9 @@
 //! Un saut fait toujours 2 cases en ligne droite (8 directions) et atterrit sur une case
 //! libre, par-dessus n'importe quoi : du vide, un de tes pions, un pion adverse. Chaque
 //! saut part de la case d'arrivée du précédent ; un même pion ne peut pas être survolé
-//! deux fois. Un saut meurtrier tue tout de suite le pion adverse survolé (sa case est
-//! libre pour la suite), sauf s'il est protégé (carnet, 2026-10-30).
+//! deux fois, mais le loup peut repasser par une case, y compris sa case de départ. Un
+//! saut meurtrier tue tout de suite le pion adverse survolé (sa case est libre pour la
+//! suite), sauf s'il est protégé (carnet, 2026-10-30).
 //!
 //! Les cibles choisies sont les cases d'arrivée, dans l'ordre des sauts.
 
@@ -86,7 +87,7 @@ impl Walk {
         Direction::ALL.iter().filter_map(move |&dir| {
             let over = self.board.neighbor(self.at, dir)?;
             let landing = self.board.neighbor(over, dir)?;
-            let free = self.board.owner(landing).is_none();
+            let free = self.board.is_free(landing);
             let not_jumped_yet = self
                 .board
                 .get(over)
@@ -111,7 +112,7 @@ impl Walk {
                     });
                 } else if context.can_kill(over) {
                     self.effects.push(Effect::Kill { at: over });
-                    self.board.set(over, Cell::EMPTY).ok()?;
+                    self.board.remove_pion(over)?;
                 }
             }
         }

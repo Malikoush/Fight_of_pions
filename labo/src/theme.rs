@@ -80,9 +80,24 @@ pub const EPAISSEUR_CROIX_IMMOBILISE: f32 = 3.0;
 /// Anneau autour d'un pion protégé, entre le pion et l'anneau de choix.
 pub const ANNEAU_PROTEGE: Color32 = Color32::from_rgb(56, 142, 60);
 pub const RAYON_ANNEAU_PROTEGE: f32 = 0.42;
-/// La légende des statuts, sous l'état de la partie : elle nomme les couleurs ci-dessus.
+/// Point en haut à droite d'un pion lié par un pacte (Meilleurs amis) : sa couleur, son
+/// rayon et son décalage depuis le centre, en fraction du côté d'une case.
+pub const MARQUE_PACTE: Color32 = Color32::from_rgb(229, 57, 53);
+pub const RAYON_MARQUE_PACTE: f32 = 0.09;
+pub const DECALAGE_MARQUE_PACTE: f32 = 0.3;
+/// La tombe d'un pion tué (le Médecin) : une pierre dans le bas de la case. Sa couleur,
+/// sa taille et sa marge depuis le bas, en fraction du côté d'une case, et son arrondi.
+pub const COULEUR_TOMBE: Color32 = Color32::from_rgb(117, 117, 117);
+pub const LARGEUR_TOMBE: f32 = 0.3;
+pub const HAUTEUR_TOMBE: f32 = 0.22;
+pub const MARGE_TOMBE: f32 = 0.06;
+pub const ARRONDI_TOMBE: f32 = 3.0;
+/// La légende des effets continus, sous l'état de la partie : elle nomme les couleurs
+/// ci-dessus.
 pub const LEGENDE_STATUTS: &str = "Croix bleue : pion immobilisé, il ne peut pas attaquer. \
-     Anneau vert : pion protégé, il ne peut pas être tué.";
+     Anneau vert : pion protégé, il ne peut pas être tué. \
+     Point rouge : pion lié par un pacte, son ami le vengera. \
+     Pierre grise : tombe d'un pion à l'infirmerie, le Médecin peut le ressusciter.";
 
 pub fn couleur_joueur(player: Player) -> Color32 {
     match player {

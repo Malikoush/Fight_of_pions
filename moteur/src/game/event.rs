@@ -27,7 +27,9 @@ pub enum Event {
     },
     /// Un pion a été tué et retiré du plateau. Suivent la fin de ses effets continus
     /// ([`Event::EffectEnded`]), puis son départ à l'infirmerie
-    /// ([`Event::InfirmaryEntered`]) ou dans la réserve ([`Event::ReserveChanged`]).
+    /// ([`Event::InfirmaryEntered`], puis sa tombe : [`Event::TombRemoved`] pour celle
+    /// qu'elle remplace, et [`Event::TombAdded`]) ou dans la réserve
+    /// ([`Event::ReserveChanged`]).
     PionKilled {
         /// Le pion tué.
         pion: Pion,
@@ -72,10 +74,30 @@ pub enum Event {
     /// a été tué.
     EffectEnded(ActiveEffect),
     /// Un pion tué entre à l'infirmerie, jusqu'à la fin du tour [`Patient::last_turn`].
+    /// Suit sa tombe ([`Event::TombRemoved`] pour celle qu'elle remplace, puis
+    /// [`Event::TombAdded`]).
     InfirmaryEntered(Patient),
-    /// Un pion sort de l'infirmerie ; il revient dans la réserve de son propriétaire
-    /// ([`Event::ReserveChanged`] suit).
+    /// Un pion sort de l'infirmerie. Suivent [`Event::TombRemoved`], s'il avait encore une
+    /// tombe, puis [`Event::ReserveChanged`] (il revient dans la réserve de son
+    /// propriétaire) ou [`Event::PionPlaced`] (ressuscité par le Médecin, avec une nouvelle
+    /// identité).
     InfirmaryLeft(Patient),
+    /// Un pion tué laisse sa tombe sur la case où il est mort. Une tombe ne bloque pas la
+    /// case ; une case porte au plus une tombe.
+    TombAdded {
+        /// Le pion tué.
+        pion: Pion,
+        /// La case de la tombe.
+        at: Position,
+    },
+    /// Une tombe s'efface : son pion sort de l'infirmerie, ou une nouvelle tombe la
+    /// remplace.
+    TombRemoved {
+        /// Le pion de la tombe.
+        pion: Pion,
+        /// La case de la tombe.
+        at: Position,
+    },
     /// Les compteurs d'actions d'un joueur ont changé (pose, attaque, fin de tour…).
     /// N'est jamais émis si rien n'a changé. Quand la partie se termine, les compteurs
     /// restent tels qu'ils étaient.

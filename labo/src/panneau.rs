@@ -9,7 +9,7 @@ use crate::theme;
 use bots::BotKind;
 use eframe::egui;
 use fight_of_pions::{
-    Action, Event, Game, GameConfig, GameEnd, GameRecord, Outcome, Player, Position,
+    Action, ActiveEffect, Event, Game, GameConfig, GameEnd, GameRecord, Outcome, Player, Position,
 };
 use std::time::Duration;
 
@@ -474,10 +474,10 @@ fn decrire(event: &Event) -> Option<String> {
             second_at
         )),
         Event::EffectStarted(effet) => Some(format!(
-            "Le pion {} est {} jusqu'à la fin du tour {} ({})",
+            "Le pion {} est {}{} ({})",
             effet.pion(),
             effet.kind(),
-            effet.last_turn(),
+            jusqu_a(*effet),
             effet.source()
         )),
         Event::EffectEnded(effet) => Some(format!(
@@ -491,8 +491,17 @@ fn decrire(event: &Event) -> Option<String> {
             theme::nom_joueur(patient.pion().owner()),
             patient.last_turn()
         )),
+        Event::TombAdded { pion, at } => Some(format!(
+            "Le pion {} de {} laisse sa tombe en {}",
+            pion.id(),
+            theme::nom_joueur(pion.owner()),
+            at
+        )),
+        Event::TombRemoved { pion, at } => {
+            Some(format!("La tombe du pion {} s'efface en {}", pion.id(), at))
+        }
         Event::InfirmaryLeft(patient) => Some(format!(
-            "Le pion {} de {} sort de l'infirmerie et revient dans la réserve",
+            "Le pion {} de {} sort de l'infirmerie",
             patient.pion().id(),
             theme::nom_joueur(patient.pion().owner())
         )),
@@ -503,6 +512,13 @@ fn decrire(event: &Event) -> Option<String> {
         Event::TurnEnded { next } => Some(format!("Au tour de {}", theme::nom_joueur(*next))),
         Event::GameEnded(fin) => Some(texte_fin(*fin)),
     }
+}
+
+/// « jusqu'à la fin du tour 6 », ou rien pour un effet sans durée (un pacte).
+fn jusqu_a(effet: ActiveEffect) -> String {
+    effet.last_turn().map_or(String::new(), |tour| {
+        format!(" jusqu'à la fin du tour {tour}")
+    })
 }
 
 /// « Joueur 1 (violet) gagne la partie (alignement) » ou « Match nul (…) ».

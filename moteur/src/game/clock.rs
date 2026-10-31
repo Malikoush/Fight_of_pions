@@ -1,7 +1,8 @@
 //! L'horloge de la partie : ce qui dure après une action (effets continus, infirmerie),
 //! quand cela commence et quand cela s'arrête. Une seule règle pour tout : une durée de N
-//! tours se compte en tours de l'adversaire de celui qui a joué l'effet, le tour en cours
-//! ne compte jamais, et elle s'éteint à la fin de son dernier tour (carnet, 2026-10-30).
+//! tours se compte en tours d'un joueur (l'adversaire de celui qui a joué l'effet pour un
+//! effet, le propriétaire du pion pour l'infirmerie), le tour en cours ne compte jamais,
+//! et elle s'éteint à la fin de son dernier tour (carnet, 2026-10-30).
 
 use super::lasting::{ActiveEffect, EffectKind, Patient, pion_has};
 use super::state::Game;
@@ -14,9 +15,18 @@ impl Game {
         &self.effects
     }
 
-    /// Vrai si le pion de cette case a un effet de cette sorte (immobilisé, protégé…).
+    /// Vrai si le pion de cette case a un effet de cette sorte (immobilisé, protégé…). Pour
+    /// un pacte, la sorte comprend l'ami exact : voir plutôt [`Game::pact_friend`].
     pub fn has_effect(&self, pos: Position, kind: EffectKind) -> bool {
         pion_has(&self.board, &self.effects, pos, kind)
+    }
+
+    /// L'ami du pion de cette case, s'il est lié par un pacte (Meilleurs amis).
+    pub fn pact_friend(&self, pos: Position) -> Option<PionId> {
+        let pion = self.board.get(pos).and_then(Cell::pion)?;
+        self.effects
+            .iter()
+            .find_map(|effect| effect.friend_of(pion.id()))
     }
 
     /// Les pions des deux joueurs à l'infirmerie, dans l'ordre de leur arrivée. Chaque
@@ -25,12 +35,16 @@ impl Game {
         &self.infirmary
     }
 
-    /// Le dernier tour d'une durée de `turns` tours (au moins 1), jouée par le joueur
-    /// courant : elle se compte en tours de son adversaire, à partir du tour suivant. Les
-    /// réactions (B8), jouées pendant le tour de l'adversaire, devront sauter ce tour-là.
-    fn last_turn_of(&self, turns: u32) -> u32 {
+    /// Le dernier tour d'une durée de `turns` tours (au moins 1) comptée en tours de
+    /// `counted_on`, à partir de son prochain tour : le tour en cours ne compte jamais.
+    fn last_turn_of(&self, counted_on: Player, turns: u32) -> u32 {
+        let first = if counted_on == self.current_player {
+            2
+        } else {
+            1
+        };
         self.turn
-            .saturating_add(1)
+            .saturating_add(first)
             .saturating_add(turns.saturating_sub(1).saturating_mul(2))
     }
 
@@ -47,13 +61,47 @@ impl Game {
         let Some(pion) = self.board.get(at).and_then(Cell::pion) else {
             return;
         };
-        let creator = self.current_player;
-        let last_turn = self.last_turn_of(turns);
+        let last_turn = self.last_turn_of(self.current_player.opponent(), turns);
+        self.add_effect(pion.id(), kind, source, Some(last_turn), events);
+    }
+
+    /// Lie les pions de ces deux cases par un pacte (Meilleurs amis) : chacun porte le sien,
+    /// sans durée.
+    pub(super) fn bind(
+        &mut self,
+        a: Position,
+        b: Position,
+        source: Attack,
+        events: &mut Vec<Event>,
+    ) {
+        let pions = (
+            self.board.get(a).and_then(Cell::pion),
+            self.board.get(b).and_then(Cell::pion),
+        );
+        let (Some(first), Some(second)) = pions else {
+            return;
+        };
+        let pact = |friend: Pion| EffectKind::Pact {
+            friend: friend.id(),
+        };
+        self.add_effect(first.id(), pact(second), source, None, events);
+        self.add_effect(second.id(), pact(first), source, None, events);
+    }
+
+    /// Crée un effet continu du joueur courant sur ce pion, et l'annonce.
+    fn add_effect(
+        &mut self,
+        pion: PionId,
+        kind: EffectKind,
+        source: Attack,
+        last_turn: Option<u32>,
+        events: &mut Vec<Event>,
+    ) {
         let effect = ActiveEffect::new(
             self.next_effect_id,
             kind,
-            pion.id(),
-            creator,
+            pion,
+            self.current_player,
             source,
             last_turn,
         );
@@ -82,20 +130,48 @@ impl Game {
     }
 
     /// Un pion tué va à l'infirmerie pour [`crate::GameConfig::infirmary_turns`] tours de
-    /// l'adversaire du joueur qui l'a tué (le joueur courant), ou directement dans la
-    /// réserve si cette durée est 0. La règle (carnet, 2026-10-30) compte en tours de son
-    /// propriétaire : c'est la même chose tant qu'on ne tue que des pions adverses. Le cas
-    /// d'un pion tué par une carte de son propriétaire viendra en B6.
-    pub(super) fn send_to_infirmary(&mut self, pion: Pion, events: &mut Vec<Event>) {
+    /// son propriétaire (carnet, 2026-10-30), ou directement dans la réserve si cette durée
+    /// est 0. Un pion du joueur courant (tué par une vengeance, par exemple) ne compte pas
+    /// le tour en cours.
+    ///
+    /// À l'infirmerie, il laisse sa tombe sur la case `at` où il est mort ; elle remplace
+    /// la tombe qui s'y trouvait (une case porte au plus une tombe, carnet, 2026-10-30).
+    pub(super) fn send_to_infirmary(&mut self, pion: Pion, at: Position, events: &mut Vec<Event>) {
         let turns = self.config.infirmary_turns;
         if turns == 0 {
             self.return_to_reserve(pion.owner(), events);
             return;
         }
-        let last_turn = self.last_turn_of(turns);
+        let last_turn = self.last_turn_of(pion.owner(), turns);
         let patient = Patient::new(pion, last_turn);
         self.infirmary.push(patient);
         events.push(Event::InfirmaryEntered(patient));
+        if let Some(replaced) = self.board.set_tomb(at, Some(pion)) {
+            events.push(Event::TombRemoved { pion: replaced, at });
+        }
+        events.push(Event::TombAdded { pion, at });
+    }
+
+    /// Ce pion sort de l'infirmerie (vers la réserve ou, ressuscité, vers le plateau) : sa
+    /// tombe s'efface, s'il en a encore une. Faux s'il n'y était pas.
+    pub(super) fn leave_infirmary(&mut self, pion: PionId, events: &mut Vec<Event>) -> bool {
+        let index = self
+            .infirmary
+            .iter()
+            .position(|patient| patient.pion().id() == pion);
+        let Some(index) = index else {
+            return false;
+        };
+        let patient = self.infirmary.remove(index);
+        events.push(Event::InfirmaryLeft(patient));
+        if let Some(at) = self.board.tomb_of(pion) {
+            self.board.set_tomb(at, None);
+            events.push(Event::TombRemoved {
+                pion: patient.pion(),
+                at,
+            });
+        }
+        true
     }
 
     fn return_to_reserve(&mut self, owner: Player, events: &mut Vec<Event>) {
@@ -110,21 +186,31 @@ impl Game {
     pub(super) fn end_what_expires(&mut self, events: &mut Vec<Event>) -> bool {
         let turn = self.turn;
         let before = events.len();
-        self.end_effects(|effect| effect.last_turn() <= turn, events);
-        let (leaving, staying): (Vec<Patient>, Vec<Patient>) = std::mem::take(&mut self.infirmary)
-            .into_iter()
-            .partition(|patient| patient.last_turn() <= turn);
-        self.infirmary = staying;
-        for patient in leaving {
-            events.push(Event::InfirmaryLeft(patient));
-            self.return_to_reserve(patient.pion().owner(), events);
+        self.end_effects(
+            |effect| effect.last_turn().is_some_and(|last| last <= turn),
+            events,
+        );
+        let leaving: Vec<Pion> = self
+            .infirmary
+            .iter()
+            .filter(|patient| patient.last_turn() <= turn)
+            .map(|patient| patient.pion())
+            .collect();
+        for pion in leaving {
+            if self.leave_infirmary(pion.id(), events) {
+                self.return_to_reserve(pion.owner(), events);
+            }
         }
         events.len() > before
     }
 
     /// Vrai si quelque chose est programmé pour changer la partie plus tard : un effet
-    /// continu qui s'arrêtera, un pion qui sortira de l'infirmerie.
+    /// continu qui s'arrêtera à un tour donné, un pion qui sortira de l'infirmerie. Un
+    /// effet sans durée (le pacte) ne change rien tout seul : il ne compte pas.
     pub(super) fn something_is_scheduled(&self) -> bool {
-        !self.effects.is_empty() || !self.infirmary.is_empty()
+        self.effects
+            .iter()
+            .any(|effect| effect.last_turn().is_some())
+            || !self.infirmary.is_empty()
     }
 }

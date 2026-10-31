@@ -373,22 +373,16 @@ impl Game {
 
     fn execute_place(&mut self, pos: Position, events: &mut Vec<Event>) {
         let player = self.current_player;
-        let pion = Pion::new(self.next_pion_id, player);
         // La position a été validée. En debug, un écart futur entre `validate` et `execute`
         // est signalé tout de suite ; en release, le plateau est modifié en premier, donc
-        // si `set` refusait quand même, rien d'autre n'aurait encore changé.
+        // si la pose échouait quand même, rien d'autre n'aurait encore changé.
         debug_assert!(self.board.contains(pos), "pose validée hors du plateau");
-        if self.board.set(pos, Cell::with_pion(pion)).is_err() {
+        if !self.put_pion(pos, events) {
             return;
         }
-        self.next_pion_id = self.next_pion_id.next();
         self.placements_this_turn = self.placements_this_turn.saturating_add(1);
-        // Les soustractions ne peuvent pas passer sous zéro : `validate` a vérifié les deux.
+        // La soustraction ne peut pas passer sous zéro : `validate` l'a vérifiée.
         self.actions_left = self.actions_left.saturating_sub(self.config.place_cost);
-        let reserve = &mut self.reserve_pions[player.index()];
-        *reserve = reserve.saturating_sub(1);
-        events.push(Event::PionPlaced { pion, at: pos });
-        events.push(self.reserve_changed(player));
         // Une pose gratuite ne change pas les compteurs d'actions : rien à annoncer.
         if self.config.place_cost > 0 {
             events.push(self.actions_changed(player));
@@ -403,6 +397,34 @@ impl Game {
         } else {
             self.after_action(events);
         }
+    }
+
+    /// Pose sur cette case libre un nouveau pion du joueur courant, pris dans sa réserve, et
+    /// l'annonce : la pose normale et les cartes qui posent passent par ici. Faux, sans rien
+    /// changer, si la case n'est pas libre ou la réserve vide.
+    pub(super) fn put_pion(&mut self, at: Position, events: &mut Vec<Event>) -> bool {
+        let player = self.current_player;
+        if self.reserve_pions[player.index()] == 0 || !self.create_pion(at, events) {
+            return false;
+        }
+        let reserve = &mut self.reserve_pions[player.index()];
+        *reserve = reserve.saturating_sub(1);
+        events.push(self.reserve_changed(player));
+        true
+    }
+
+    /// Crée sur cette case libre un nouveau pion du joueur courant et l'annonce. Il reçoit
+    /// une nouvelle identité, donc compte comme posé ce tour. D'où il vient (réserve,
+    /// infirmerie) est l'affaire de l'appelant. Faux, sans rien changer, si la case n'est
+    /// pas libre.
+    pub(super) fn create_pion(&mut self, at: Position, events: &mut Vec<Event>) -> bool {
+        let pion = Pion::new(self.next_pion_id, self.current_player);
+        if self.board.place_pion(at, pion).is_err() {
+            return false;
+        }
+        self.next_pion_id = self.next_pion_id.next();
+        events.push(Event::PionPlaced { pion, at });
+        true
     }
 
     /// Ce qui suit toute action qui a modifié le plateau sans faire gagner : la partie peut

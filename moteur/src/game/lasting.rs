@@ -29,7 +29,7 @@ impl fmt::Display for EffectId {
 }
 
 /// Ce que fait un effet continu. D'autres sortes viendront avec les cartes qui en ont
-/// besoin (couronne, jetons, pacte…).
+/// besoin (couronne, jetons…).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EffectKind {
     /// Statut immobilisé : le pion ne peut pas lancer d'attaque, donc pas non plus bouger
@@ -37,14 +37,28 @@ pub enum EffectKind {
     Immobilized,
     /// Statut protégé : le pion ne peut pas être tué.
     Protected,
+    /// Le pacte de Meilleurs amis : si ce pion est tué, `friend` venge sa mort. Chacun des
+    /// deux amis porte le sien. Sans durée.
+    Pact {
+        /// L'autre ami.
+        friend: PionId,
+    },
 }
 
-/// « immobilisé », « protégé ».
+impl EffectKind {
+    /// Vrai pour un statut (immobilisé, protégé) : ce qu'Attila Commune retire.
+    pub fn is_status(self) -> bool {
+        matches!(self, EffectKind::Immobilized | EffectKind::Protected)
+    }
+}
+
+/// « immobilisé », « protégé », « lié par un pacte avec #3 ».
 impl fmt::Display for EffectKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             EffectKind::Immobilized => write!(f, "immobilisé"),
             EffectKind::Protected => write!(f, "protégé"),
+            EffectKind::Pact { friend } => write!(f, "lié par un pacte avec {friend}"),
         }
     }
 }
@@ -58,7 +72,7 @@ pub struct ActiveEffect {
     pion: PionId,
     creator: Player,
     source: Attack,
-    last_turn: u32,
+    last_turn: Option<u32>,
 }
 
 impl ActiveEffect {
@@ -68,7 +82,7 @@ impl ActiveEffect {
         pion: PionId,
         creator: Player,
         source: Attack,
-        last_turn: u32,
+        last_turn: Option<u32>,
     ) -> ActiveEffect {
         ActiveEffect {
             id,
@@ -106,13 +120,23 @@ impl ActiveEffect {
     }
 
     /// Le dernier tour où il agit ([`crate::Game::turn`]) : il s'éteint à la fin de ce tour.
-    pub fn last_turn(self) -> u32 {
+    /// `None` pour un effet sans durée (le pacte), qui ne s'arrête que par un événement.
+    pub fn last_turn(self) -> Option<u32> {
         self.last_turn
     }
 
-    /// Vrai si cet effet vise ce pion et a été créé par ce joueur.
-    pub(crate) fn is_on_by(self, pion: PionId, creator: Player) -> bool {
-        self.pion == pion && self.creator == creator
+    /// Vrai si cet effet est un statut sur ce pion, posé par ce joueur : ce qu'Attila
+    /// Commune retire.
+    pub(crate) fn is_status_on_by(self, pion: PionId, creator: Player) -> bool {
+        self.kind.is_status() && self.pion == pion && self.creator == creator
+    }
+
+    /// L'autre ami, si cet effet est le pacte de ce pion.
+    pub(crate) fn friend_of(self, pion: PionId) -> Option<PionId> {
+        match self.kind {
+            EffectKind::Pact { friend } if self.pion == pion => Some(friend),
+            _ => None,
+        }
     }
 }
 

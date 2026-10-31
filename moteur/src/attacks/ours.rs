@@ -72,13 +72,11 @@ impl AttackRules for Ours {
 mod tests {
     use super::*;
     use crate::attacks::Launch;
-    use crate::{Board, Cell, Pion, PionId, Player};
+    use crate::{Board, Pion, PionId, Player};
 
     fn put(board: &mut Board, row: usize, col: usize, player: Player) {
         let pion = Pion::new(PionId::FIRST, player);
-        board
-            .set(Position { row, col }, Cell::with_pion(pion))
-            .unwrap();
+        board.place_pion(Position { row, col }, pion).unwrap();
     }
 
     #[test]
@@ -98,6 +96,7 @@ mod tests {
             rarity: Rarity::Rare,
             launch: Launch::Now,
             sick_from: None,
+            reserve: 0,
         };
         let mut targets = Ours.candidate_targets(&context, &[]);
         targets.sort_by_key(|pos| (pos.row, pos.col));

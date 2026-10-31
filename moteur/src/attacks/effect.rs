@@ -1,9 +1,9 @@
-use crate::{EffectKind, Position};
+use crate::{EffectKind, PionId, Position};
 
 /// Une opération de base produite par une attaque. Les familles décrivent leurs effets avec
 /// ces primitives ; seul le résolveur de la partie les applique, émet les événements et
-/// déclenche les conséquences (infirmerie, fin des effets d'un pion tué…). De nouvelles
-/// primitives (poser…) s'ajouteront avec les familles qui en ont besoin (catalogue dans
+/// déclenche les conséquences (infirmerie, fin des effets d'un pion tué, vengeance…). De
+/// nouvelles primitives s'ajouteront avec les familles qui en ont besoin (catalogue dans
 /// l'architecture).
 ///
 /// Les effets s'appliquent dans l'ordre : chaque case désigne le pion qui s'y trouve au
@@ -26,9 +26,9 @@ pub(crate) enum Effect {
         /// Sa durée, en tours de l'adversaire du joueur qui attaque.
         turns: u32,
     },
-    /// Retirer du pion de cette case tous les effets créés par l'adversaire du joueur qui
-    /// attaque.
-    RemoveEnemyEffects {
+    /// Retirer du pion de cette case tous les statuts (immobilisé, protégé) posés par
+    /// l'adversaire du joueur qui attaque.
+    RemoveEnemyStatuses {
         /// La case du pion visé.
         at: Position,
     },
@@ -39,6 +39,30 @@ pub(crate) enum Effect {
         from: Position,
         /// La case d'arrivée.
         to: Position,
+    },
+    /// Poser un pion de la réserve du joueur qui attaque sur cette case libre. Comme une
+    /// pose : il reçoit une nouvelle identité et compte comme posé ce tour, mais n'utilise
+    /// pas la pose normale du tour et ne coûte rien de plus.
+    Place {
+        /// La case où il arrive.
+        at: Position,
+    },
+    /// Ressusciter ce pion du joueur qui attaque : il sort de l'infirmerie (sa tombe
+    /// s'efface) et revient sur la case libre `at`, comme un pion posé ce tour. Il est
+    /// désigné par son identité : si une autre tombe a remplacé la sienne (l'occupant tué
+    /// par le Médecin Épique), il revient quand même.
+    Resurrect {
+        /// Le pion à ressusciter.
+        pion: PionId,
+        /// La case où il revient.
+        at: Position,
+    },
+    /// Lier par un pacte (Meilleurs amis) les pions de ces deux cases.
+    Bind {
+        /// La case du premier ami.
+        a: Position,
+        /// La case du second ami.
+        b: Position,
     },
     /// Échanger les pions de deux cases, d'un coup.
     Swap {

@@ -8,6 +8,8 @@ mod card;
 mod effect;
 mod interchange;
 mod lievre;
+mod medecin;
+mod meilleurs_amis;
 mod ours;
 mod reach;
 mod reine;
@@ -28,9 +30,11 @@ impl AttackKind {
             AttackKind::SautDuLoup => &saut_du_loup::SautDuLoup,
             AttackKind::Reine => &reine::Reine,
             AttackKind::Attila => &attila::Attila,
+            AttackKind::Medecin => &medecin::Medecin,
             AttackKind::Interchange => &interchange::Interchange,
             AttackKind::Ours => &ours::Ours,
             AttackKind::Lievre => &lievre::Lievre,
+            AttackKind::MeilleursAmis => &meilleurs_amis::MeilleursAmis,
         }
     }
 }

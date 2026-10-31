@@ -4,8 +4,8 @@ mod common;
 
 use common::{SEED, game_with, new_game, place, random_config};
 use fight_of_pions::{
-    Action, ActiveEffect, AttackKind, Event, Game, GameConfig, GameEnd, GameError, GameRecord,
-    Patient, Pion, PionId, Player, Position, Rarity, ReplayError, Rng,
+    Action, ActiveEffect, AttackKind, EffectKind, Event, Game, GameConfig, GameEnd, GameError,
+    GameRecord, Patient, Pion, PionId, Player, Position, Rarity, ReplayError, Rng,
 };
 
 /// Ce qu'un client sait de la partie s'il ne suit **que** les événements, en partant de
@@ -30,6 +30,8 @@ struct EventMirror {
     effects: Vec<ActiveEffect>,
     /// Les pions à l'infirmerie, dans l'ordre d'arrivée.
     infirmary: Vec<Patient>,
+    /// La tombe de chaque case, s'il y en a une.
+    tombs: Vec<Option<Pion>>,
     pions_per_player: u32,
 }
 
@@ -54,6 +56,7 @@ impl EventMirror {
             summoning_sickness: config.summoning_sickness,
             effects: Vec::new(),
             infirmary: Vec::new(),
+            tombs: vec![None; config.board_size * config.board_size],
             pions_per_player: config.pions_per_player,
         }
     }
@@ -163,6 +166,16 @@ impl EventMirror {
                 );
                 self.infirmary.push(patient);
             }
+            Event::TombAdded { pion, at } => {
+                let tomb = &mut self.tombs[at.row * self.size + at.col];
+                assert_eq!(*tomb, None, "deux tombes sur une case : {event:?}");
+                *tomb = Some(pion);
+            }
+            Event::TombRemoved { pion, at } => {
+                let tomb = &mut self.tombs[at.row * self.size + at.col];
+                assert_eq!(*tomb, Some(pion), "tombe absente : {event:?}");
+                *tomb = None;
+            }
             Event::InfirmaryLeft(patient) => {
                 let index = self.infirmary.iter().position(|known| *known == patient);
                 let index = index.unwrap_or_else(|| panic!("patient inconnu : {event:?}"));
@@ -220,9 +233,30 @@ impl EventMirror {
         assert_eq!(self.end, game.end());
         assert_eq!(self.effects, game.active_effects(), "effets continus");
         assert_eq!(self.infirmary, game.infirmary(), "infirmerie");
+        for pos in game.board().positions() {
+            let mirrored = self.tombs[pos.row * self.size + pos.col];
+            assert_eq!(mirrored, game.board().tomb(pos), "tombe en {pos}");
+            // Une tombe appartient toujours à un pion encore à l'infirmerie.
+            if let Some(dead) = mirrored {
+                assert!(self.infirmary.iter().any(|patient| patient.pion() == dead));
+            }
+        }
         // Aucun effet ne survit à son pion.
         for effect in &self.effects {
             assert!(self.is_on_board(effect.pion()), "{effect:?}");
+        }
+        // Un pacte lie toujours deux amis sur le plateau, chacun portant celui de l'autre.
+        for effect in &self.effects {
+            if let EffectKind::Pact { friend } = effect.kind() {
+                let mutual = EffectKind::Pact {
+                    friend: effect.pion(),
+                };
+                let reciprocal = self
+                    .effects
+                    .iter()
+                    .any(|other| other.pion() == friend && other.kind() == mutual);
+                assert!(reciprocal, "pacte sans réciproque : {effect:?}");
+            }
         }
         // Aucun pion ne se perd : plateau, réserve et infirmerie font toujours le compte.
         for player in [Player::One, Player::Two] {
@@ -330,9 +364,11 @@ fn events_are_enough_to_follow_the_board() {
         AttackKind::SautDuLoup,
         AttackKind::Reine,
         AttackKind::Attila,
+        AttackKind::Medecin,
         AttackKind::Interchange,
         AttackKind::Ours,
         AttackKind::Lievre,
+        AttackKind::MeilleursAmis,
     ] {
         assert!(kinds_played.contains(&kind), "{kind} jamais jouée");
     }

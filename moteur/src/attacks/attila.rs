@@ -24,7 +24,7 @@ impl AttackRules for Attila {
         1..=1
     }
 
-    /// Les pions, n'importe où, qui portent un effet créé par l'adversaire.
+    /// Les pions, n'importe où, qui portent un statut posé par l'adversaire.
     fn candidate_targets(&self, context: &AttackContext, chosen: &[Position]) -> Vec<Position> {
         let enemy = context.player.opponent();
         context
@@ -40,7 +40,7 @@ impl AttackRules for Attila {
                         context
                             .effects
                             .iter()
-                            .any(|effect| effect.is_on_by(pion.id(), enemy))
+                            .any(|effect| effect.is_status_on_by(pion.id(), enemy))
                     })
             })
             .collect()
@@ -49,7 +49,7 @@ impl AttackRules for Attila {
     fn effects(&self, _context: &AttackContext, targets: &[Position]) -> Vec<Effect> {
         targets
             .iter()
-            .map(|&at| Effect::RemoveEnemyEffects { at })
+            .map(|&at| Effect::RemoveEnemyStatuses { at })
             .collect()
     }
 }

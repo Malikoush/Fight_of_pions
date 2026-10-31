@@ -14,12 +14,16 @@ pub enum AttackKind {
     Reine,
     /// Le contre des effets en cours (fiche n°04).
     Attila,
+    /// La résurrection des pions tombés, sur leur tombe (fiche n°05).
+    Medecin,
     /// L'échange de cases avec un pion adverse (fiche n°06).
     Interchange,
     /// Le corps à corps, sur les 8 cases collées au lanceur (fiche n°09).
     Ours,
     /// Le mouvement pur, pas à pas (fiche n°10).
     Lievre,
+    /// Deux pions liés par un pacte : si l'un est tué, l'autre le venge (fiche n°12).
+    MeilleursAmis,
 }
 
 impl fmt::Display for AttackKind {
@@ -29,9 +33,11 @@ impl fmt::Display for AttackKind {
             AttackKind::SautDuLoup => write!(f, "Saut du loup"),
             AttackKind::Reine => write!(f, "Reine"),
             AttackKind::Attila => write!(f, "Attila"),
+            AttackKind::Medecin => write!(f, "Médecin"),
             AttackKind::Interchange => write!(f, "Interchange"),
             AttackKind::Ours => write!(f, "Ours"),
             AttackKind::Lievre => write!(f, "Lièvre"),
+            AttackKind::MeilleursAmis => write!(f, "Meilleurs amis"),
         }
     }
 }

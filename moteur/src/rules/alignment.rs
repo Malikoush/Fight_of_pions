@@ -50,15 +50,13 @@ pub fn has_line(board: &Board, player: Player, target: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Cell, Pion, PionId};
+    use crate::{Pion, PionId};
 
     /// Pose un pion pour un test. Plante si la case est hors du plateau.
     /// L'identité du pion n'a pas d'importance pour l'alignement.
     fn put_pion(board: &mut Board, row: usize, col: usize, player: Player) {
         let pion = Pion::new(PionId::FIRST, player);
-        board
-            .set(Position { row, col }, Cell::with_pion(pion))
-            .unwrap();
+        board.place_pion(Position { row, col }, pion).unwrap();
     }
 
     #[test]

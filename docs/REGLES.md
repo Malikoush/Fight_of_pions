@@ -24,7 +24,7 @@ Une partie refuse de démarrer si ses réglages sont incohérents :
 - (2026-10-27) chaque attaque du catalogue doit être jouable par le moteur, n'y figurer qu'une fois, coûter au moins une action et au plus ce qu'on peut avoir en économisant, et avoir une recharge d'au moins 1 tour ;
 - (2026-10-27) chaque attaque de départ d'un joueur doit être dans le catalogue.
 
-Une configuration où la victoire semble impossible (moins de pions que l'alignement demandé) est **acceptée** : elle sert aux tests, et les invocations pourraient la rendre jouable (à revoir en B5).
+Une configuration où la victoire semble impossible (moins de pions que l'alignement demandé) est **acceptée** : elle sert aux tests, et les invocations ne la rendent pas jouable (2026-10-30 : un pion invoqué vient de la réserve).
 
 ### Tour de jeu (2026-10-26)
 
@@ -69,14 +69,14 @@ Une action est refusée, sans rien modifier, si :
 - (2026-10-30) Une attaque **sans effet** n'est jamais proposée : un Grognement sans ennemi collé au lanceur, un Attila sans statut adverse à retirer…
 - Une attaque commencée va **toujours au bout** ; pendant les choix, aucune autre action n'est possible. L'annulation se fait dans l'interface, avant d'envoyer les choix au moteur.
 - Le **coût est payé** et la carte part **en recharge** quand l'attaque est jouée. Elle redevient prête au début du tour de son propriétaire, une fois sa recharge écoulée.
-- Un pion **tué** quitte le plateau ; ses effets continus s'arrêtent. Il retourne dans la réserve de son propriétaire, tout de suite ou après l'infirmerie (voir plus bas). Il ne laisse pas de tombe (pas avant le Médecin).
+- Un pion **tué** quitte le plateau ; ses effets continus s'arrêtent. Il retourne dans la réserve de son propriétaire, tout de suite ou après l'infirmerie (voir plus bas) ; à l'infirmerie, il laisse sa tombe, et le Médecin peut le ramener sur le plateau (B5b).
 - Une attaque qui dépense les dernières actions du tour termine le tour, comme une pose, s'il ne reste aucune pose possible (2026-10-28).
 
 ### Statuts et durées (2026-10-30)
 
 Les règles communes des attaques décidées le 2026-10-30 (voir « Règles communes des attaques », plus bas), codées :
 
-- Un **effet continu** est ce qu'une carte laisse en jeu : pour l'instant, deux statuts, posés sur un pion (qu'ils suivent par son identité) :
+- Un **effet continu** est ce qu'une carte laisse en jeu, posé sur un pion qu'il suit par son identité : deux statuts (ci-dessous), et le pacte de Meilleurs amis (sans durée, B5a). Les statuts :
   - **immobilisé** : le pion ne peut pas lancer d'attaque (refus : « aucun lanceur prêt ») ;
   - **protégé** : le pion ne peut pas être choisi comme cible d'un kill ; il peut encore être immobilisé.
 - Chaque effet retient le joueur qui l'a créé et la carte qui l'a créé. Un pion est immobilisé tant qu'au moins un effet l'immobilise : deux immobilisations se superposent, sans règle de cumul.
@@ -86,7 +86,7 @@ Les règles communes des attaques décidées le 2026-10-30 (voir « Règles comm
 
 ### Infirmerie (2026-10-30)
 
-- Un pion tué passe `infirmary_turns` tours à l'infirmerie (2 dans les règles cibles, 0 par défaut : retour immédiat dans la réserve, comme avant). La durée suit la même horloge que les effets : elle se compte en tours de l'adversaire du joueur qui l'a tué, c'est-à-dire aujourd'hui de son propriétaire (on ne tue que des pions adverses) ; il revient dans la réserve de son propriétaire à la fin du dernier de ces tours, et peut être reposé au tour suivant. Décidé le 2026-10-30 : l'infirmerie se compte toujours en tours du propriétaire du pion, même tué par sa propre carte (codé en B6, avec la première carte qui le permet).
+- Un pion tué passe `infirmary_turns` tours à l'infirmerie (2 dans les règles cibles, 0 par défaut : retour immédiat dans la réserve, comme avant). La durée suit la même horloge que les effets, mais se compte toujours en tours du **propriétaire** du pion (décidé le 2026-10-30), même tué pendant son propre tour (une vengeance, codé en B5a) : le tour en cours ne compte pas. Il revient dans la réserve de son propriétaire à la fin du dernier de ces tours, et peut être reposé au tour suivant.
 - L'infirmerie n'est pas un effet continu : aucune carte ne l'annule.
 
 ### Ours (2026-10-27, complété le 2026-10-30)
@@ -106,17 +106,18 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
 - **Commune** : immobilise 1 pion adverse pendant 2 tours.
 - **Rare** : immobilise 2 pions adverses différents pendant 2 tours.
 - **Charme fatal** : un pion visé déjà immobilisé (par n'importe quelle carte) est tué ; s'il est protégé, il est seulement immobilisé à nouveau.
-- L'Épique et la Légendaire (séduction) viendront avec la pose (B5).
+- (2026-10-30) **Épique** : séduit 1 pion adverse dans le regard. **Légendaire** : séduit 1 pion adverse n'importe où ; le nouveau pion est protégé jusqu'au prochain tour du joueur (1 tour de l'adversaire).
+- **Séduction** : le pion visé est tué (c'est un kill), puis un pion de ta réserve est posé à sa place. Ce n'est pas un changement de camp (carnet, 2026-10-30). Impossible si ta réserve est vide ou si la cible est protégée. Le pion posé compte comme posé ce tour et n'utilise pas la pose normale.
 
 ### Reine : le Garde royal (2026-10-30)
 
 - **Commune** : le lanceur est protégé pendant 2 tours. Comme toute carte qui agit sur un de tes pions, elle s'applique au lanceur, qui doit donc être posé avant ce tour et non immobilisé. Pas de cible à choisir.
 - Un joueur qui l'a dans son arsenal peut toujours agir tant qu'il a un pion sur le plateau (un pion posé ce tour ou immobilisé pourra la lancer plus tard) : une telle partie ne se fige jamais, la limite de tours la termine.
-- La Rare, l'Épique et la Légendaire (la reine) viendront avec la pose (B5).
+- La Rare, l'Épique et la Légendaire (la reine) viendront en B5c.
 
 ### Attila Commune (2026-10-30)
 
-- **Commune** : sur tout le plateau, retire d'un pion tous les effets placés par l'adversaire (immobilisé, protégé), quelle que soit la carte qui les a posés. Le pion peut être à toi (le libérer) ou à l'adversaire (lui ôter sa protection). Un pion qui ne porte que tes propres effets ne peut pas être visé.
+- **Commune** : sur tout le plateau, retire d'un pion tous les **statuts** placés par l'adversaire (immobilisé, protégé ; pas un pacte), quelle que soit la carte qui les a posés. Le pion peut être à toi (le libérer) ou à l'adversaire (lui ôter sa protection). Un pion qui ne porte que tes propres effets ne peut pas être visé.
 - La Rare, l'Épique et la Légendaire (effets entiers, Terre brûlée) viendront avec l'annulation (B6).
 
 ### Mouvement (2026-10-30)
@@ -131,13 +132,13 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
 - **Commune** : 1 saut ; un pion adverse survolé est immobilisé 2 tours.
 - **Rare** : 1 saut meurtrier. **Épique** : jusqu'à 2. **Légendaire** : jusqu'à 3.
 - **Saut meurtrier** : le pion adverse survolé est tué tout de suite ; sa case est libre pour la suite. Un pion protégé peut être survolé, mais il n'est pas tué.
-- **Sauts enchaînés** : chaque saut part de la case d'arrivée du précédent ; on peut s'arrêter avant le maximum, et repasser par une case déjà visitée, mais jamais survoler deux fois le même pion.
+- **Sauts enchaînés** : chaque saut part de la case d'arrivée du précédent ; on peut s'arrêter avant le maximum, et repasser par une case déjà visitée, y compris sa case de départ (même sans avoir survolé de pion, décidé le 2026-10-30), mais jamais survoler deux fois le même pion.
 - Les choix : le lanceur, puis chaque case d'arrivée.
 
 ### Lièvre (2026-10-30)
 
 - Un **pas** va vers une case libre collée (8 directions) ; on peut tourner en chemin, jamais passer par-dessus un pion.
-- **Commune** : 1 de tes pions avance de jusqu'à 2 pas. **Rare** : jusqu'à 2 pions, de jusqu'à 2 pas chacun. **Légendaire** : jusqu'à 3 pions, de jusqu'à 3 pas chacun. « Jusqu'à 2 (3) pions » est une hypothèse, en attendant la réponse à la question ouverte (voir les questions bloquantes) ; « jusqu'à 2 (3) pas » est décidé.
+- **Commune** : 1 de tes pions avance de jusqu'à 2 pas. **Rare** : jusqu'à 2 pions, de jusqu'à 2 pas chacun. **Légendaire** : jusqu'à 3 pions, de jusqu'à 3 pas chacun.
 - Chaque pion qui avance finit sur une autre case que sa case de départ.
 - Le premier pion est le lanceur ; les suivants sont des lanceurs aussi (posés avant ce tour, non immobilisés), différents, et bougent l'un après l'autre : le deuxième voit la nouvelle place du premier.
 - Les choix : le lanceur, ses pas, puis le pion suivant et ses pas… Un pas se choisit sur une case libre, un pion suivant sur un de tes pions : les deux ne se confondent jamais.
@@ -150,6 +151,34 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
 - Le pion adverse peut être protégé ou immobilisé.
 - La Commune (téléportation avec retour) et la Légendaire viendront avec les retours programmés (B6).
 
+### Une carte qui pose (2026-10-30)
+
+- Le pion vient de la réserve du joueur, sur une case libre, n'importe où (« une carte qui pose agit comme une pose »). Il reçoit une nouvelle identité et compte comme posé ce tour (mal du débarquement), mais n'utilise pas la pose normale du tour et ne coûte rien de plus que la carte.
+- Une ligne faite par une carte qui pose suit la règle des lignes faites par une carte : elle gagne au début du tour de son propriétaire.
+
+### Kill et vengeance (2026-10-30)
+
+- Est un **kill** tout pion envoyé à l'infirmerie ou au cimetière : par une attaque, par une séduction, par une vengeance. L'**assassin** est le pion qui a lancé l'attaque, même s'il a bougé.
+- L'infirmerie se compte en tours du **propriétaire** du pion tué. Un pion tué pendant le tour de son propriétaire (par une vengeance) ne compte pas ce tour-là.
+
+### Tombes et Médecin (2026-10-30)
+
+- **Tombe** : un pion tué qui part à l'infirmerie laisse une tombe sur la case où il est mort. Elle disparaît quand il sort de l'infirmerie (retour dans la réserve, ou résurrection). Une tombe ne bloque pas la case, et reste sur sa case quand un pion y arrive, en part, bouge ou est échangé. Une case porte au plus une tombe : la plus récente remplace l'autre, et le premier pion reste à l'infirmerie sans pouvoir être ressuscité. Sans infirmerie, pas de tombe.
+- **Médecin** : il ressuscite un de tes pions de l'infirmerie, sur sa propre tombe (jamais sur une tombe adverse), n'importe où. Le pion revenu reçoit une nouvelle identité, compte comme posé ce tour, n'utilise pas ta pose normale et ne vient pas de ta réserve.
+  - **Commune** : 1 pion, sur une tombe libre. **Rare** : jusqu'à 2 pions, sur des tombes libres.
+  - **Épique** : 1 pion, même sur une tombe occupée par un pion adverse, qui est tué (un kill, dont l'assassin est le lanceur du Médecin) ; le pion revenu est protégé 2 tours.
+  - **Légendaire** : tous tes pions qui peuvent revenir, même sur des tombes occupées par un pion adverse ; il en faut au moins un. Pas de choix.
+  - Une tombe occupée par ton propre pion, ou par un pion adverse protégé, ne permet pas de revenir : l'Épique ne peut pas la viser, la Légendaire saute ce pion.
+- Le Médecin ne sert qu'avec l'infirmerie (règles cibles).
+
+### Meilleurs amis (2026-10-30)
+
+- **Épique** (version unique) : pose 2 pions de ta réserve n'importe où, liés par un **pacte**. Impossible avec moins de 2 pions en réserve. Rejouer la carte crée un autre pacte, indépendant.
+- **Vengeance** : à la fin d'une attaque, si un seul des deux amis a été tué par cette attaque, l'autre tue l'assassin, même s'il est immobilisé. Si les deux sont morts pendant la même attaque, personne ne se venge. Si l'assassin est protégé ou déjà mort, la vengeance échoue.
+- Après la vengeance (réussie ou non), le pacte prend fin : l'ami survivant redevient un pion normal.
+- Une vengeance est un kill : si l'assassin était lui-même lié par un pacte, son ami le venge à son tour. La chaîne s'arrête, puisque chaque vengeance met fin à un pacte.
+- Le pacte est un effet continu sans durée : il ne compte pas comme « programmé » pour la partie figée. Attila Commune ne le retire pas (ce n'est pas un statut).
+
 ### Fin de partie (2026-10-26)
 
 Une partie se termine dans l'un de ces trois cas, vérifiés dans cet ordre :
@@ -157,7 +186,7 @@ Une partie se termine dans l'un de ces trois cas, vérifiés dans cet ordre :
 1. **Alignement** : une ligne d'au moins `align_to_win` pions fait gagner son propriétaire :
    - sans la règle d'or (par défaut), dès qu'elle est faite en posant ;
    - **au début de son tour**, si elle y est encore, dans tous les cas (2026-10-29). C'est ce qui fait gagner avec la règle d'or (`golden_rule`), et ce qui couvre les lignes faites par une carte, y compris une carte de l'adversaire. Ce contrôle passe avant le gain des actions et les recharges : le joueur qui gagne ainsi ne reçoit pas ses actions.
-2. **Partie figée** : plus aucun joueur ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation : aucun effet continu en jeu, personne à l'infirmerie (2026-10-30). Elle est vérifiée après chaque action, et à la fin d'un tour où un effet s'est arrêté ou un pion est sorti de l'infirmerie. Un joueur peut encore agir s'il peut poser (un pion en réserve et une case libre) ou lancer une attaque qui a une cible, même si elle est en recharge ou qu'il doit économiser pour la payer (2026-10-27). Résultat : **match nul**.
+2. **Partie figée** : plus aucun joueur ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation : aucun effet continu à durée (un pacte, sans durée, ne compte pas), personne à l'infirmerie (2026-10-30). Elle est vérifiée après chaque action, et à la fin d'un tour où un effet s'est arrêté ou un pion est sorti de l'infirmerie. Un joueur peut encore agir s'il peut poser (un pion en réserve et une case libre) ou lancer une attaque qui a une cible, même si elle est en recharge ou qu'il doit économiser pour la payer (2026-10-27). Résultat : **match nul**.
    Une réserve vide ne fige donc plus la partie tant qu'un contact entre ennemis permet d'attaquer. Le risque principal devient la partie sans fin, traité par la limite de tours et l'anti-stagnation.
 3. **Limite de tours** : à la fin du tour numéro `max_turns` (200 par défaut). Chaque tour d'un joueur compte : 200 tours font 100 tours par joueur. C'est un filet de sécurité pour les bots ; il n'est pas censé arriver dans une vraie partie. Résultat : **match nul**.
 
@@ -167,7 +196,7 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 
 ## Pas encore implémenté
 
-- Les autres attaques que l'Ours, la Beauté fatale Commune et Rare, le Saut du loup, le Garde royal, Attila Commune, l'Interchange Rare et Épique, et le Lièvre Commune, Rare et Légendaire ; et les réactions.
+- Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, le Garde royal, Attila Commune, le Médecin, l'Interchange Rare et Épique, le Lièvre Commune, Rare et Légendaire, et Meilleurs amis ; et les réactions.
 - La défaite par manque de pions (avec le cimetière, B6).
 - Le draft et la cache secrète.
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
@@ -242,8 +271,8 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B4 | Saut du loup, sauts enchaînés : le pion survolé meurt-il tout de suite, ou à la fin de tous les sauts ? | Tout de suite | **2026-10-30** : tout de suite ; sa case est libre pour la suite. Un saut fait **toujours 2 cases**, même dans le vide. Le loup peut repasser par une case déjà visitée ; seul interdit : survoler deux fois le même pion. |
 | B4 | Lièvre : « avance de 2 pas », exactement 2 ou jusqu'à 2 ? | Jusqu'à 2, sans finir sur sa case de départ | **2026-10-30** : jusqu'à 2 pas (3 pour la Légendaire), et le pion finit sur une autre case que sa case de départ. |
 | B4 | Lièvre Rare et Légendaire : plusieurs pions | Des pions différents, l'un après l'autre ; chacun est un lanceur | **2026-10-30** : oui. Le deuxième pion voit la nouvelle place du premier. |
-| B4 | Lièvre Rare et Légendaire : « 2 (3) de tes pions » : exactement, ou jusqu'à ? | Jusqu'à : on peut jouer l'attaque après un seul pion, comme pour les pas | |
-| B4 | Saut du loup Épique ou Légendaire : le loup peut-il finir sur sa case de départ sans avoir survolé de pion (aller et retour dans le vide) ? Ce n'est pas « sans effet » au sens décidé (deux déplacements), mais rien ne change, pour 3 ou 4 actions. Le Lièvre, lui, ne peut pas finir sur sa case de départ. | Non, comme le Lièvre | |
+| B4 | Lièvre Rare et Légendaire : « 2 (3) de tes pions » : exactement, ou jusqu'à ? | Jusqu'à : on peut jouer l'attaque après un seul pion, comme pour les pas | **2026-10-30** : jusqu'à. |
+| B4 | Saut du loup Épique ou Légendaire : le loup peut-il finir sur sa case de départ sans avoir survolé de pion (aller et retour dans le vide) ? Ce n'est pas « sans effet » au sens décidé (deux déplacements), mais rien ne change, pour 3 ou 4 actions. Le Lièvre, lui, ne peut pas finir sur sa case de départ. | Non, comme le Lièvre | **2026-10-30** : oui, le loup peut revenir sur sa case de départ, même sans avoir survolé de pion. |
 | B7 | Coup du taureau Rare : le pion adverse ne peut faire qu'une partie de son recul de 2 cases | Écrasé | **2026-10-30** : un pion non protégé est écrasé (infirmerie) s'il ne peut pas reculer des 2 cases. Un pion **protégé** recule aussi loin que possible et n'est jamais tué ; s'il ne peut pas reculer d'au moins une case, la charge est impossible dans cette direction. |
 | B7 | Coup du taureau : que choisit le joueur ? | La direction seulement | **2026-10-30** : la direction seulement ; la charge va aussi loin que sa rareté le permet. Le bord ne l'arrête pas : **à toutes les raretés, le taureau creuse le mur** (fiche). Seuls ses propres pions et un pion adverse protégé (Épique, Légendaire) l'arrêtent. |
 | B7 | Le mur : jusqu'où le plateau peut-il grandir ? (La fiche propose un plateau 14 × 14, soit 2 rangées de mur autour du 10 × 10.) Au-delà, la charge s'arrête-t-elle ? | Épaisseur du mur réglable (2 par défaut) ; au-delà, la limite est infranchissable et arrête la charge | |
@@ -251,14 +280,21 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B7 | Le mur arrête-t-il le regard (Beauté fatale), l'Interchange Rare et le saut du loup (sauter par-dessus du mur vers une case creusée) ? | Oui : le mur n'est pas une case du plateau tant qu'il n'est pas creusé | |
 | B5 | Les pions invoqués (Familia, Meilleurs amis, Sentinelle…) viennent-ils de la réserve ? Réserve vide = impossible ? | Oui, ils viennent de la réserve | **2026-10-29** (fiches) : oui ; réserve vide, l'invocation pose ce qu'elle peut. Seul le Médecin ressuscite depuis l'infirmerie. |
 | B5 | Un pion séduit qui meurt retourne dans la réserve de quel joueur ? | Son camp actuel | **2026-10-29** (fiches) : la question disparaît. Personne ne change de camp : séduire, c'est tuer le pion adverse puis poser un des siens à sa place. |
-| B5 | Qu'est-ce qu'un kill (pour le Massacre divin, la Queue du lézard, la vengeance et les tombes) ? | Tout pion envoyé à l'infirmerie ou au cimetière : séduction, charme fatal, écrasement, tir de la reine, retour d'Interchange, résurrection sur une tombe occupée, vengeance | |
-| B5 | Deux tombes sur une même case (un de tes pions meurt où un autre est déjà mort) ? Le Médecin Épique ou Légendaire sur une tombe occupée par **ton** pion ? | La plus récente remplace l'autre ; résurrection impossible sur ton propre pion | |
-| B5 | Rejouer une carte dont l'effet est encore en jeu : 2 reines, 2 pactes, 2 piles de jetons Massacre qui comptent pour le même kill ? | À trancher | |
+| B5 | Qu'est-ce qu'un kill (pour le Massacre divin, la Queue du lézard, la vengeance et les tombes) ? | Tout pion envoyé à l'infirmerie ou au cimetière : séduction, charme fatal, écrasement, tir de la reine, retour d'Interchange, résurrection sur une tombe occupée, vengeance | **2026-10-30** : oui. La séduction reste « tuer puis poser » (fiche), donc un kill : plus simple et déjà équilibrée (3,5) ; un vrai changement de camp pourra être essayé après les playtests. L'**assassin** est le lanceur de l'attaque, même s'il a bougé. |
+| B5 | Deux tombes sur une même case (un de tes pions meurt où un autre est déjà mort) ? Le Médecin Épique ou Légendaire sur une tombe occupée par **ton** pion ? | La plus récente remplace l'autre ; résurrection impossible sur ton propre pion | **2026-10-30** : une case porte au plus une tombe, la plus récente remplace l'autre (le premier pion reste à l'infirmerie sans pouvoir être ressuscité). Résurrection impossible sur une tombe occupée par ton propre pion. |
+| B5b | Médecin Épique ou Légendaire sur une tombe occupée par un pion adverse **protégé** | L'Épique ne peut pas viser cette tombe ; la Légendaire saute ce pion, qui reste à l'infirmerie | **2026-10-30** : oui. |
+| B5b | Médecin Légendaire (« obligatoirement tous ») quand certains pions ne peuvent pas revenir (tombe occupée par ton pion ou par un pion protégé) | Il ressuscite tous ceux qu'il peut ; il en faut au moins un pour jouer la carte | **2026-10-30** : oui. |
+| B5b | Une tombe reste-t-elle sur sa case quand un pion bouge ou est échangé ? Sans infirmerie, le Médecin est-il jouable ? | La tombe reste sur sa case ; sans infirmerie (0 tour), pas de tombe, donc pas de Médecin | **2026-10-30** : oui pour les deux : le Médecin ne sert qu'avec l'infirmerie. |
+| B5 | Rejouer une carte dont l'effet est encore en jeu : 2 reines, 2 pactes, 2 piles de jetons Massacre qui comptent pour le même kill ? | À trancher | **2026-10-30**, pour les pactes : permis, chaque pacte est indépendant. Reste à trancher pour la reine (B5c) et le Massacre divin (B6). |
+| B5 | Meilleurs amis : quand la vengeance a-t-elle lieu ? (Un Saut du loup peut tuer un ami au premier saut et l'autre au deuxième.) | À la fin de l'attaque | **2026-10-30** : à la fin de l'attaque. Si un seul des deux amis est mort pendant l'attaque, l'autre tue l'assassin ; si les deux sont morts, personne ne se venge. |
+| B5 | Vengeance en chaîne : si l'assassin est lui-même lié par un pacte, son ami le venge-t-il ? | Oui | **2026-10-30** : oui, la vengeance est un kill comme un autre. La chaîne s'arrête forcément : chaque pacte prend fin après sa vengeance. |
+| B5 | Meilleurs amis avec un seul pion en réserve (la règle commune dit qu'une invocation « pose ce qu'elle peut ») | Carte impossible | **2026-10-30** : impossible, un pacte demande deux amis. |
 | B5 | Le pas gratuit de la reine (puis le jeton du Lièvre Épique) est-il une attaque ? | Non : un « geste gratuit », sans coût, une fois par tour ; il déclenche quand même le Hibou | |
 | B6 | Le retour d'Interchange Commune est-il un effet continu (Attila peut l'annuler) ? La fiche dit « elle ne peut pas faire gagner », or le retour peut compléter une ligne de 5 avant la vérification. | Oui, c'est un effet continu ; le retour qui complète une ligne gagne (l'adversaire a eu un tour pour casser les 5 autres pions) : corriger la phrase de la fiche | |
 | B6 | Terre brûlée : « les cartes adverses s'appliquent sans leur partie continue » rend Interchange Commune plus forte (téléportation sans retour) | « Pendant Terre brûlée, l'adversaire ne peut jouer aucune carte qui crée un effet continu » | |
 | B6 | Garder le mot-clé Inébranlable, qui ne sert qu'à une carte ? | Le retirer (principe de simplicité) | |
-| B6 | Un pion tué par une carte de son propriétaire (le retour d'Interchange Commune tue « tout pion qui occupe » la case) : l'infirmerie se compte-t-elle en tours de son propriétaire, ou de l'adversaire de celui qui a joué la carte ? Aujourd'hui c'est pareil : on ne tue que des pions adverses. | En tours de son propriétaire | **2026-10-30** : en tours de son **propriétaire**, toujours. Le moteur compte aujourd'hui en tours de l'adversaire du tueur, ce qui revient au même tant qu'on ne tue que des pions adverses ; le cas d'un pion tué par une carte de son propriétaire sera codé et testé avec la première carte qui le permet (B6). |
+| B6 | Un pion tué par une carte de son propriétaire (le retour d'Interchange Commune tue « tout pion qui occupe » la case) : l'infirmerie se compte-t-elle en tours de son propriétaire, ou de l'adversaire de celui qui a joué la carte ? Aujourd'hui c'est pareil : on ne tue que des pions adverses. | En tours de son propriétaire | **2026-10-30** : en tours de son **propriétaire**, toujours. Codé en B5a : un pion tué par la vengeance pendant le tour de son propriétaire compte les tours suivants de son propriétaire (testé). |
+| B6 | Un ami tué par une carte de son propre camp (le retour d'Interchange Commune) : son ami venge-t-il sa mort sur son propre lanceur, ou sur lui-même s'il est le lanceur ? Aujourd'hui, on ne tue que des pions adverses, et le moteur tuerait le lanceur allié. | Pas de vengeance si l'assassin est du même camp ; le pacte prend fin quand même | |
 | Statuts | Une attaque « sans effet » n'est jamais proposée : mais une immobilisation qui se superpose à une autre plus longue (Grognement juste après un Rugissement), ou une seconde protection sur un pion déjà protégé, compte-t-elle comme un effet ? Elle ne change rien en jeu. | Oui, elle compte (c'est ce que fait le moteur depuis B3) : « sans effet » veut dire « aucune primitive », pas « rien ne change ». Plus simple à expliquer et à calculer. | **2026-10-30** : oui, elle compte. |
 | B6 | Interchange Légendaire : double échange, ou une des autres pistes de la fiche ? | Échange protégé (fait seulement de briques existantes : échanger + protéger) | |
 | B7 | Qu'est-ce que le « mur » du Coup du taureau ? Un trou est-il permanent ? | À définir | **2026-10-29** (fiches) : le lanceur creuse le bord, la case creusée devient normale pour toujours (plateau 14 × 14 dont le tour est du mur). Proposé le 2026-10-30 : coder d'abord la charge qui s'arrête au bord (B4), le mur ensuite s'il est gardé (B7). **2026-10-30** : le mur est gardé, à toutes les raretés ; tout le Coup du taureau passe donc en B7, avec le mur. |
@@ -289,4 +325,6 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-10-29 | B2 : la règle d'or, en option (`golden_rule`, activée dans les règles cibles). Une ligne présente au début de son tour gagne, dans tous les cas ; une ligne en attente gagne aussi quand la partie s'arrête (figée ou limite de tours). Par défaut, une ligne faite en posant gagne toujours aussitôt. |
 | 2026-10-30 | Fiches attaques validées du 2026-10-29 copiées dans [FICHES_ATTAQUES.md](FICHES_ATTAQUES.md). Règles cibles mises à jour (infirmerie, défaite par manque de pions) ; règles communes des attaques décidées (cibles, le lanceur est le pion qui agit, pas de portée par défaut, une carte qui pose agit comme une pose, fin d'une durée, protégé, recharge, banque). Pas encore codé. |
 | 2026-10-30 | B3 : statuts immobilisé et protégé, durées comptées en tours de l'adversaire, infirmerie en option (`infirmary_turns`, 2 dans les règles cibles), nombre de cibles « jusqu'à N » (`Action::FinishAttack`), attaques sans effet jamais proposées ; Ours Commune et Légendaire, Ours Épique « jusqu'à 2 », Beauté fatale Commune et Rare, Garde royal, Attila Commune ; coûts des fiches par défaut. Une partie n'est pas figée tant qu'un effet ou l'infirmerie est en cours. |
-| 2026-10-30 | B4 : déplacer et échanger (`PionMoved`, `PionsSwapped`) ; Saut du loup (Commune à Légendaire, sauts enchaînés, kill immédiat), Lièvre Commune, Rare et Légendaire (jusqu'à N pas ; jusqu'à N pions en attendant la réponse à la question ouverte), Interchange Rare (en ligne droite, même derrière un pion) et Épique. Le Coup du taureau passe en B7 avec le mur. |
+| 2026-10-30 | B4 : déplacer et échanger (`PionMoved`, `PionsSwapped`) ; Saut du loup (Commune à Légendaire, sauts enchaînés, kill immédiat), Lièvre Commune, Rare et Légendaire (jusqu'à N pas et jusqu'à N pions, confirmé par Martin), Interchange Rare (en ligne droite, même derrière un pion) et Épique. Le Coup du taureau passe en B7 avec le mur. |
+| 2026-10-30 | B5a : une carte qui pose ; kill et assassin définis ; l'infirmerie se compte en tours du propriétaire, même tué pendant son tour ; séduction (Beauté fatale Épique et Légendaire = tuer + poser) ; Meilleurs amis (pacte sans durée, vengeance à la fin de l'attaque, en chaîne) ; Attila Commune ne retire que les statuts. |
+| 2026-10-30 | B5b : tombes (une par case, la plus récente remplace l'autre, elles restent sur leur case quand les pions bougent) ; le Médecin (Commune à Légendaire) ressuscite depuis l'infirmerie, sur sa propre tombe. Sans infirmerie, ni tombe ni Médecin. |

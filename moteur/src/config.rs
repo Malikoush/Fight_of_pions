@@ -94,12 +94,18 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
     vec![
         entry(AttackKind::BeauteFatale, Rarity::Common, 1),
         entry(AttackKind::BeauteFatale, Rarity::Rare, 2),
+        entry(AttackKind::BeauteFatale, Rarity::Epic, 3),
+        entry(AttackKind::BeauteFatale, Rarity::Legendary, 4),
         entry(AttackKind::SautDuLoup, Rarity::Common, 1),
         entry(AttackKind::SautDuLoup, Rarity::Rare, 2),
         entry(AttackKind::SautDuLoup, Rarity::Epic, 3),
         entry(AttackKind::SautDuLoup, Rarity::Legendary, 4),
         entry(AttackKind::Reine, Rarity::Common, 1),
         entry(AttackKind::Attila, Rarity::Common, 1),
+        entry(AttackKind::Medecin, Rarity::Common, 1),
+        entry(AttackKind::Medecin, Rarity::Rare, 2),
+        entry(AttackKind::Medecin, Rarity::Epic, 3),
+        entry(AttackKind::Medecin, Rarity::Legendary, 4),
         entry(AttackKind::Interchange, Rarity::Rare, 2),
         entry(AttackKind::Interchange, Rarity::Epic, 3),
         entry(AttackKind::Ours, Rarity::Common, 1),
@@ -109,6 +115,7 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
         entry(AttackKind::Lievre, Rarity::Common, 1),
         entry(AttackKind::Lievre, Rarity::Rare, 2),
         entry(AttackKind::Lievre, Rarity::Legendary, 4),
+        entry(AttackKind::MeilleursAmis, Rarity::Epic, 3),
     ]
 }
 
@@ -514,7 +521,7 @@ mod tests {
             assert_eq!(entry.stats.cost, card_cost, "{}", entry.attack);
         }
         let not_yet = Attack {
-            kind: AttackKind::BeauteFatale,
+            kind: AttackKind::Lievre,
             rarity: Rarity::Epic,
         };
         assert!(config.attack_stats(not_yet).is_none());
@@ -523,7 +530,7 @@ mod tests {
     #[test]
     fn catalog_only_holds_attacks_the_engine_can_play() {
         let attack = Attack {
-            kind: AttackKind::BeauteFatale,
+            kind: AttackKind::Lievre,
             rarity: Rarity::Epic,
         };
         assert_eq!(

@@ -94,7 +94,7 @@ fn the_growl_immobilizes_adjacent_enemies_for_one_turn_of_the_victim() {
     assert_eq!(growl[0].creator(), Player::One);
     assert_eq!(growl[0].source(), ours(Rarity::Common));
     // 1 tour de la victime, le tour en cours ne compte pas : le tour 4.
-    assert_eq!(growl[0].last_turn(), 4);
+    assert_eq!(growl[0].last_turn(), Some(4));
     play(&mut game, &[Action::EndTurn]);
 
     // Tour 4 : F5, immobilisé, ne peut pas lancer ; J10 n'a pas de cible.
@@ -136,7 +136,7 @@ fn the_charm_lasts_until_the_end_of_the_second_turn_of_the_victim() {
     let charmed = started(&events);
     assert_eq!(charmed.len(), 1);
     // Les tours 4 et 6 sont ceux de J2 : l'effet s'éteint à la fin du tour 6.
-    assert_eq!(charmed[0].last_turn(), 6);
+    assert_eq!(charmed[0].last_turn(), Some(6));
 
     for turn in 3..6 {
         assert_eq!(game.turn(), turn);
@@ -244,7 +244,7 @@ fn a_protected_pion_cannot_be_chosen_to_be_killed_but_can_be_immobilized() {
     assert_eq!(guard[0].creator(), Player::Two);
     assert_eq!(guard[0].source(), royal_guard());
     // 2 tours de l'adversaire (J1) : les tours 3 et 5.
-    assert_eq!(guard[0].last_turn(), 5);
+    assert_eq!(guard[0].last_turn(), Some(5));
 
     // Tour 3 : l'Ours Rare n'a personne à tuer ; le Grognement immobilise quand même F5.
     assert_eq!(
@@ -303,7 +303,7 @@ fn the_roar_kills_up_to_two_and_immobilizes_the_other_adjacent_enemies() {
     let mut immobilized: Vec<PionAt> = roared.iter().map(|e| PionAt::of(&game, e)).collect();
     immobilized.sort();
     assert_eq!(immobilized, vec![PionAt(4, 3), PionAt(5, 5)]);
-    assert!(roared.iter().all(|effect| effect.last_turn() == 8));
+    assert!(roared.iter().all(|effect| effect.last_turn() == Some(8)));
 }
 
 /// La case (rangée, colonne) du pion visé par un effet.

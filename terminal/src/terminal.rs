@@ -1,7 +1,7 @@
 //! Interface texte : traduit du texte en Action, et une Game en texte.
 //! Elle ne décide jamais si un coup est légal : c'est le travail du moteur.
 
-use fight_of_pions::{Action, Decision, Game, GameConfig, Player, Position};
+use fight_of_pions::{Action, ActiveEffect, Decision, Game, GameConfig, Player, Position};
 
 /// Ce que le joueur peut taper.
 pub enum Command {
@@ -20,10 +20,18 @@ Commandes :
   c C5   choisir C5 comme lanceur ou comme cible de l'attaque en cours
   v      jouer l'attaque en cours avec les cibles déjà choisies (« jusqu'à 2 »)
   f      finir le tour (les actions restantes sont gardées, {} maximum)
+  Sur le plateau : X et O les pions, + une tombe libre (le Médecin y ressuscite).
   h      afficher l'aide
   q      quitter",
         config.max_banked_actions
     )
+}
+
+/// « jusqu'à la fin du tour 6 », ou rien pour un effet sans durée (un pacte).
+pub fn until(effect: ActiveEffect) -> String {
+    effect.last_turn().map_or(String::new(), |turn| {
+        format!(" jusqu'à la fin du tour {turn}")
+    })
 }
 
 /// Le symbole d'un joueur sur le plateau.
@@ -60,9 +68,11 @@ pub fn render(game: &Game) -> String {
     for row in 0..size {
         out.push_str(&format!("{:>3} ", row + 1));
         for col in 0..size {
-            let c = match board.owner(Position { row, col }) {
-                Some(player) => symbol(player),
-                None => '.',
+            let pos = Position { row, col };
+            let c = match (board.owner(pos), board.tomb(pos)) {
+                (Some(player), _) => symbol(player),
+                (None, Some(_)) => '+',
+                (None, None) => '.',
             };
             out.push(c);
             out.push(' ');
@@ -93,16 +103,15 @@ pub fn render(game: &Game) -> String {
     }
     for effect in game.active_effects() {
         if let Some(at) = board.position_of(effect.pion()) {
-            out.push_str(&format!(
-                "\n  {at} : {} jusqu'à la fin du tour {}",
-                effect.kind(),
-                effect.last_turn()
-            ));
+            out.push_str(&format!("\n  {at} : {}{}", effect.kind(), until(*effect)));
         }
     }
     for patient in game.infirmary() {
+        let tomb = board
+            .tomb_of(patient.pion().id())
+            .map_or(String::new(), |at| format!(", tombe en {at}"));
         out.push_str(&format!(
-            "\n  à l'infirmerie : pion {} de {}, jusqu'à la fin du tour {}",
+            "\n  à l'infirmerie : pion {} de {}, jusqu'à la fin du tour {}{tomb}",
             patient.pion().id(),
             player_name(patient.pion().owner()),
             patient.last_turn()

@@ -76,6 +76,9 @@ pub fn show(ui: &mut egui::Ui, game: &Game, intentions: &mut Vec<Intention>) {
                     theme::CASE_FONCEE
                 };
                 painter.rect_filled(rect, theme::ARRONDI_CASE, fond);
+                if game.board().tomb(pos).is_some() {
+                    tombe(&painter, &geo, rect);
+                }
                 if posables(pos) {
                     painter.circle_filled(
                         rect.center(),
@@ -130,6 +133,18 @@ pub fn show(ui: &mut egui::Ui, game: &Game, intentions: &mut Vec<Intention>) {
     });
 }
 
+/// Une pierre tombale dans le bas de la case : la tombe d'un pion tué, que le Médecin peut
+/// ressusciter. Elle est dessinée sous le pion, qui peut occuper la case.
+fn tombe(painter: &egui::Painter, geo: &Geometrie, rect: Rect) {
+    let taille = Vec2::new(
+        geo.cote * theme::LARGEUR_TOMBE,
+        geo.cote * theme::HAUTEUR_TOMBE,
+    );
+    let bas = rect.center_bottom() - Vec2::new(0.0, geo.cote * theme::MARGE_TOMBE);
+    let pierre = Rect::from_min_size(bas - Vec2::new(taille.x / 2.0, taille.y), taille);
+    painter.rect_filled(pierre, theme::ARRONDI_TOMBE, theme::COULEUR_TOMBE);
+}
+
 /// Les statuts du pion de cette case, lus dans le moteur : une croix s'il est immobilisé,
 /// un anneau s'il est protégé.
 fn statuts(painter: &egui::Painter, geo: &Geometrie, game: &Game, pos: Position) {
@@ -155,6 +170,13 @@ fn statuts(painter: &egui::Painter, geo: &Geometrie, game: &Game, pos: Position)
             centre,
             geo.cote * theme::RAYON_ANNEAU_PROTEGE,
             Stroke::new(theme::EPAISSEUR_ANNEAU, theme::ANNEAU_PROTEGE),
+        );
+    }
+    if game.pact_friend(pos).is_some() {
+        painter.circle_filled(
+            centre + Vec2::splat(geo.cote * theme::DECALAGE_MARQUE_PACTE) * Vec2::new(1.0, -1.0),
+            geo.cote * theme::RAYON_MARQUE_PACTE,
+            theme::MARQUE_PACTE,
         );
     }
 }

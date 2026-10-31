@@ -6,11 +6,9 @@
 //!
 //! Un pas va vers une case libre collée (8 directions) ; on peut tourner en chemin. Chaque
 //! pion avance **jusqu'à** son nombre de pas et finit sur une autre case que sa case de
-//! départ (carnet, 2026-10-30). Les pions bougent l'un après l'autre, et chacun est un
-//! lanceur : posé avant ce tour et non immobilisé. Le premier est le lanceur choisi.
-//!
-//! Hypothèse en attendant la réponse de Martin (question ouverte du carnet, B4) : on peut
-//! aussi s'arrêter avant le nombre de pions, comme pour les pas.
+//! départ ; on peut aussi s'arrêter avant le nombre de pions (carnet, 2026-10-30). Les
+//! pions bougent l'un après l'autre, et chacun est un lanceur : posé avant ce tour et non
+//! immobilisé. Le premier est le lanceur choisi.
 //!
 //! Les cibles choisies mêlent les pas (une case libre) et les pions suivants (une case
 //! occupée par un de tes pions) : les deux ne se confondent jamais.
@@ -155,7 +153,7 @@ impl Walk {
 
     /// Les cases libres collées au pion en cours.
     fn free_steps(&self) -> impl Iterator<Item = Position> + '_ {
-        around(&self.board, self.current.at).filter(|&cell| self.board.owner(cell).is_none())
+        around(&self.board, self.current.at).filter(|&cell| self.board.is_free(cell))
     }
 
     /// Les pions qui peuvent avancer ensuite : à toi, prêts à agir, pas encore choisis.

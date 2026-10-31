@@ -5,6 +5,7 @@ mod clock;
 mod decision;
 mod end;
 mod event;
+mod kill;
 mod lasting;
 mod record;
 mod state;

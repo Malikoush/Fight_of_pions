@@ -56,7 +56,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
 | Plateau | `Board` | Le damier `board_size × board_size` |
-| Case | `Cell` | Le contenu d'une case : une structure en couches (pour l'instant, un pion optionnel) |
+| Case | `Cell` | Le contenu d'une case : une structure en couches, un pion et une tombe, chacun optionnel |
 | Position | `Position` | Rangée et colonne à partir de 0, affichée « C5 » |
 | Direction | `Direction` | Un pas d'une case parmi les 8 directions |
 | Pion | `Pion` | Un pion posé, avec son identité et son propriétaire |
@@ -65,10 +65,11 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Case d'un pion | `Board::position_of(pion)` | Où se trouve un pion, retrouvé par son identité (un effet vise une identité, pas une case) |
 | Réserve de pions | `reserve_pions` | Les pions qu'un joueur peut encore poser (15 au départ) |
 | Pion lanceur | `launcher` | Le pion du joueur depuis lequel une attaque est lancée, choisi par `Action::Choose`. C'est aussi le pion qui agit : une carte qui déplace, protège ou échange « un de tes pions » s'applique au lanceur (décidé le 2026-10-30) |
-| Mal du débarquement | `summoning_sickness`, `Game::is_summoning_sick(pos)`, `GameError::NoReadyLauncher` | Avec ce réglage, un pion posé ce tour ne peut pas lancer d'attaque (`NoReadyLauncher` vaut aussi pour un pion immobilisé). (cible) Un pion invoqué non plus ; un pion déplacé garde son ancienneté. |
-| Tombe | couche `tomb` de `Cell` (cible) | Ce que laisse un pion tué. Elle ne bloque pas la case. |
+| Mal du débarquement | `summoning_sickness`, `Game::is_summoning_sick(pos)`, `GameError::NoReadyLauncher` | Avec ce réglage, un pion posé ce tour ne peut pas lancer d'attaque (`NoReadyLauncher` vaut aussi pour un pion immobilisé). Un pion posé par une carte ou ressuscité non plus (nouvelle identité) ; un pion déplacé ou échangé garde son ancienneté. |
+| Tombe | `Cell::tomb`, `Board::tomb(pos)`, `Board::tomb_of(pion)`, `Event::TombAdded`, `Event::TombRemoved` | Ce que laisse un pion tué qui part à l'infirmerie, sur la case où il est mort, jusqu'à ce qu'il en sorte. Elle ne bloque pas la case ; une case en porte au plus une. |
+| Opérations sur les pions | `Board::place_pion`, `remove_pion`, `move_pion`, `swap` (internes) | Le plateau ne s'écrit que pion par pion : une tombe reste sur sa case quand un pion y arrive, en part, bouge ou est échangé |
+| Ressusciter | `Effect::Resurrect { pion, at }`, `Game::leave_infirmary`, `Game::create_pion` (internes) | Un pion sort de l'infirmerie (sa tombe s'efface) et revient sur le plateau avec une nouvelle identité, posé ce tour, sans passer par la réserve |
 | Trou | couche terrain de `Cell` (cible) | Case détruite par le Coup du taureau, injouable |
-| Zombie | type de pion (cible) | Pion ressuscité par le Médecin |
 | Axe d'alignement | `Direction::AXES`, `axis` | Une des 4 directions de ligne : horizontale, verticale, deux diagonales |
 | Alignement | `rules::complete_line` | Une ligne droite d'au moins `align_to_win` pions d'un joueur |
 | Règle d'or | `golden_rule`, `rules::has_line` | Une ligne ne gagne qu'au début du tour de son propriétaire, si elle y est encore. Une ligne présente au début de son tour gagne dans tous les cas ; une ligne en attente gagne aussi quand la partie s'arrête. |
@@ -78,7 +79,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
 | Attaque | `Attack` | Une carte : une famille dans une rareté (« Ours (Rare) ») |
-| Famille d'attaque | `AttackKind` | `BeauteFatale`, `SautDuLoup`, `Reine`, `Attila`, `Interchange`, `Ours`, `Lievre`, et plus tard Médecin… Le nom de la carte, tel quel (« Beauté fatale »). Une famille par fichier dans `attacks/`. |
+| Famille d'attaque | `AttackKind` | `BeauteFatale`, `SautDuLoup`, `Reine`, `Attila`, `Interchange`, `Ours`, `Lievre`, `MeilleursAmis`, `Medecin`, et plus tard Familia… Le nom de la carte, tel quel (« Beauté fatale »). Une famille par fichier dans `attacks/`. |
 | Rareté | `Rarity` | `Common`, `Rare`, `Epic`, `Legendary` : la variante de l'attaque et sa place dans le draft, **sans lien imposé avec le coût** |
 | Caractéristiques | `AttackStats` | Coût et recharge d'une attaque |
 | Catalogue | `attack_catalog`, `CatalogEntry` | Dans `GameConfig` : les attaques jouables et leurs caractéristiques |
@@ -94,9 +95,12 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Recharge | `cooldown`, `cooldown_left`, `Event::CooldownChanged` | Tours du propriétaire avant de pouvoir relancer une attaque (1 = une fois par tour) |
 | Cible | case choisie | Une case visée par l'attaque en cours, proposée par la famille |
 | Attaque lancée | `Event::AttackUsed` | Annonce d'une attaque résolue ; ses effets suivent |
-| Effet primitif | `Effect` (interne au moteur) | Opération de base produite par une famille : `Kill` (tuer), `Apply` (donner un effet continu), `RemoveEnemyEffects` (retirer les effets adverses d'un pion), `Move` (déplacer), `Swap` (échanger), et plus tard poser… (catalogue dans l'architecture). Seul le résolveur l'applique. Il n'y a pas de « changer de camp » : séduire, c'est tuer puis poser. |
-| Effet continu | `ActiveEffect`, `EffectId`, `Game::active_effects()` | Ce qu'une carte laisse en jeu après avoir été jouée : pour l'instant les statuts ; plus tard couronne, gardes, jetons, pacte, retour programmé, famille. Il vise un pion par son identité, retient son créateur (`creator`), sa carte (`source`) et son dernier tour (`last_turn`). Les fiches disaient aussi « effet en cours ». Les pions, l'infirmerie, les tombes et les cases creusées n'en sont pas. |
+| Effet primitif | `Effect` (interne au moteur) | Opération de base produite par une famille : `Kill` (tuer), `Apply` (donner un effet continu), `RemoveEnemyStatuses` (retirer les statuts adverses d'un pion), `Move` (déplacer), `Swap` (échanger), `Place` (poser depuis la réserve), `Bind` (lier par un pacte), `Resurrect` (ressusciter depuis l'infirmerie)… (catalogue dans l'architecture). Seul le résolveur l'applique. Il n'y a pas de « changer de camp » : séduire, c'est tuer puis poser. |
+| Effet continu | `ActiveEffect`, `EffectId`, `Game::active_effects()` | Ce qu'une carte laisse en jeu après avoir été jouée : les statuts et le pacte ; plus tard couronne, gardes, jetons, retour programmé, famille. Il vise un pion par son identité, retient son créateur (`creator`), sa carte (`source`) et son dernier tour (`last_turn`, `None` pour un effet sans durée comme le pacte). Les fiches disaient aussi « effet en cours ». Les pions, l'infirmerie, les tombes et les cases creusées n'en sont pas. |
 | Statut | `EffectKind::Immobilized`, `EffectKind::Protected`, `Game::has_effect(pos, kind)` | Immobilisé (ne lance pas d'attaque, donc ne bouge pas par une carte de son propriétaire) ou protégé (ne peut pas être choisi comme cible d'un kill) : un effet continu sur un pion |
+| Pacte, ami | `EffectKind::Pact { friend }`, `EffectKind::is_status()` | L'effet continu de Meilleurs amis, porté par chacun des deux amis, sans durée (`last_turn() == None`). Ce n'est pas un statut : Attila Commune ne le retire pas. |
+| Kill, assassin, vengeance | `Game::kill`, `Game::avenge`, `Death` (internes, `game/kill.rs`) | Un kill envoie un pion à l'infirmerie ou au cimetière ; l'assassin est le lanceur de l'attaque. À la fin d'une attaque, l'ami survivant d'un pacte tue l'assassin de son ami (en chaîne). |
+| Pose par une carte | `Effect::Place`, `Game::put_pion` (interne) | Un pion de la réserve posé par une carte (séduction, Meilleurs amis) : nouvelle identité, posé ce tour, sans utiliser la pose normale. La pose normale passe aussi par `put_pion`. |
 | Durée, dernier tour | `last_turn` | Une durée de N tours se compte en tours de l'adversaire de celui qui a joué l'effet, sans le tour en cours ; l'effet s'arrête à la fin de son dernier tour (`clock.rs`) |
 | Infirmerie | `infirmary_turns`, `Game::infirmary()`, `Patient` | Où va un pion tué, pour `infirmary_turns` tours (2 dans les règles cibles, 0 par défaut), avant de revenir dans la réserve de son propriétaire. Un `Patient` est un pion qui y attend. |
 | Cimetière | (cible, B6) | Où va un pion tué par le Massacre divin Épique ou Légendaire : il ne revient jamais |

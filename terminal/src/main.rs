@@ -87,10 +87,10 @@ fn main() {
                                 second_at
                             ),
                             Event::EffectStarted(effect) => println!(
-                                "Le pion {} est {} jusqu'à la fin du tour {} ({}).",
+                                "Le pion {} est {}{} ({}).",
                                 effect.pion(),
                                 effect.kind(),
-                                effect.last_turn(),
+                                terminal::until(effect),
                                 effect.source()
                             ),
                             Event::EffectEnded(effect) => {
@@ -102,8 +102,14 @@ fn main() {
                                 terminal::player_name(patient.pion().owner()),
                                 patient.last_turn()
                             ),
+                            Event::TombAdded { pion, at } => {
+                                println!("Le pion {} laisse sa tombe en {}.", pion.id(), at)
+                            }
+                            Event::TombRemoved { pion, at } => {
+                                println!("La tombe du pion {} s'efface en {}.", pion.id(), at)
+                            }
                             Event::InfirmaryLeft(patient) => println!(
-                                "Le pion {} de {} sort de l'infirmerie et revient dans la réserve.",
+                                "Le pion {} de {} sort de l'infirmerie.",
                                 patient.pion().id(),
                                 terminal::player_name(patient.pion().owner())
                             ),

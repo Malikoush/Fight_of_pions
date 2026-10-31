@@ -107,7 +107,7 @@ pub fn random_config(rng: &mut Rng) -> GameConfig {
         })
         .collect();
     let mut random_arsenal = || -> Vec<Attack> {
-        (0..random_below(rng, 4))
+        (0..random_below(rng, 6))
             .map(|_| attacks[random_below(rng, attacks.len())])
             .collect()
     };

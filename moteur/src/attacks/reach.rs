@@ -56,7 +56,7 @@ pub(crate) fn in_sight(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Cell, Pion, PionId, Player};
+    use crate::{Pion, PionId, Player};
 
     fn at(row: usize, col: usize) -> Position {
         Position { row, col }
@@ -66,7 +66,7 @@ mod tests {
         let mut board = Board::new(5);
         for &pos in pions {
             board
-                .set(pos, Cell::with_pion(Pion::new(PionId::FIRST, Player::Two)))
+                .place_pion(pos, Pion::new(PionId::FIRST, Player::Two))
                 .unwrap();
         }
         board

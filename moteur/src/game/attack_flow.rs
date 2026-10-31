@@ -6,6 +6,7 @@
 //! plus aucune cible utile), ou plus tôt avec [`crate::Action::FinishAttack`] quand elle
 //! est déjà complète (« jusqu'à 2 »).
 
+use super::kill::Death;
 use super::state::{Game, PendingAttack};
 use crate::attacks::{
     AttackContext, Effect, Launch, can_act, can_choose_more, can_complete, is_complete,
@@ -206,41 +207,48 @@ impl Game {
             turns_left: stats.cooldown,
         });
 
+        let mut deaths = Vec::new();
         for effect in effects {
-            self.apply_effect(effect, attack, killer, events);
+            self.apply_effect(effect, attack, killer, &mut deaths, events);
         }
+        // Les vengeances, une fois l'attaque entière jouée (carnet, 2026-10-30).
+        self.avenge(deaths, events);
         self.after_action(events);
     }
 
-    /// Le résolveur central : le seul endroit où un effet d'attaque modifie la partie.
+    /// Le résolveur central : le seul endroit où un effet d'attaque modifie la partie. Les
+    /// pions tués s'ajoutent à `deaths`, pour les vengeances de fin d'attaque.
     fn apply_effect(
         &mut self,
         effect: Effect,
         source: Attack,
         by: Option<PionId>,
+        deaths: &mut Vec<Death>,
         events: &mut Vec<Event>,
     ) {
         match effect {
-            Effect::Kill { at } => {
-                let Some(pion) = self.board.get(at).and_then(Cell::pion) else {
-                    return;
-                };
-                if self.board.set(at, Cell::EMPTY).is_err() {
-                    return;
-                }
-                events.push(Event::PionKilled { pion, at, by });
-                self.end_effects_on(pion.id(), events);
-                self.send_to_infirmary(pion, events);
-            }
+            Effect::Kill { at } => deaths.extend(self.kill(at, by, events)),
             Effect::Apply { at, kind, turns } => {
                 self.start_effect(at, kind, turns, source, events);
             }
-            Effect::RemoveEnemyEffects { at } => {
+            Effect::RemoveEnemyStatuses { at } => {
                 let Some(pion) = self.board.get(at).and_then(Cell::pion) else {
                     return;
                 };
                 let enemy = self.current_player.opponent();
-                self.end_effects(|effect| effect.is_on_by(pion.id(), enemy), events);
+                self.end_effects(|effect| effect.is_status_on_by(pion.id(), enemy), events);
+            }
+            Effect::Place { at } => {
+                self.put_pion(at, events);
+            }
+            Effect::Bind { a, b } => self.bind(a, b, source, events),
+            Effect::Resurrect { pion, at } => {
+                let ours = self.infirmary.iter().any(|patient| {
+                    patient.pion().id() == pion && patient.pion().owner() == self.current_player
+                });
+                if ours && self.board.is_free(at) && self.leave_infirmary(pion, events) {
+                    self.create_pion(at, events);
+                }
             }
             Effect::Move { from, to } => {
                 let Some(pion) = self.board.get(from).and_then(Cell::pion) else {
@@ -294,6 +302,7 @@ impl Game {
             rarity: attack.rarity,
             launch,
             sick_from: self.sick_from(),
+            reserve: self.reserve_pions[player.index()],
         }
     }
 

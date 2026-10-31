@@ -34,11 +34,16 @@ fn assert_placed_then(events: &[Event], end: Event) {
 }
 
 /// La définition du carnet, écrite indépendamment du moteur : une partie est figée quand
-/// rien n'est programmé (aucun effet continu, personne à l'infirmerie) et qu'aucun des deux
-/// joueurs ne peut plus ni poser (plateau plein ou réserve vide), ni lancer une attaque qui
-/// a une cible.
+/// rien n'est programmé (aucun effet continu qui s'arrêtera à un tour donné, personne à
+/// l'infirmerie ; un pacte, sans durée, ne programme rien) et qu'aucun des deux joueurs ne
+/// peut plus ni poser (plateau plein ou réserve vide), ni lancer une attaque qui a une
+/// cible.
 fn frozen_by_the_rules(game: &Game) -> bool {
-    if !game.active_effects().is_empty() || !game.infirmary().is_empty() {
+    let timed_effect = game
+        .active_effects()
+        .iter()
+        .any(|effect| effect.last_turn().is_some());
+    if timed_effect || !game.infirmary().is_empty() {
         return false;
     }
     let board_full = game
@@ -60,9 +65,12 @@ fn frozen_by_the_rules(game: &Game) -> bool {
 /// pion n'a de statut. Écrit sans réutiliser le moteur, d'après les fiches :
 /// - l'Ours (toutes raretés) vise un ennemi collé au lanceur ;
 /// - la Beauté fatale vise par le regard (2 cases en ligne droite, sans pion entre) :
-///   1 ennemi pour la Commune, 2 pour la Rare ;
+///   1 ennemi pour la Commune, 2 pour la Rare ; l'Épique séduit dans le regard et la
+///   Légendaire n'importe où, s'il reste un pion en réserve ;
+/// - Meilleurs amis pose 2 pions de la réserve sur 2 cases libres ;
 /// - le Garde royal (Reine Commune) protège le lanceur : toujours possible ;
 /// - Attila Commune retire des statuts : sans statut, jamais possible ;
+/// - le Médecin ressuscite sur une tombe : personne à l'infirmerie, donc aucune tombe ;
 /// - le Saut du loup a besoin d'une case libre à 2 cases en ligne droite ;
 /// - l'Interchange Rare vise un ennemi à 1 ou 2 cases en ligne droite, même derrière un
 ///   pion ; l'Épique, n'importe quel ennemi ;
@@ -113,15 +121,21 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             .any(free)
     };
     let any_enemy = board.positions().any(enemy);
+    let reserve = game.reserve_pions(player);
+    let free_cells = board.positions().filter(|&pos| free(pos)).count();
     board
         .positions()
         .filter(|&pos| board.owner(pos) == Some(player))
         .any(|launcher| match (attack.kind, attack.rarity) {
             (AttackKind::Ours, _) => adjacent(launcher) >= 1,
             (AttackKind::BeauteFatale, Rarity::Rare) => in_sight(launcher) >= 2,
+            (AttackKind::BeauteFatale, Rarity::Epic) => reserve > 0 && in_sight(launcher) >= 1,
+            (AttackKind::BeauteFatale, Rarity::Legendary) => reserve > 0 && any_enemy,
             (AttackKind::BeauteFatale, _) => in_sight(launcher) >= 1,
+            (AttackKind::MeilleursAmis, _) => reserve >= 2 && free_cells >= 2,
             (AttackKind::Reine, _) => true,
             (AttackKind::Attila, _) => false,
+            (AttackKind::Medecin, _) => false,
             (AttackKind::SautDuLoup, _) => free_two_away(launcher),
             (AttackKind::Interchange, Rarity::Rare) => enemy_in_line(launcher),
             (AttackKind::Interchange, _) => any_enemy,
