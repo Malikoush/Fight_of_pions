@@ -1,7 +1,7 @@
 //! Les réglages prêts à comparer, partagés par l'exemple `arene` et le labo : les bots
 //! disponibles, les paires de l'arène et les variantes de configuration.
 
-use crate::{Banking, Bot, GreedyBot, RandomBot};
+use crate::{Banking, Bot, GreedyBot, MctsBot, RandomBot, Weights};
 use fight_of_pions::{Attack, AttackKind, GameConfig, Rarity};
 
 /// Un des bots disponibles.
@@ -13,15 +13,26 @@ pub enum BotKind {
     Greedy,
     /// Le bot glouton qui garde le maximum d'actions permis.
     Banker,
+    /// Le bot MCTS, avec les poids de départ de l'évaluation.
+    Mcts,
 }
+
+/// Les simulations du bot MCTS par décision.
+const MCTS_ITERATIONS: u32 = 3000;
 
 static RANDOM: RandomBot = RandomBot;
 static GREEDY: GreedyBot = GreedyBot::new(Banking::SpendAll);
 static BANKER: GreedyBot = GreedyBot::new(Banking::KeepMax);
+static MCTS: MctsBot = MctsBot::new(MCTS_ITERATIONS, Weights::DEFAULT);
 
 impl BotKind {
     /// Tous les bots disponibles, dans l'ordre où les proposer.
-    pub const ALL: [BotKind; 3] = [BotKind::Random, BotKind::Greedy, BotKind::Banker];
+    pub const ALL: [BotKind; 4] = [
+        BotKind::Random,
+        BotKind::Greedy,
+        BotKind::Banker,
+        BotKind::Mcts,
+    ];
 
     /// Le bot lui-même.
     pub fn bot(self) -> &'static (dyn Bot + Sync) {
@@ -29,6 +40,7 @@ impl BotKind {
             BotKind::Random => &RANDOM,
             BotKind::Greedy => &GREEDY,
             BotKind::Banker => &BANKER,
+            BotKind::Mcts => &MCTS,
         }
     }
 
@@ -153,6 +165,6 @@ mod tests {
     #[test]
     fn every_bot_has_its_own_name() {
         let names: Vec<&str> = BotKind::ALL.iter().map(|kind| kind.name()).collect();
-        assert_eq!(names, ["aléatoire", "glouton", "banquier"]);
+        assert_eq!(names, ["aléatoire", "glouton", "banquier", "MCTS"]);
     }
 }

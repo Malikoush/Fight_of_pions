@@ -3,21 +3,11 @@
 mod common;
 
 use bots::{Banking, Bot, GreedyBot, Windows, target_rules};
-use common::{duel, place, play};
+use common::{duel, place, play, play_the_turn};
 use fight_of_pions::{Action, Game, Player, Rng};
 
 fn greedy() -> GreedyBot {
     GreedyBot::new(Banking::SpendAll)
-}
-
-/// Laisse le bot jouer pour le joueur courant jusqu'à la fin de son tour (ou de la partie).
-fn play_the_turn(bot: &GreedyBot, game: &mut Game) {
-    let player = game.current_player();
-    let mut rng = Rng::new(0);
-    while game.end().is_none() && game.current_player() == player {
-        let action = bot.choose(game, &mut rng).unwrap();
-        game.apply(action).unwrap();
-    }
 }
 
 #[test]

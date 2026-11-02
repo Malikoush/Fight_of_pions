@@ -26,8 +26,12 @@
 pub mod arena;
 /// Ce qu'est un bot.
 pub mod bot;
+/// L'évaluation : ce que vaut une partie pas finie, et les poids de ses critères.
+pub mod evaluation;
 /// Le bot glouton, qui lit le plateau en fenêtres.
 pub mod greedy;
+/// Le bot MCTS, qui cherche plusieurs coups en avance sur des copies de la partie.
+pub mod mcts;
 /// Les réglages prêts à comparer : bots disponibles, paires et variantes.
 pub mod presets;
 /// Le bot aléatoire.
@@ -39,7 +43,9 @@ mod reading;
 
 pub use arena::{Report, record_game, run, run_pairs, start_game};
 pub use bot::Bot;
+pub use evaluation::Weights;
 pub use greedy::{Banking, GreedyBot};
+pub use mcts::MctsBot;
 pub use presets::{BotKind, STANDARD_PAIRS, Variant, current_rules, target_rules, variants};
 pub use random::RandomBot;
 pub use windows::Windows;

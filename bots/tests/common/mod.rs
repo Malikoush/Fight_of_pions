@@ -1,16 +1,48 @@
 //! Outils partagés par les tests d'intégration des bots.
 #![allow(dead_code)] // chaque fichier de tests n'utilise qu'une partie de ces outils
 
-use fight_of_pions::{Action, Game, GameConfig, Position};
+use bots::Bot;
+use fight_of_pions::{Action, Game, GameConfig, Position, Rng};
+
+/// La case (rangée, colonne).
+pub fn at(row: usize, col: usize) -> Position {
+    Position { row, col }
+}
 
 /// L'action « poser un pion » sur la case (rangée, colonne).
 pub fn place(row: usize, col: usize) -> Action {
-    Action::Place(Position { row, col })
+    Action::Place(at(row, col))
 }
 
 /// Une partie avec la configuration par défaut, où chaque joueur a toutes les attaques.
 pub fn duel() -> Game {
     Game::new(GameConfig::default().with_full_arsenals(), 0).unwrap()
+}
+
+/// Chaque joueur pose à son tour un de ces pions, puis finit son tour en gardant ses
+/// actions, si la pose ne l'a pas déjà fini.
+pub fn alternate(game: &mut Game, cells: &[Position]) {
+    for &pos in cells {
+        let player = game.current_player();
+        game.apply(Action::Place(pos)).unwrap();
+        if game.end().is_none() && game.current_player() == player {
+            game.apply(Action::EndTurn).unwrap();
+        }
+    }
+}
+
+/// Laisse le bot jouer pour le joueur courant jusqu'à la fin de son tour (ou de la
+/// partie), et rend les actions qu'il a jouées.
+pub fn play_the_turn(bot: &dyn Bot, game: &mut Game) -> Vec<Action> {
+    let player = game.current_player();
+    let mut rng = Rng::new(0);
+    let mut played = Vec::new();
+    while game.end().is_none() && game.current_player() == player {
+        let action = bot.choose(game, &mut rng).unwrap();
+        game.apply(action).unwrap();
+        played.push(action);
+    }
+    played
 }
 
 /// Joue une suite d'actions qui doivent toutes réussir.
