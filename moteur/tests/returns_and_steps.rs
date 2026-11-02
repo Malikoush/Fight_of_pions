@@ -93,23 +93,13 @@ fn the_teleported_pion_comes_back_at_the_start_of_its_next_turn() {
 }
 
 #[test]
-fn a_second_teleport_keeps_the_first_return() {
+fn a_pion_waiting_for_its_return_cannot_teleport_again() {
     let mut game = teleported(vec![interchange(Rarity::Common)], Vec::new());
-    play(
-        &mut game,
-        &[Action::UseAttack(1), choose(5, 5), choose(7, 7)],
+    play(&mut game, &[place(9, 9), Action::UseAttack(1)]);
+    assert_eq!(
+        game.apply(choose(5, 5)),
+        Err(GameError::InvalidChoice(at(5, 5)))
     );
-    let returns = |game: &Game| {
-        game.active_effects()
-            .iter()
-            .filter(|effect| matches!(effect.kind(), EffectKind::Return { .. }))
-            .count()
-    };
-    assert_eq!(returns(&game), 1);
-    play(&mut game, &[Action::EndTurn, Action::EndTurn]); // tours 1 et 2
-    assert_eq!(game.board().owner(at(0, 0)), Some(Player::One));
-    assert_eq!(game.board().owner(at(7, 7)), None);
-    assert_eq!(returns(&game), 0);
 }
 
 #[test]

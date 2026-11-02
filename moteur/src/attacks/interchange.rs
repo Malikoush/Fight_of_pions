@@ -1,9 +1,8 @@
 //! L'Interchange (fiche n°06) : le lanceur échange sa case avec celle d'un pion adverse.
 //!
 //! - Commune : le lanceur est téléporté sur n'importe quelle case libre ; au début de ton
-//!   tour suivant, il revient sur sa case d'origine (`game/returns.rs`). Un pion qui
-//!   attend déjà son retour peut repartir : il garde son premier retour, et revient donc sur
-//!   sa toute première case (carnet, 2026-11-02).
+//!   tour suivant, il revient sur sa case d'origine (`game/returns.rs`). Pas jouable depuis
+//!   un pion qui attend déjà son retour (carnet, 2026-11-02).
 //! - Rare : un pion adverse à 1 ou 2 cases en ligne droite, même derrière un autre pion
 //!   (carnet, 2026-10-30).
 //! - Épique : n'importe quel pion adverse.
@@ -38,7 +37,7 @@ impl AttackRules for Interchange {
     }
 
     /// L'Épique et la Légendaire visent n'importe où ; la Rare vise depuis le lanceur, et la
-    /// Commune dépend de lui (un second départ ne programme pas de second retour).
+    /// Commune dépend de lui (pas de second départ avant son retour).
     fn ignores_launcher(&self, rarity: Rarity) -> bool {
         matches!(rarity, Rarity::Epic | Rarity::Legendary)
     }
@@ -53,10 +52,11 @@ impl AttackRules for Interchange {
     fn candidate_targets(&self, context: &AttackContext, chosen: &[Position]) -> Vec<Position> {
         let board = context.board;
         match context.rarity {
-            Rarity::Common => board
+            Rarity::Common if !awaits_return(context) => board
                 .positions()
                 .filter(|&pos| board.is_free(pos))
                 .collect(),
+            Rarity::Common => Vec::new(),
             Rarity::Rare => in_line(board, context.launcher, RARE_REACH)
                 .filter(|&pos| context.is_enemy(pos))
                 .collect(),
@@ -95,17 +95,14 @@ impl AttackRules for Interchange {
     fn effects(&self, context: &AttackContext, targets: &[Position]) -> Vec<Effect> {
         let launcher = context.launcher;
         match (context.rarity, targets) {
-            (Rarity::Common, &[to]) => {
-                let mut effects = vec![Effect::Move { from: launcher, to }];
-                if !awaits_return(context) {
-                    effects.push(Effect::Attach {
-                        at: to,
-                        kind: EffectKind::Return { origin: launcher },
-                        end: EffectEnd::NextTurn,
-                    });
-                }
-                effects
-            }
+            (Rarity::Common, &[to]) => vec![
+                Effect::Move { from: launcher, to },
+                Effect::Attach {
+                    at: to,
+                    kind: EffectKind::Return { origin: launcher },
+                    end: EffectEnd::NextTurn,
+                },
+            ],
             (Rarity::Legendary, &[first, mine, second]) => vec![
                 Effect::Swap {
                     a: launcher,
