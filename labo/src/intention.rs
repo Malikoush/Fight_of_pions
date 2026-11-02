@@ -13,6 +13,9 @@ pub enum Intention {
     CommencerAttaque(usize),
     /// Une case cliquée : pose, ou lanceur et cibles pendant une attaque.
     ChoisirCase(Position),
+    /// Viser les jetons de l'adversaire (ses piles du Massacre divin) : le prochain choix de
+    /// l'attaque en cours, comme une case.
+    ViserJetons,
     /// Jouer l'attaque en cours de choix avec les cibles déjà choisies (« jusqu'à 2 »).
     FinirAttaque,
     /// Abandonner l'attaque en cours de choix (rien n'a encore été joué).

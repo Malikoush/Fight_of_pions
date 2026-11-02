@@ -92,18 +92,23 @@ impl Labo {
 
     /// Une case cliquée : pose hors attaque, ou prochain choix de l'attaque en cours.
     fn choisir_case(&mut self, pos: Position) {
+        // Sans sélection ni attaque en cours dans la vraie partie : une pose.
+        if self.selection.is_none() && !self.partie.game().attack_in_progress() {
+            self.demander(Demande::Agir(Action::Place(pos)));
+        } else {
+            self.choisir(Action::Choose(pos));
+        }
+    }
+
+    /// Le prochain choix de l'attaque en cours : une case, ou les jetons de l'adversaire.
+    fn choisir(&mut self, choix: Action) {
         let Some(mut suite) = self.selection.take() else {
-            // Sans sélection : une pose, ou un choix si la vraie partie en attend un
-            // (partie chargée au milieu d'une attaque, par exemple).
-            let action = if self.partie.game().attack_in_progress() {
-                Action::Choose(pos)
-            } else {
-                Action::Place(pos)
-            };
-            self.demander(Demande::Agir(action));
+            // Sans sélection, le choix va à la vraie partie, qui en attend un (partie
+            // chargée au milieu d'une attaque, par exemple).
+            self.demander(Demande::Agir(choix));
             return;
         };
-        suite.push(Action::Choose(pos));
+        suite.push(choix);
         match self.partie.apercu(&suite) {
             // Le choix est accepté et l'attaque attend encore un choix : on continue.
             Ok(apercu) if apercu.attack_in_progress() => self.selection = Some(suite),
@@ -160,6 +165,7 @@ impl Labo {
             intention,
             Intention::CommencerAttaque(_)
                 | Intention::ChoisirCase(_)
+                | Intention::ViserJetons
                 | Intention::FinirAttaque
                 | Intention::Demande(Demande::Agir(_) | Demande::Jouer(_))
         );
@@ -176,6 +182,7 @@ impl Labo {
                 self.selection = Some(vec![Action::UseAttack(slot)]);
             }
             Intention::ChoisirCase(pos) => self.choisir_case(pos),
+            Intention::ViserJetons => self.choisir(Action::ChooseEnemyTokens),
             Intention::FinirAttaque => self.finir_attaque(),
             Intention::AnnulerSelection => self.selection = None,
             Intention::Revoir {

@@ -4,7 +4,9 @@
 //!
 //! Est un kill tout pion envoyé à l'infirmerie ou au cimetière ; l'assassin est le pion
 //! qui a lancé l'attaque, même s'il a bougé (carnet, 2026-10-30). Un garde de la reine la
-//! sauve de ce qui la tuerait, une fois (carnet, 2026-10-31).
+//! sauve de ce qui la tuerait, une fois (carnet, 2026-10-31). Un kill compte pour
+//! l'adversaire du pion tué, pendant son tour ou non : il use un jeton de chacune de ses
+//! piles du Massacre divin (`tokens.rs`), qui peuvent l'envoyer au cimetière.
 
 use super::lasting::EffectKind;
 use super::state::Game;
@@ -31,9 +33,9 @@ pub(super) struct Death {
 }
 
 impl Game {
-    /// Tue le pion de cette case : il quitte le plateau, ses effets s'arrêtent, il part à
-    /// l'infirmerie ou dans la réserve. Une reine gardée dépense un garde à la place, et
-    /// survit.
+    /// Tue le pion de cette case : il quitte le plateau, ses effets s'arrêtent, le kill use
+    /// les jetons de son assassin, puis il part au cimetière, à l'infirmerie ou dans la
+    /// réserve. Une reine gardée dépense un garde à la place, et survit.
     pub(super) fn kill(
         &mut self,
         at: Position,
@@ -55,7 +57,13 @@ impl Game {
             .find_map(|effect| effect.friend_of(pion.id()));
         events.push(Event::PionKilled { pion, at, by });
         self.end_effects_on(pion.id(), events);
-        self.send_to_infirmary(pion, at, events);
+        // Toutes les familles ne tuent que des pions adverses : le kill est à l'adversaire du
+        // pion tué, même pendant une vengeance.
+        if self.use_tokens(pion.owner().opponent(), events) {
+            self.send_to_graveyard(pion, events);
+        } else {
+            self.send_to_infirmary(pion, at, events);
+        }
         Hit::Killed(Death { friend, killer: by })
     }
 

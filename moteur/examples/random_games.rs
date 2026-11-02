@@ -47,8 +47,8 @@ fn main() {
 fn measure(label: &str, config: GameConfig, games: u64) {
     let start = Instant::now();
     let mut actions = 0_u64;
-    // Fins par alignement, partie figée, limite de tours.
-    let mut ends = [0_u64; 3];
+    // Fins par alignement, partie figée, limite de tours, manque de pions.
+    let mut ends = [0_u64; 4];
 
     for seed in 0..games {
         let mut rng = Rng::new(seed);
@@ -72,6 +72,7 @@ fn measure(label: &str, config: GameConfig, games: u64) {
             Some(EndReason::Alignment) => ends[0] += 1,
             Some(EndReason::Frozen) => ends[1] += 1,
             Some(EndReason::TurnLimit) => ends[2] += 1,
+            Some(EndReason::TooFewPions) => ends[3] += 1,
             None => {}
         }
     }
@@ -86,9 +87,10 @@ fn measure(label: &str, config: GameConfig, games: u64) {
         actions as f64 / games as f64
     );
     println!(
-        "    fins : alignement {:.0} %, figée {:.0} %, limite de tours {:.0} %",
+        "    fins : alignement {:.0} %, figée {:.0} %, limite de tours {:.0} %, manque de pions {:.0} %",
         percent(ends[0]),
         percent(ends[1]),
-        percent(ends[2])
+        percent(ends[2]),
+        percent(ends[3])
     );
 }

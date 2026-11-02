@@ -15,6 +15,10 @@
 //! premier n'annule pas déjà ; sans un tel pion, l'attaque est jouée après le premier. La
 //! couronne d'une reine reste (carnet, 2026-11-02).
 //!
+//! Les jetons de l'adversaire (Massacre divin), posés devant lui et non sur un pion, se
+//! visent à part ([`crate::Action::ChooseEnemyTokens`]) et comptent pour un pion : toutes
+//! ses piles sont annulées, chacune étant un effet entier.
+//!
 //! La Légendaire (Terre brûlée) viendra en B6d.
 
 use std::ops::RangeInclusive;
@@ -47,6 +51,13 @@ impl AttackRules for Attila {
             Rarity::Common => carrying_enemy_statuses(context, chosen),
             _ => carrying_new_enemy_plays(context, chosen),
         }
+    }
+
+    fn enemy_tokens_effects(&self, context: &AttackContext) -> Vec<Effect> {
+        if context.rarity == Rarity::Common || !context.enemy_has_tokens() {
+            return Vec::new();
+        }
+        vec![Effect::CancelEnemyTokens]
     }
 
     fn effects(&self, context: &AttackContext, targets: &[Position]) -> Vec<Effect> {

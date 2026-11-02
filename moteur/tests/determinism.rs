@@ -5,7 +5,7 @@ mod common;
 use common::{SEED, game_with, new_game, place, random_config};
 use fight_of_pions::{
     Action, ActiveEffect, AttackKind, EffectKind, Event, Game, GameConfig, GameEnd, GameError,
-    GameRecord, Patient, Pion, PionId, Player, Position, Rarity, ReplayError, Rng,
+    GameRecord, Patient, Pion, PionId, Player, Position, Rarity, ReplayError, Rng, TokenPile,
 };
 
 /// Ce qu'un client sait de la partie s'il ne suit **que** les événements, en partant de
@@ -32,6 +32,10 @@ struct EventMirror {
     infirmary: Vec<Patient>,
     /// La tombe de chaque case, s'il y en a une.
     tombs: Vec<Option<Pion>>,
+    /// Les piles de jetons, dans l'ordre où elles ont été posées.
+    token_piles: Vec<TokenPile>,
+    /// Les pions au cimetière, dans l'ordre d'arrivée.
+    graveyard: Vec<Pion>,
     pions_per_player: u32,
 }
 
@@ -57,6 +61,8 @@ impl EventMirror {
             effects: Vec::new(),
             infirmary: Vec::new(),
             tombs: vec![None; config.board_size * config.board_size],
+            token_piles: Vec::new(),
+            graveyard: Vec::new(),
             pions_per_player: config.pions_per_player,
         }
     }
@@ -181,6 +187,41 @@ impl EventMirror {
                 let index = index.unwrap_or_else(|| panic!("patient inconnu : {event:?}"));
                 self.infirmary.remove(index);
             }
+            Event::GraveyardEntered(pion) => {
+                assert!(
+                    !self.is_on_board(pion.id()),
+                    "pion encore sur le plateau : {event:?}"
+                );
+                self.graveyard.push(pion);
+            }
+            Event::TokenPileStarted(pile) => {
+                assert!(pile.tokens() > 0, "pile vide : {event:?}");
+                assert!(
+                    self.token_piles
+                        .iter()
+                        .all(|known| known.play() != pile.play()),
+                    "deux piles pour un jeu : {event:?}"
+                );
+                self.token_piles.push(pile);
+            }
+            Event::TokenUsed(pile) => {
+                let known = self
+                    .token_piles
+                    .iter_mut()
+                    .find(|known| known.play() == pile.play());
+                let known = known.unwrap_or_else(|| panic!("pile inconnue : {event:?}"));
+                assert_eq!(known.tokens(), pile.tokens() + 1, "{event:?}");
+                assert!(pile.tokens() > 0, "pile vide encore là : {event:?}");
+                *known = pile;
+            }
+            Event::TokenPileEnded(pile) => {
+                let index = self
+                    .token_piles
+                    .iter()
+                    .position(|known| known.play() == pile.play());
+                let index = index.unwrap_or_else(|| panic!("pile inconnue : {event:?}"));
+                self.token_piles.remove(index);
+            }
             // L'attaque elle-même ne change rien : ses effets sont annoncés à part.
             Event::AttackUsed { .. } | Event::QueenShot { .. } => {}
             Event::TurnEnded { next } => {
@@ -233,6 +274,8 @@ impl EventMirror {
         assert_eq!(self.end, game.end());
         assert_eq!(self.effects, game.active_effects(), "effets continus");
         assert_eq!(self.infirmary, game.infirmary(), "infirmerie");
+        assert_eq!(self.token_piles, game.token_piles(), "piles de jetons");
+        assert_eq!(self.graveyard, game.graveyard(), "cimetière");
         for pos in game.board().positions() {
             let mirrored = self.tombs[pos.row * self.size + pos.col];
             assert_eq!(mirrored, game.board().tomb(pos), "tombe en {pos}");
@@ -258,7 +301,8 @@ impl EventMirror {
                 assert!(reciprocal, "pacte sans réciproque : {effect:?}");
             }
         }
-        // Aucun pion ne se perd : plateau, réserve et infirmerie font toujours le compte.
+        // Aucun pion ne se perd : plateau, réserve, infirmerie et cimetière font toujours le
+        // compte.
         for player in [Player::One, Player::Two] {
             let on_board = self.cells.iter().flatten();
             let on_board = on_board.filter(|pion| pion.owner() == player).count() as u32;
@@ -268,6 +312,12 @@ impl EventMirror {
                 .count() as u32;
             assert_eq!(
                 on_board + self.reserves[player.index()] + wounded,
+                game.living_pions(player)
+            );
+            let dead = self.graveyard.iter();
+            let dead = dead.filter(|pion| pion.owner() == player).count() as u32;
+            assert_eq!(
+                on_board + self.reserves[player.index()] + wounded + dead,
                 self.pions_per_player,
                 "pions de {player:?}"
             );
@@ -320,6 +370,7 @@ fn play_random_game(config: GameConfig, seed: u64, rng: &mut Rng) -> PlayedGame 
 fn events_are_enough_to_follow_the_board() {
     let (mut attacks, mut epics, mut kills) = (0, 0, 0);
     let (mut effects_ended, mut healed, mut moved, mut swapped) = (0, 0, 0, 0);
+    let (mut tokens_used, mut buried) = (0, 0);
     let mut kinds_played = Vec::new();
     for seed in 0..500 {
         let mut rng = Rng::new(seed);
@@ -338,6 +389,9 @@ fn events_are_enough_to_follow_the_board() {
         healed += played.count(|event| matches!(event, Event::InfirmaryLeft(_)));
         moved += played.count(|event| matches!(event, Event::PionMoved { .. }));
         swapped += played.count(|event| matches!(event, Event::PionsSwapped { .. }));
+        tokens_used +=
+            played.count(|event| matches!(event, Event::TokenUsed(_) | Event::TokenPileEnded(_)));
+        buried += played.count(|event| matches!(event, Event::GraveyardEntered(_)));
         for (events, _) in &played.steps {
             for event in events {
                 if let Event::AttackUsed { attack, .. } = event
@@ -359,6 +413,9 @@ fn events_are_enough_to_follow_the_board() {
         healed > 20,
         "seulement {healed} pions sortis de l'infirmerie"
     );
+    assert!(tokens_used > 20, "seulement {tokens_used} jetons usés");
+    // Rare au hasard : il faut un Massacre Épique ou Légendaire, puis un kill.
+    assert!(buried > 3, "seulement {buried} pions au cimetière");
     for kind in [
         AttackKind::BeauteFatale,
         AttackKind::SautDuLoup,
@@ -366,6 +423,7 @@ fn events_are_enough_to_follow_the_board() {
         AttackKind::Attila,
         AttackKind::Medecin,
         AttackKind::Interchange,
+        AttackKind::MassacreDivin,
         AttackKind::Ours,
         AttackKind::Lievre,
         AttackKind::MeilleursAmis,

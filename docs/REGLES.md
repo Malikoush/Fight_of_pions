@@ -226,9 +226,20 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
 - Une famille ne programme rien : la protection d'un enfant ne compte pas pour la partie figée.
 - Attila Rare et Épique (annuler tous les enfants d'une Familia, qui forment un seul effet) viendront avec B6.
 
+### Massacre divin (2026-11-02)
+
+- La carte se lance, comme Attila, depuis n'importe lequel de tes pions prêts, sans cible : elle pose devant toi une **pile de jetons**. Commune : 1 jeton, 2 points. Rare : 4 jetons, 1 point chacun. Épique : 2 jetons, cimetière. Légendaire : 3 jetons, cimetière.
+- **Kill** : tout pion adverse tué, par n'importe quelle carte, le tir de la reine ou une vengeance, pendant ton tour ou celui de l'adversaire. Un pion sauvé par un garde n'est pas tué : il n'use aucun jeton.
+- **Les piles s'additionnent** : chaque kill use un jeton de **chacune** de tes piles. Un même kill peut donc rendre des points **et** envoyer au cimetière. Plusieurs kills dans une même attaque usent chacun leurs jetons, dans l'ordre des kills. Une pile vide disparaît.
+- **Points rendus** : pendant ton tour, ils s'ajoutent à tes points du tour, sans plafond jusqu'à la fin du tour, où ta banque redescend à son maximum. Pendant le tour adverse (une vengeance), ils vont dans ta banque, plafonnée tout de suite.
+- **Cimetière** : le pion tué ne laisse pas de tombe et ne revient jamais. Sans infirmerie (premières règles), il ne retourne pas non plus dans la réserve.
+- **Défaite par manque de pions** : à la fin de chaque action, après les vengeances, un joueur qui a un pion au cimetière et moins de `align_to_win` pions (plateau, réserve et infirmerie) a perdu. Si c'est le cas des deux joueurs dans la même action, match nul.
+- **Attila Rare et Épique** visent les jetons de l'adversaire à part (« Viser les jetons adverses ») : ils comptent pour un pion, et **toutes** ses piles sont annulées, chacune étant un effet entier. Attila Commune n'y touche pas (ce ne sont pas des statuts).
+- Les jetons ne programment rien : une pile ne compte pas pour la partie figée.
+
 ### Fin de partie (2026-10-26)
 
-Une partie se termine dans l'un de ces trois cas, vérifiés dans cet ordre :
+Une partie se termine dans l'un de ces cas, vérifiés dans cet ordre (le manque de pions, ajouté en B6b, se vérifie à la fin de chaque action, avant la partie figée) :
 
 1. **Alignement** : une ligne d'au moins `align_to_win` pions fait gagner son propriétaire :
    - sans la règle d'or (premières règles), dès qu'elle est faite en posant ;
@@ -243,8 +254,7 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 
 ## Pas encore implémenté
 
-- Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, la Reine, Attila Commune, le Médecin, l'Interchange Rare et Épique, le Lièvre Commune, Rare et Légendaire, et Meilleurs amis ; et les réactions.
-- La défaite par manque de pions (avec le cimetière, B6).
+- Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, la Reine, Attila Commune, Rare et Épique, le Médecin, le Massacre divin, l'Interchange Rare et Épique, le Lièvre Commune, Rare et Légendaire, et Meilleurs amis ; et les réactions.
 - Le draft et la cache secrète.
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
 
@@ -332,7 +342,7 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B5b | Médecin Épique ou Légendaire sur une tombe occupée par un pion adverse **protégé** | L'Épique ne peut pas viser cette tombe ; la Légendaire saute ce pion, qui reste à l'infirmerie | **2026-10-30** : oui. |
 | B5b | Médecin Légendaire (« obligatoirement tous ») quand certains pions ne peuvent pas revenir (tombe occupée par ton pion ou par un pion protégé) | Il ressuscite tous ceux qu'il peut ; il en faut au moins un pour jouer la carte | **2026-10-30** : oui. |
 | B5b | Une tombe reste-t-elle sur sa case quand un pion bouge ou est échangé ? Sans infirmerie, le Médecin est-il jouable ? | La tombe reste sur sa case ; sans infirmerie (0 tour), pas de tombe, donc pas de Médecin | **2026-10-30** : oui pour les deux : le Médecin ne sert qu'avec l'infirmerie. |
-| B5 | Rejouer une carte dont l'effet est encore en jeu : 2 reines, 2 pactes, 2 piles de jetons Massacre qui comptent pour le même kill ? | À trancher | **2026-10-30**, pour les pactes : permis, chaque pacte est indépendant. **2026-10-31**, pour la reine : une seule à la fois. Reste à trancher pour le Massacre divin (B6). |
+| B5 | Rejouer une carte dont l'effet est encore en jeu : 2 reines, 2 pactes, 2 piles de jetons Massacre qui comptent pour le même kill ? | À trancher | **2026-10-30**, pour les pactes : permis, chaque pacte est indépendant. **2026-10-31**, pour la reine : une seule à la fois. **2026-11-02**, pour le Massacre divin : les piles s'additionnent, et chaque kill use un jeton de chacune. |
 | B5 | Meilleurs amis : quand la vengeance a-t-elle lieu ? (Un Saut du loup peut tuer un ami au premier saut et l'autre au deuxième.) | À la fin de l'attaque | **2026-10-30** : à la fin de l'attaque. Si un seul des deux amis est mort pendant l'attaque, l'autre tue l'assassin ; si les deux sont morts, personne ne se venge. |
 | B5 | Vengeance en chaîne : si l'assassin est lui-même lié par un pacte, son ami le venge-t-il ? | Oui | **2026-10-30** : oui, la vengeance est un kill comme un autre. La chaîne s'arrête forcément : chaque pacte prend fin après sa vengeance. |
 | B5 | Meilleurs amis avec un seul pion en réserve (la règle commune dit qu'une invocation « pose ce qu'elle peut ») | Carte impossible | **2026-10-30** : impossible, un pacte demande deux amis. |
@@ -354,6 +364,12 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B6a | Attila Rare sur une reine : et sa couronne ? | La couronne reste ; seuls les gardes partent | **2026-11-02** : oui. |
 | B6a | Comment choisir l'effet à annuler ? | Viser un pion : tous ses effets adverses partent, chacun en entier ; l'Épique vise 2 pions différents | **2026-11-02** : oui. |
 | B6a | Attila Rare ou Épique sans effet adverse en jeu ? | Carte injouable | **2026-11-02** : oui. |
+| B6b | Un kill pendant le tour adverse (une vengeance) use-t-il tes jetons ? | Oui ; les points vont dans ta banque, plafonnée tout de suite | **2026-11-02** : oui. |
+| B6b | Plusieurs kills dans une même attaque ? | Chacun use ses jetons, dans l'ordre des kills | **2026-11-02** : oui. |
+| B6b | Une reine sauvée par un garde ? Le cimetière sans infirmerie ? | Pas de kill, pas de jeton ; le cimetière s'applique quand même | **2026-11-02** : oui. |
+| B6b | Quand se constate la défaite par manque de pions ? Et si les deux joueurs tombent sous 6 ensemble ? | À la fin de l'action, après les vengeances ; match nul si les deux | **2026-11-02** : oui. |
+| B6c | Un pion de ton camp tué par ta propre carte (le retour d'Interchange Commune peut tuer l'occupant de sa case) use-t-il des jetons du Massacre divin, et de qui ? Aujourd'hui, un kill compte pour l'adversaire du pion tué, car toutes les familles ne tuent que des pions adverses. | Non : seul un kill de pion adverse use des jetons (le joueur qui tue sera alors passé au kill) | |
+| B6b | Comment Attila vise-t-il les jetons, posés devant le joueur et non sur un pion ? | Un choix à part, « les jetons adverses », qui compte pour un pion : toutes les piles adverses sont annulées | **2026-11-02** : oui. |
 | B6a | Attila Épique quand un seul pion porte deux jeux adverses, ou qu'un pion X porte deux jeux et un pion Y l'un des deux : l'ordre des choix compte-t-il ? Aujourd'hui : viser X puis Y est impossible (Y n'a plus rien de nouveau), Y puis X marche ; un seul pion X ne suffit pas. | Oui, l'ordre compte, et il faut toujours deux pions (lettre de la règle « 2 pions différents ») | **2026-11-02** : l'ordre compte, mais l'Épique vise 1 ou 2 pions et se joue dès qu'un effet adverse est en jeu (à perte si un seul). |
 | B6 | Le retour d'Interchange Commune est-il un effet continu (Attila peut l'annuler) ? La fiche dit « elle ne peut pas faire gagner », or le retour peut compléter une ligne de 5 avant la vérification. | Oui, c'est un effet continu ; le retour qui complète une ligne gagne (l'adversaire a eu un tour pour casser les 5 autres pions) : corriger la phrase de la fiche | |
 | B6 | Terre brûlée : « les cartes adverses s'appliquent sans leur partie continue » rend Interchange Commune plus forte (téléportation sans retour) | « Pendant Terre brûlée, l'adversaire ne peut jouer aucune carte qui crée un effet continu » | |
@@ -394,3 +410,4 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-10-30 | B5a : une carte qui pose ; kill et assassin définis ; l'infirmerie se compte en tours du propriétaire, même tué pendant son tour ; séduction (Beauté fatale Épique et Légendaire = tuer + poser) ; Meilleurs amis (pacte sans durée, vengeance à la fin de l'attaque, en chaîne) ; Attila Commune ne retire que les statuts. |
 | 2026-10-30 | B5b : tombes (une par case, la plus récente remplace l'autre, elles restent sur leur case quand les pions bougent) ; le Médecin (Commune à Légendaire) ressuscite depuis l'infirmerie, sur sa propre tombe. Sans infirmerie, ni tombe ni Médecin. |
 | 2026-10-31 | B5c : la reine (Reine Rare à Légendaire) : pose n'importe où, une seule à la fois ; pas gratuit une fois par tour (le tour l'attend) ; gardes qui la sauvent d'un kill ou tirent (un tir par tour, `guard_shot_cost`). |
+| 2026-11-02 | B6b : le Massacre divin (Commune à Légendaire) : piles de jetons qui s'additionnent, points rendus, cimetière sans tombe, défaite par manque de pions (nul si les deux) ; Attila Rare et Épique visent aussi les jetons adverses. |

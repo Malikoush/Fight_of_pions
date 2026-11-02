@@ -9,6 +9,7 @@ mod effect;
 mod familia;
 mod interchange;
 mod lievre;
+mod massacre_divin;
 mod medecin;
 mod meilleurs_amis;
 mod ours;
@@ -21,7 +22,8 @@ pub use card::{Attack, AttackKind, AttackStats, CatalogEntry, Rarity};
 pub(crate) use effect::Effect;
 pub(crate) use reach::{around, both_sides, first_in_lines};
 pub(crate) use rules::{
-    AttackContext, AttackRules, Launch, can_act, can_choose_more, can_complete, is_complete, is_new,
+    AttackContext, AttackRules, Launch, Targets, can_act, can_choose_more, can_complete,
+    can_complete_with_enemy_tokens, effects_of, is_complete, is_new,
 };
 
 impl AttackKind {
@@ -34,6 +36,7 @@ impl AttackKind {
             AttackKind::Attila => &attila::Attila,
             AttackKind::Medecin => &medecin::Medecin,
             AttackKind::Interchange => &interchange::Interchange,
+            AttackKind::MassacreDivin => &massacre_divin::MassacreDivin,
             AttackKind::Ours => &ours::Ours,
             AttackKind::Lievre => &lievre::Lievre,
             AttackKind::MeilleursAmis => &meilleurs_amis::MeilleursAmis,

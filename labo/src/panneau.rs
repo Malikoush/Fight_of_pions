@@ -10,6 +10,7 @@ use bots::BotKind;
 use eframe::egui;
 use fight_of_pions::{
     Action, ActiveEffect, Event, Game, GameConfig, GameEnd, GameRecord, Outcome, Player, Position,
+    TokenPile, TokenReward,
 };
 use std::time::Duration;
 
@@ -363,7 +364,18 @@ fn attaques(
     if en_choix.attack_in_progress() {
         ui.label("Clique le pion lanceur, puis la ou les cibles.");
         // Une attaque « jusqu'à 2 » peut se jouer avant son nombre maximal de cibles.
-        let fin_possible = tour_humain && en_choix.legal_actions().contains(&Action::FinishAttack);
+        let legales_du_choix = en_choix.legal_actions();
+        let fin_possible = tour_humain && legales_du_choix.contains(&Action::FinishAttack);
+        // Les jetons adverses ne sont sur aucune case : un bouton les vise.
+        let jetons_visables = tour_humain && legales_du_choix.contains(&Action::ChooseEnemyTokens);
+        if jetons_visables
+            && ui
+                .button("Viser les jetons adverses")
+                .on_hover_text("Annuler toutes les piles du Massacre divin de l'adversaire.")
+                .clicked()
+        {
+            intentions.push(Intention::ViserJetons);
+        }
         ui.horizontal(|ui| {
             if ui
                 .add_enabled(fin_possible, egui::Button::new("Jouer l'attaque"))
@@ -439,13 +451,34 @@ fn etat(ui: &mut egui::Ui, game: &Game) {
             .iter()
             .filter(|patient| patient.pion().owner() == player)
             .count();
+        let morts = game
+            .graveyard()
+            .iter()
+            .filter(|pion| pion.owner() == player)
+            .count();
+        let cimetiere = if morts > 0 {
+            format!(
+                ", {morts} au cimetière ({} pions en vie)",
+                game.living_pions(player)
+            )
+        } else {
+            String::new()
+        };
         ui.label(format!(
-            "{} : {} pions en réserve, {} à l'infirmerie, {} actions gardées",
+            "{} : {} pions en réserve, {} à l'infirmerie{}, {} actions gardées",
             theme::nom_joueur(player),
             game.reserve_pions(player),
             blesses,
+            cimetiere,
             game.banked_actions(player)
         ));
+        for pile in game
+            .token_piles()
+            .iter()
+            .filter(|pile| pile.owner() == player)
+        {
+            ui.label(format!("    {}", texte_pile(*pile)));
+        }
     }
 }
 
@@ -535,6 +568,22 @@ fn decrire(event: &Event) -> Option<String> {
             patient.pion().id(),
             theme::nom_joueur(patient.pion().owner())
         )),
+        Event::GraveyardEntered(pion) => Some(format!(
+            "Le pion {} de {} part au cimetière, pour toujours",
+            pion.id(),
+            theme::nom_joueur(pion.owner())
+        )),
+        Event::TokenPileStarted(pile) => Some(format!(
+            "{} pose {}",
+            theme::nom_joueur(pile.owner()),
+            texte_pile(*pile)
+        )),
+        Event::TokenUsed(pile) => Some(format!("Un jeton sert : {}", texte_pile(*pile))),
+        Event::TokenPileEnded(pile) => Some(format!(
+            "La pile de {} ({}) disparaît",
+            theme::nom_joueur(pile.owner()),
+            pile.source()
+        )),
         Event::ActionsChanged { .. }
         | Event::PlacementsChanged { .. }
         | Event::ReserveChanged { .. }
@@ -542,6 +591,20 @@ fn decrire(event: &Event) -> Option<String> {
         Event::TurnEnded { next } => Some(format!("Au tour de {}", theme::nom_joueur(*next))),
         Event::GameEnded(fin) => Some(texte_fin(*fin)),
     }
+}
+
+/// « Massacre divin (Rare) : 3 jetons, 1 point par kill ».
+fn texte_pile(pile: TokenPile) -> String {
+    let jetons = match pile.tokens() {
+        1 => "1 jeton".to_string(),
+        n => format!("{n} jetons"),
+    };
+    let gain = match pile.reward() {
+        TokenReward::Points(1) => "1 point par kill".to_string(),
+        TokenReward::Points(n) => format!("{n} points par kill"),
+        TokenReward::Graveyard => "le pion tué part au cimetière".to_string(),
+    };
+    format!("{} : {jetons}, {gain}", pile.source())
 }
 
 /// « jusqu'à la fin du tour 6 », « tant que sa famille l'encadre » (un enfant de la

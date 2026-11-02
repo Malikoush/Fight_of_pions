@@ -1,6 +1,7 @@
 use super::arsenal::ArsenalSlot;
 use super::lasting::{ActiveEffect, EffectId, Patient, PlayId};
-use crate::attacks::{Launch, is_new};
+use super::tokens::TokenPile;
+use crate::attacks::{Launch, Targets, is_new};
 use crate::{
     Action, Attack, Board, Cell, Decision, EndReason, Event, GameConfig, GameEnd, GameError,
     Outcome, Pion, PionId, Player, Position, rules,
@@ -39,6 +40,10 @@ pub struct Game {
     pub(super) next_play_id: PlayId,
     /// Les pions tués qui attendent de revenir dans la réserve, dans l'ordre d'arrivée.
     pub(super) infirmary: Vec<Patient>,
+    /// Les piles de jetons du Massacre divin, dans l'ordre où elles ont été posées.
+    pub(super) token_piles: Vec<TokenPile>,
+    /// Les pions au cimetière, dans l'ordre d'arrivée : ils ne reviennent jamais.
+    pub(super) graveyard: Vec<Pion>,
     /// Vrai si la reine du joueur courant a déjà fait son pas gratuit ce tour.
     pub(super) queen_stepped: bool,
     /// Vrai si un garde de la reine du joueur courant a déjà tiré ce tour.
@@ -56,7 +61,7 @@ pub(super) struct PendingAttack {
     /// La case du pion lanceur, une fois choisie.
     pub(super) launcher: Option<Position>,
     /// Les cibles déjà choisies.
-    pub(super) targets: Vec<Position>,
+    pub(super) targets: Targets,
 }
 
 impl Game {
@@ -209,7 +214,8 @@ impl Game {
     }
 
     /// Vrai si une attaque est commencée et attend encore son lanceur ou une cible : seules
-    /// [`Action::Choose`] et [`Action::FinishAttack`] sont alors permises.
+    /// [`Action::Choose`], [`Action::ChooseEnemyTokens`] et [`Action::FinishAttack`] sont
+    /// alors permises.
     pub fn attack_in_progress(&self) -> bool {
         self.pending_decision()
             .is_some_and(Decision::is_attack_choice)
@@ -219,7 +225,8 @@ impl Game {
     /// toujours identique : les poses rangée par rangée (A1, B1… puis A2…), les attaques
     /// dans l'ordre de l'arsenal, les pas de la reine puis ses tirs (dans l'ordre des
     /// directions, [`crate::Direction::ALL`]), puis `EndTurn` ; pendant une attaque, les
-    /// choix de case rangée par rangée, puis `FinishAttack`. Vide si la partie est finie.
+    /// choix de case rangée par rangée, puis `ChooseEnemyTokens`, puis `FinishAttack`. Vide
+    /// si la partie est finie.
     ///
     /// La liste est construite en passant chaque action candidate par la validation
     /// elle-même : elle ne peut pas contredire `apply`. Les candidates sont seulement
@@ -245,7 +252,7 @@ impl Game {
                 .choice_candidates(pending)
                 .into_iter()
                 .map(Action::Choose)
-                .chain([Action::FinishAttack])
+                .chain([Action::ChooseEnemyTokens, Action::FinishAttack])
                 .collect(),
         };
         candidates
@@ -288,6 +295,8 @@ impl Game {
             next_effect_id: EffectId::FIRST,
             next_play_id: PlayId::FIRST,
             infirmary: Vec::new(),
+            token_piles: Vec::new(),
+            graveyard: Vec::new(),
             queen_stepped: false,
             queen_shot: false,
             config,
@@ -313,6 +322,7 @@ impl Game {
             (None, Action::Shoot(at)) => self.validate_shot(at),
             (None, Action::EndTurn) => Ok(()),
             (Some(pending), Action::Choose(pos)) => self.validate_choice(pending, pos),
+            (Some(pending), Action::ChooseEnemyTokens) => self.validate_enemy_tokens(pending),
             (Some(pending), Action::FinishAttack) => self.validate_finish(pending),
             _ => Err(GameError::UnexpectedAction),
         }
@@ -357,6 +367,7 @@ impl Game {
             Action::Place(pos) => self.execute_place(pos, &mut events),
             Action::UseAttack(slot) => self.start_attack(slot),
             Action::Choose(pos) => self.execute_choice(pos, &mut events),
+            Action::ChooseEnemyTokens => self.execute_enemy_tokens(&mut events),
             Action::FinishAttack => self.resolve_attack(&mut events),
             Action::StepQueen(to) => self.execute_step(to, &mut events),
             Action::Shoot(at) => self.execute_shot(at, &mut events),
@@ -444,11 +455,14 @@ impl Game {
     }
 
     /// Ce qui suit toute action qui a modifié le plateau sans faire gagner : les enfants que
-    /// leur famille n'encadre plus perdent leur protection, puis la partie peut se figer, ou
-    /// le tour se terminer quand il ne reste ni action, ni pose, ni pas de reine.
+    /// leur famille n'encadre plus perdent leur protection, puis un joueur peut perdre par
+    /// manque de pions, la partie se figer, ou le tour se terminer quand il ne reste ni
+    /// action, ni pose, ni pas de reine.
     pub(super) fn after_action(&mut self, events: &mut Vec<Event>) {
         self.end_unframed_children(events);
-        if self.is_frozen() {
+        if let Some(outcome) = self.lack_of_pions() {
+            self.finish_game(outcome, EndReason::TooFewPions, events);
+        } else if self.is_frozen() {
             self.stop_game(EndReason::Frozen, events);
         } else if self.actions_left == 0
             && self.placements_left() == 0

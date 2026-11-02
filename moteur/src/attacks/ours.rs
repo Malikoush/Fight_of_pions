@@ -91,6 +91,7 @@ mod tests {
         let context = AttackContext {
             board: &board,
             effects: &[],
+            token_piles: &[],
             player: Player::One,
             launcher: Position { row: 2, col: 2 },
             rarity: Rarity::Rare,

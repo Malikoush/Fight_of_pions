@@ -10,7 +10,8 @@ use super::kill::{Death, Hit};
 use super::lasting::CardPlay;
 use super::state::{Game, PendingAttack};
 use crate::attacks::{
-    AttackContext, Effect, Launch, can_act, can_choose_more, can_complete, is_complete,
+    AttackContext, Effect, Launch, Targets, can_act, can_choose_more, can_complete,
+    can_complete_with_enemy_tokens, effects_of, is_complete,
 };
 use crate::{Attack, AttackStats, Cell, Event, GameError, Pion, PionId, Player, Position};
 
@@ -58,8 +59,10 @@ impl Game {
                 let context = self.context(player, attack, launcher, Launch::Now);
                 let rules = attack.kind.rules();
                 let mut chosen = pending.targets.clone();
-                let candidate = rules.candidate_targets(&context, &chosen).contains(&pos);
-                chosen.push(pos);
+                let candidate = rules
+                    .candidate_targets(&context, &chosen.cells)
+                    .contains(&pos);
+                chosen.cells.push(pos);
                 candidate && can_complete(rules, &context, &mut chosen)
             }
         };
@@ -67,6 +70,23 @@ impl Game {
             Ok(())
         } else {
             Err(GameError::InvalidChoice(pos))
+        }
+    }
+
+    /// Viser les jetons de l'adversaire (Attila Rare et Épique) : permis après le lanceur,
+    /// si l'attaque sait les viser et peut encore finir ensuite.
+    pub(super) fn validate_enemy_tokens(&self, pending: &PendingAttack) -> Result<(), GameError> {
+        let Some(launcher) = pending.launcher else {
+            return Err(GameError::UnexpectedAction);
+        };
+        let attack = pending.attack;
+        let rules = attack.kind.rules();
+        let context = self.context(self.current_player, attack, launcher, Launch::Now);
+        let mut chosen = pending.targets.clone();
+        if can_complete_with_enemy_tokens(rules, &context, &mut chosen) {
+            Ok(())
+        } else {
+            Err(GameError::UnexpectedAction)
         }
     }
 
@@ -87,7 +107,7 @@ impl Game {
                     .attack
                     .kind
                     .rules()
-                    .candidate_targets(&context, &pending.targets)
+                    .candidate_targets(&context, &pending.targets.cells)
             }
         };
         cells.sort_by_key(|pos| (pos.row, pos.col));
@@ -142,7 +162,7 @@ impl Game {
             slot,
             attack: slot_state.attack(),
             launcher: None,
-            targets: Vec::new(),
+            targets: Targets::default(),
         });
     }
 
@@ -152,8 +172,18 @@ impl Game {
         };
         match pending.launcher {
             None => pending.launcher = Some(pos),
-            Some(_) => pending.targets.push(pos),
+            Some(_) => pending.targets.cells.push(pos),
         }
+        if self.nothing_left_to_choose() {
+            self.resolve_attack(events);
+        }
+    }
+
+    pub(super) fn execute_enemy_tokens(&mut self, events: &mut Vec<Event>) {
+        let Some(pending) = self.pending_attack.as_mut() else {
+            return;
+        };
+        pending.targets.enemy_tokens = true;
         if self.nothing_left_to_choose() {
             self.resolve_attack(events);
         }
@@ -192,7 +222,8 @@ impl Game {
         let player = self.current_player;
         let attack = pending.attack;
         let stats = self.attack_stats(attack);
-        let effects = attack.kind.rules().effects(
+        let effects = effects_of(
+            attack.kind.rules(),
             &self.context(player, attack, launcher, Launch::Now),
             &pending.targets,
         );
@@ -262,6 +293,8 @@ impl Game {
                 self.start_effect(at, kind, turns, play, events);
             }
             Effect::CancelEnemyEffects { at } => self.cancel_enemy_effects(at, events),
+            Effect::CancelEnemyTokens => self.cancel_enemy_tokens(events),
+            Effect::AddTokens { reward, tokens } => self.add_tokens(reward, tokens, play, events),
             Effect::RemoveEnemyStatuses { at } => {
                 let pion = self.board.get(at).and_then(Cell::pion)?;
                 let enemy = self.current_player.opponent();
@@ -327,6 +360,7 @@ impl Game {
         AttackContext {
             board: &self.board,
             effects: &self.effects,
+            token_piles: &self.token_piles,
             player,
             launcher,
             rarity: attack.rarity,
@@ -346,7 +380,7 @@ impl Game {
         when: Launch,
     ) -> bool {
         let context = self.context(player, attack, launcher, when);
-        can_complete(attack.kind.rules(), &context, &mut Vec::new())
+        can_complete(attack.kind.rules(), &context, &mut Targets::default())
     }
 }
 

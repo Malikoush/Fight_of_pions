@@ -20,6 +20,10 @@ pub enum Action {
     /// Choisir une case : le pion lanceur, puis chaque cible de l'attaque en cours.
     /// L'attaque est jouée dès qu'il n'y a plus rien à choisir.
     Choose(Position),
+    /// Choisir les jetons de l'adversaire (ses piles du Massacre divin) comme prochaine
+    /// cible de l'attaque en cours : Attila Rare et Épique les annulent. Compte pour une
+    /// cible.
+    ChooseEnemyTokens,
     /// Jouer l'attaque en cours avec les cibles déjà choisies, quand elle en permet plus
     /// (« jusqu'à 2 ») et qu'on n'en veut pas d'autre. Permis seulement si l'attaque est
     /// déjà complète.

@@ -126,7 +126,9 @@ fn queen_can_act(game: &Game, player: Player) -> bool {
 ///   Reines posent une reine, s'il reste un pion en réserve, une case libre, et pas de reine ;
 /// - Attila vise un pion qui porte un effet adverse (sans durée : un pacte, des gardes, un
 ///   enfant) : un statut pour la Commune (un enfant), tout sauf la couronne pour la Rare et
-///   l'Épique (son second pion est facultatif) ;
+///   l'Épique (son second pion est facultatif), qui visent aussi les jetons adverses ;
+/// - le Massacre divin pose ses jetons depuis n'importe lequel de tes pions : toujours
+///   possible ;
 /// - le Médecin ressuscite sur une tombe : personne à l'infirmerie, donc aucune tombe ;
 /// - le Saut du loup a besoin d'une case libre à 2 cases en ligne droite ;
 /// - l'Interchange Rare vise un ennemi à 1 ou 2 cases en ligne droite, même derrière un
@@ -208,6 +210,10 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             .map(|effect| effect.play())
             .collect()
     };
+    let enemy_tokens = game
+        .token_piles()
+        .iter()
+        .any(|pile| pile.owner() == player.opponent());
     let enemy_plays: Vec<Position> = board
         .positions()
         .filter(|&pos| !plays_at(pos).is_empty())
@@ -257,7 +263,8 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
                 reserve > 0 && free_cells > 0 && game.queen_of(player).is_none()
             }
             (AttackKind::Attila, Rarity::Common) => !enemy_statuses.is_empty(),
-            (AttackKind::Attila, _) => !enemy_plays.is_empty(),
+            (AttackKind::Attila, _) => !enemy_plays.is_empty() || enemy_tokens,
+            (AttackKind::MassacreDivin, _) => true,
             (AttackKind::Medecin, _) => false,
             (AttackKind::SautDuLoup, _) => free_two_away(launcher),
             (AttackKind::Interchange, Rarity::Rare) => enemy_in_line(launcher),
@@ -342,6 +349,13 @@ fn random_games_freeze_exactly_when_the_rules_say_so() {
                     frozen_by_the_rules(&game),
                     "partie {seed} déclarée figée à tort : {:?}",
                     game.config()
+                ),
+                Some(EndReason::TooFewPions) => assert!(
+                    [Player::One, Player::Two].into_iter().any(|player| {
+                        game.graveyard().iter().any(|pion| pion.owner() == player)
+                            && (game.living_pions(player) as usize) < game.config().align_to_win
+                    }),
+                    "partie {seed} perdue par manque de pions à tort"
                 ),
                 Some(EndReason::TurnLimit) | None => assert!(
                     !frozen_by_the_rules(&game),

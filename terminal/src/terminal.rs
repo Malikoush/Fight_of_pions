@@ -1,7 +1,9 @@
 //! Interface texte : traduit du texte en Action, et une Game en texte.
 //! Elle ne décide jamais si un coup est légal : c'est le travail du moteur.
 
-use fight_of_pions::{Action, ActiveEffect, Decision, Game, GameConfig, Player, Position};
+use fight_of_pions::{
+    Action, ActiveEffect, Decision, Game, GameConfig, Player, Position, TokenPile, TokenReward,
+};
 
 /// Ce que le joueur peut taper.
 pub enum Command {
@@ -18,6 +20,7 @@ Commandes :
   p C5   poser un pion en C5
   a 1    lancer l'attaque n°1 de son arsenal
   c C5   choisir C5 comme lanceur ou comme cible de l'attaque en cours
+  j      viser les jetons de l'adversaire (Massacre divin) pendant une attaque
   v      jouer l'attaque en cours avec les cibles déjà choisies (« jusqu'à 2 »)
   r C5   faire avancer sa reine en C5 (son pas gratuit, une fois par tour)
   t C5   faire tirer un garde de sa reine sur le pion en C5
@@ -26,6 +29,20 @@ Commandes :
   h      afficher l'aide
   q      quitter",
         config.max_banked_actions
+    )
+}
+
+/// « Joueur 1 : Massacre divin (Rare), 3 jeton(s), 1 point(s) par kill ».
+pub fn token_pile(pile: TokenPile) -> String {
+    let reward = match pile.reward() {
+        TokenReward::Points(n) => format!("{n} point(s) par kill"),
+        TokenReward::Graveyard => "le pion tué part au cimetière".to_string(),
+    };
+    format!(
+        "{} : {}, {} jeton(s), {reward}",
+        player_name(pile.owner()),
+        pile.source(),
+        pile.tokens()
     )
 }
 
@@ -128,14 +145,35 @@ pub fn render(game: &Game) -> String {
             patient.last_turn()
         ));
     }
+    for pile in game.token_piles() {
+        out.push_str(&format!("\n  {}", token_pile(*pile)));
+    }
+    for pion in game.graveyard() {
+        out.push_str(&format!(
+            "\n  au cimetière : pion {} de {}",
+            pion.id(),
+            player_name(pion.owner())
+        ));
+    }
     match game.pending_decision() {
         Some(Decision::ChooseLauncher { attack, .. }) => {
             out.push_str(&format!("\n{attack} : choisis le pion lanceur (c C5)"));
         }
         Some(Decision::ChooseTarget { attack, .. }) => {
-            let can_finish = game.legal_actions().contains(&Action::FinishAttack);
-            let or_finish = if can_finish { ", ou joue-la (v)" } else { "" };
-            out.push_str(&format!("\n{attack} : choisis une cible (c C5){or_finish}"));
+            let legal = game.legal_actions();
+            let or_tokens = if legal.contains(&Action::ChooseEnemyTokens) {
+                ", les jetons adverses (j)"
+            } else {
+                ""
+            };
+            let or_finish = if legal.contains(&Action::FinishAttack) {
+                ", ou joue-la (v)"
+            } else {
+                ""
+            };
+            out.push_str(&format!(
+                "\n{attack} : choisis une cible (c C5){or_tokens}{or_finish}"
+            ));
         }
         Some(Decision::MainAction { .. }) | None => {}
     }
@@ -154,6 +192,7 @@ pub fn parse_command(line: &str) -> Result<Command, String> {
                 "« {number} » : il faut le numéro d'une attaque, à partir de 1"
             )),
         },
+        ["j"] => Ok(Command::Play(Action::ChooseEnemyTokens)),
         ["v"] => Ok(Command::Play(Action::FinishAttack)),
         ["r", pos] => Ok(Command::Play(Action::StepQueen(pos.parse()?))),
         ["t", pos] => Ok(Command::Play(Action::Shoot(pos.parse()?))),

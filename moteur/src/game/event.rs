@@ -1,4 +1,4 @@
-use crate::{ActiveEffect, Attack, GameEnd, Patient, Pion, PionId, Player, Position};
+use crate::{ActiveEffect, Attack, GameEnd, Patient, Pion, PionId, Player, Position, TokenPile};
 
 /// Ce que le moteur annonce après une action acceptée.
 ///
@@ -34,7 +34,10 @@ pub enum Event {
         target: Position,
     },
     /// Un pion a été tué et retiré du plateau. Suivent la fin de ses effets continus
-    /// ([`Event::EffectEnded`]), puis son départ à l'infirmerie
+    /// ([`Event::EffectEnded`]), les jetons du Massacre divin que le kill use
+    /// ([`Event::TokenUsed`], [`Event::TokenPileEnded`], puis [`Event::ActionsChanged`] s'ils
+    /// rendent des points), puis son départ au cimetière ([`Event::GraveyardEntered`]), à
+    /// l'infirmerie
     /// ([`Event::InfirmaryEntered`], puis sa tombe : [`Event::TombRemoved`] pour celle
     /// qu'elle remplace, et [`Event::TombAdded`]) ou dans la réserve
     /// ([`Event::ReserveChanged`]).
@@ -90,6 +93,16 @@ pub enum Event {
     /// propriétaire) ou [`Event::PionPlaced`] (ressuscité par le Médecin, avec une nouvelle
     /// identité).
     InfirmaryLeft(Patient),
+    /// Un pion tué part au cimetière (Massacre divin Épique et Légendaire), sans tombe : il
+    /// ne reviendra jamais.
+    GraveyardEntered(Pion),
+    /// Une pile de jetons du Massacre divin est posée devant son propriétaire.
+    TokenPileStarted(TokenPile),
+    /// Un kill a usé un jeton de cette pile ; elle en a encore (`tokens`).
+    TokenUsed(TokenPile),
+    /// Une pile de jetons disparaît : son dernier jeton a servi (`tokens` vaut alors 0), ou
+    /// Attila l'a annulée.
+    TokenPileEnded(TokenPile),
     /// Un pion tué laisse sa tombe sur la case où il est mort. Une tombe ne bloque pas la
     /// case ; une case porte au plus une tombe.
     TombAdded {

@@ -116,6 +116,19 @@ fn main() {
                                 patient.pion().id(),
                                 terminal::player_name(patient.pion().owner())
                             ),
+                            Event::GraveyardEntered(pion) => println!(
+                                "Le pion {} de {} part au cimetière, pour toujours.",
+                                pion.id(),
+                                terminal::player_name(pion.owner())
+                            ),
+                            Event::TokenPileStarted(pile) | Event::TokenUsed(pile) => {
+                                println!("{}.", terminal::token_pile(pile))
+                            }
+                            Event::TokenPileEnded(pile) => println!(
+                                "La pile de {} ({}) disparaît.",
+                                terminal::player_name(pile.owner()),
+                                pile.source()
+                            ),
                             Event::TurnEnded { next } => {
                                 println!("Au tour de {}.", terminal::player_name(next));
                             }

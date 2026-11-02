@@ -1,4 +1,4 @@
-use crate::{EffectKind, PionId, Position};
+use crate::{EffectKind, PionId, Position, TokenReward};
 
 /// Une opération de base produite par une attaque. Les familles décrivent leurs effets avec
 /// ces primitives ; seul le résolveur de la partie les applique, émet les événements et
@@ -38,6 +38,17 @@ pub(crate) enum Effect {
     CancelEnemyEffects {
         /// La case du pion visé.
         at: Position,
+    },
+    /// Annuler toutes les piles de jetons de l'adversaire du joueur qui attaque (Attila Rare
+    /// et Épique) : chacune est un effet entier.
+    CancelEnemyTokens,
+    /// Poser devant le joueur qui attaque une pile de jetons (Massacre divin) : chacun de
+    /// ses prochains kills en use un.
+    AddTokens {
+        /// Ce que rapporte chaque jeton.
+        reward: TokenReward,
+        /// Le nombre de jetons, au moins 1.
+        tokens: u32,
     },
     /// Déplacer le pion de `from` vers la case libre `to`. C'est la famille qui calcule le
     /// trajet (pas, saut…) ; seule l'arrivée compte pour la partie.
@@ -98,7 +109,7 @@ pub(crate) enum Effect {
 impl Effect {
     /// La case du seul pion que vise cet effet, s'il n'en vise qu'un : si une attaque y a
     /// été annulée par un garde, elle ne lui fait plus rien d'autre. `None` pour les effets
-    /// qui touchent plusieurs cases (déplacer, échanger, lier).
+    /// qui touchent plusieurs cases (déplacer, échanger, lier) ou aucune (les jetons).
     pub(crate) fn single_target(self) -> Option<Position> {
         match self {
             Effect::Kill { at }
@@ -109,7 +120,11 @@ impl Effect {
             | Effect::Resurrect { at, .. }
             | Effect::Crown { at, .. }
             | Effect::MakeChild { at, .. } => Some(at),
-            Effect::Move { .. } | Effect::Swap { .. } | Effect::Bind { .. } => None,
+            Effect::Move { .. }
+            | Effect::Swap { .. }
+            | Effect::Bind { .. }
+            | Effect::CancelEnemyTokens
+            | Effect::AddTokens { .. } => None,
         }
     }
 }

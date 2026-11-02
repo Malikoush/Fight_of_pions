@@ -1,7 +1,9 @@
 use std::ops::RangeInclusive;
 
 use crate::game::{has_effect_of, is_child, pion_has};
-use crate::{ActiveEffect, Board, Cell, EffectKind, Pion, PionId, Player, Position, Rarity};
+use crate::{
+    ActiveEffect, Board, Cell, EffectKind, Pion, PionId, Player, Position, Rarity, TokenPile,
+};
 
 use super::Effect;
 
@@ -42,6 +44,8 @@ pub(crate) struct AttackContext<'a> {
     pub board: &'a Board,
     /// Les effets continus en jeu, pour lire les statuts des pions.
     pub effects: &'a [ActiveEffect],
+    /// Les piles de jetons des deux joueurs (Massacre divin).
+    pub token_piles: &'a [TokenPile],
     /// Le joueur qui attaque.
     pub player: Player,
     /// La case du pion lanceur.
@@ -85,6 +89,29 @@ impl AttackContext<'_> {
     pub fn can_act(&self, pion: Pion) -> bool {
         can_act(pion, self.player, self.launch, self.effects, self.sick_from)
     }
+
+    /// Vrai si l'adversaire du joueur qui attaque a au moins une pile de jetons.
+    pub fn enemy_has_tokens(&self) -> bool {
+        let enemy = self.player.opponent();
+        self.token_piles.iter().any(|pile| pile.owner() == enemy)
+    }
+}
+
+/// Les cibles déjà choisies d'une attaque : des cases, et peut-être les jetons de
+/// l'adversaire ([`crate::Action::ChooseEnemyTokens`]), qui comptent pour une cible.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub(crate) struct Targets {
+    /// Les cases choisies, dans l'ordre.
+    pub cells: Vec<Position>,
+    /// Vrai si les jetons de l'adversaire sont choisis.
+    pub enemy_tokens: bool,
+}
+
+impl Targets {
+    /// Le nombre de cibles choisies.
+    pub fn len(&self) -> usize {
+        self.cells.len() + usize::from(self.enemy_tokens)
+    }
 }
 
 /// Les règles d'une famille d'attaques. Sans état : tout vient de la partie, et la partie
@@ -101,9 +128,16 @@ pub(crate) trait AttackRules {
     /// Les cases qu'on peut choisir comme prochaine cible, sachant celles déjà choisies.
     fn candidate_targets(&self, context: &AttackContext, chosen: &[Position]) -> Vec<Position>;
 
-    /// Les effets de l'attaque avec ces cibles. Une attaque n'est jouable que si elle en a
-    /// au moins un : le moteur ne propose jamais un coup sans effet.
+    /// Les effets de l'attaque avec ces cases. Une attaque n'est jouable que si elle a au
+    /// moins un effet : le moteur ne propose jamais un coup sans effet.
     fn effects(&self, context: &AttackContext, targets: &[Position]) -> Vec<Effect>;
+
+    /// Les effets de viser les jetons de l'adversaire, qui comptent pour une cible : vide si
+    /// l'attaque ne peut pas les viser maintenant. Par défaut, vide ; Attila Rare et Épique
+    /// les annulent.
+    fn enemy_tokens_effects(&self, _context: &AttackContext) -> Vec<Effect> {
+        Vec::new()
+    }
 
     /// Vrai si l'attaque peut s'arrêter après ces cibles, quand leur nombre le permet. Par
     /// défaut, toujours ; le Lièvre, par exemple, attend qu'un pion choisi ait bougé.
@@ -120,16 +154,42 @@ pub(crate) trait AttackRules {
     }
 }
 
+/// Tous les effets de l'attaque avec ces cibles : ceux des cases, puis ceux des jetons de
+/// l'adversaire s'ils sont choisis.
+pub(crate) fn effects_of(
+    rules: &dyn AttackRules,
+    context: &AttackContext,
+    chosen: &Targets,
+) -> Vec<Effect> {
+    let mut effects = rules.effects(context, &chosen.cells);
+    if chosen.enemy_tokens {
+        effects.extend(rules.enemy_tokens_effects(context));
+    }
+    effects
+}
+
 /// Vrai si l'attaque peut être résolue avec ces cibles : leur nombre est permis, elle peut
 /// s'arrêter là, et elle fait quelque chose.
 pub(crate) fn is_complete(
     rules: &dyn AttackRules,
     context: &AttackContext,
-    chosen: &[Position],
+    chosen: &Targets,
 ) -> bool {
     rules.target_count(context.rarity).contains(&chosen.len())
-        && rules.can_stop(context, chosen)
-        && !rules.effects(context, chosen).is_empty()
+        && rules.can_stop(context, &chosen.cells)
+        && !effects_of(rules, context, chosen).is_empty()
+}
+
+/// Vrai si les jetons de l'adversaire peuvent être la prochaine cible : pas encore choisis,
+/// une cible de plus est permise, et l'attaque sait les viser maintenant.
+pub(crate) fn can_choose_enemy_tokens(
+    rules: &dyn AttackRules,
+    context: &AttackContext,
+    chosen: &Targets,
+) -> bool {
+    !chosen.enemy_tokens
+        && chosen.len() < *rules.target_count(context.rarity).end()
+        && !rules.enemy_tokens_effects(context).is_empty()
 }
 
 /// Vrai si, à partir des cibles déjà choisies, on peut encore finir l'attaque. C'est ce qui
@@ -143,7 +203,7 @@ pub(crate) fn is_complete(
 pub(crate) fn can_complete(
     rules: &dyn AttackRules,
     context: &AttackContext,
-    chosen: &mut Vec<Position>,
+    chosen: &mut Targets,
 ) -> bool {
     is_complete(rules, context, chosen) || can_choose_more(rules, context, chosen)
 }
@@ -152,18 +212,34 @@ pub(crate) fn can_complete(
 pub(crate) fn can_choose_more(
     rules: &dyn AttackRules,
     context: &AttackContext,
-    chosen: &mut Vec<Position>,
+    chosen: &mut Targets,
 ) -> bool {
     if chosen.len() >= *rules.target_count(context.rarity).end() {
         return false;
     }
-    rules
-        .candidate_targets(context, chosen)
+    let by_cell = rules
+        .candidate_targets(context, &chosen.cells)
         .into_iter()
         .any(|target| {
-            chosen.push(target);
+            chosen.cells.push(target);
             let possible = can_complete(rules, context, chosen);
-            chosen.pop();
+            chosen.cells.pop();
             possible
-        })
+        });
+    by_cell || can_complete_with_enemy_tokens(rules, context, chosen)
+}
+
+/// Vrai si les jetons de l'adversaire peuvent être la prochaine cible et que l'attaque peut
+/// encore finir ensuite. `chosen` est rendu tel qu'il était.
+pub(crate) fn can_complete_with_enemy_tokens(
+    rules: &dyn AttackRules,
+    context: &AttackContext,
+    chosen: &mut Targets,
+) -> bool {
+    can_choose_enemy_tokens(rules, context, chosen) && {
+        chosen.enemy_tokens = true;
+        let possible = can_complete(rules, context, chosen);
+        chosen.enemy_tokens = false;
+        possible
+    }
 }

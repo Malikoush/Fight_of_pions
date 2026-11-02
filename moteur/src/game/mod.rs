@@ -10,6 +10,7 @@ mod lasting;
 mod queen;
 mod record;
 mod state;
+mod tokens;
 
 pub use action::Action;
 pub use arsenal::ArsenalSlot;
@@ -20,3 +21,4 @@ pub use lasting::{ActiveEffect, EffectId, EffectKind, Patient, PlayId};
 pub(crate) use lasting::{cancellable_plays_on, has_effect_of, is_child, pion_has, queen_of};
 pub use record::{GameRecord, ReplayError};
 pub use state::Game;
+pub use tokens::{TokenPile, TokenReward};
