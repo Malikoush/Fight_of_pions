@@ -1,5 +1,5 @@
 use super::arsenal::ArsenalSlot;
-use super::lasting::{ActiveEffect, EffectId, Patient};
+use super::lasting::{ActiveEffect, EffectId, Patient, PlayId};
 use crate::attacks::{Launch, is_new};
 use crate::{
     Action, Attack, Board, Cell, Decision, EndReason, Event, GameConfig, GameEnd, GameError,
@@ -35,6 +35,8 @@ pub struct Game {
     pub(super) effects: Vec<ActiveEffect>,
     /// L'identité que recevra le prochain effet continu créé.
     pub(super) next_effect_id: EffectId,
+    /// L'identité que recevra la prochaine attaque jouée.
+    pub(super) next_play_id: PlayId,
     /// Les pions tués qui attendent de revenir dans la réserve, dans l'ordre d'arrivée.
     pub(super) infirmary: Vec<Patient>,
     /// Vrai si la reine du joueur courant a déjà fait son pas gratuit ce tour.
@@ -284,6 +286,7 @@ impl Game {
             next_pion_id: PionId::FIRST,
             effects: Vec::new(),
             next_effect_id: EffectId::FIRST,
+            next_play_id: PlayId::FIRST,
             infirmary: Vec::new(),
             queen_stepped: false,
             queen_shot: false,

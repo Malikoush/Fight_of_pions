@@ -4,10 +4,12 @@
 //! effet, le propriétaire du pion pour l'infirmerie), le tour en cours ne compte jamais,
 //! et elle s'éteint à la fin de son dernier tour (carnet, 2026-10-30).
 
-use super::lasting::{ActiveEffect, EffectId, EffectKind, Patient, pion_has};
+use super::lasting::{
+    ActiveEffect, CardPlay, EffectId, EffectKind, Patient, PlayId, cancellable_plays_on, pion_has,
+};
 use super::state::Game;
 use crate::attacks::both_sides;
-use crate::{Attack, Cell, Direction, Event, Pion, PionId, Player, Position};
+use crate::{Cell, Direction, Event, Pion, PionId, Player, Position};
 
 impl Game {
     /// Les effets continus en jeu, dans l'ordre de leur création. Chaque changement est
@@ -56,14 +58,14 @@ impl Game {
         at: Position,
         kind: EffectKind,
         turns: u32,
-        source: Attack,
+        play: CardPlay,
         events: &mut Vec<Event>,
     ) {
         let Some(pion) = self.board.get(at).and_then(Cell::pion) else {
             return;
         };
         let last_turn = self.last_turn_of(self.current_player.opponent(), turns);
-        self.add_effect(pion.id(), kind, source, Some(last_turn), None, events);
+        self.add_effect(pion.id(), kind, play, Some(last_turn), None, events);
     }
 
     /// Lie les pions de ces deux cases par un pacte (Meilleurs amis) : chacun porte le sien,
@@ -72,7 +74,7 @@ impl Game {
         &mut self,
         a: Position,
         b: Position,
-        source: Attack,
+        play: CardPlay,
         events: &mut Vec<Event>,
     ) {
         let pions = (
@@ -85,8 +87,8 @@ impl Game {
         let pact = |friend: Pion| EffectKind::Pact {
             friend: friend.id(),
         };
-        self.add_effect(first.id(), pact(second), source, None, None, events);
-        self.add_effect(second.id(), pact(first), source, None, None, events);
+        self.add_effect(first.id(), pact(second), play, None, None, events);
+        self.add_effect(second.id(), pact(first), play, None, None, events);
     }
 
     /// Couronne le pion de cette case (il devient une reine) et lui donne ces gardes, sans
@@ -95,15 +97,15 @@ impl Game {
         &mut self,
         at: Position,
         guards: u32,
-        source: Attack,
+        play: CardPlay,
         events: &mut Vec<Event>,
     ) {
         let Some(queen) = self.board.get(at).and_then(Cell::pion) else {
             return;
         };
-        self.add_effect(queen.id(), EffectKind::Crown, source, None, None, events);
+        self.add_effect(queen.id(), EffectKind::Crown, play, None, None, events);
         for _ in 0..guards {
-            self.add_effect(queen.id(), EffectKind::Guard, source, None, None, events);
+            self.add_effect(queen.id(), EffectKind::Guard, play, None, None, events);
         }
     }
 
@@ -114,7 +116,7 @@ impl Game {
         &mut self,
         at: Position,
         framed_by: [Position; 2],
-        source: Attack,
+        play: CardPlay,
         events: &mut Vec<Event>,
     ) {
         let pion_at = |pos: Position| self.board.get(pos).and_then(Cell::pion).map(Pion::id);
@@ -124,14 +126,7 @@ impl Game {
             return;
         };
         let framed_by = Some([first, second]);
-        self.add_effect(
-            child,
-            EffectKind::Protected,
-            source,
-            None,
-            framed_by,
-            events,
-        );
+        self.add_effect(child, EffectKind::Protected, play, None, framed_by, events);
     }
 
     /// La protection d'un enfant tombe pour de bon dès que les deux membres de sa famille ne
@@ -194,12 +189,27 @@ impl Game {
         true
     }
 
+    /// Annule en entier les effets de l'adversaire qui visent le pion de cette case (Attila
+    /// Rare et Épique) : pour chaque jeu de carte adverse qui a laissé un effet annulable
+    /// sur lui, tous les effets annulables de ce jeu s'arrêtent, sur tous les pions.
+    pub(super) fn cancel_enemy_effects(&mut self, at: Position, events: &mut Vec<Event>) {
+        let Some(pion) = self.board.get(at).and_then(Cell::pion) else {
+            return;
+        };
+        let enemy = self.current_player.opponent();
+        let plays: Vec<PlayId> = cancellable_plays_on(&self.effects, pion.id(), enemy);
+        self.end_effects(
+            |effect| effect.kind().is_cancellable() && plays.contains(&effect.play()),
+            events,
+        );
+    }
+
     /// Crée un effet continu du joueur courant sur ce pion, et l'annonce.
     fn add_effect(
         &mut self,
         pion: PionId,
         kind: EffectKind,
-        source: Attack,
+        play: CardPlay,
         last_turn: Option<u32>,
         framed_by: Option<[PionId; 2]>,
         events: &mut Vec<Event>,
@@ -209,7 +219,7 @@ impl Game {
             kind,
             pion,
             self.current_player,
-            source,
+            play,
             last_turn,
             framed_by,
         );

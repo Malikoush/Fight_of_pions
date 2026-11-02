@@ -28,6 +28,36 @@ impl fmt::Display for EffectId {
     }
 }
 
+/// L'identité d'un jeu de carte (une attaque jouée), donnée dans l'ordre des jeux à partir
+/// de 0. Tous les effets continus d'un même jeu forment un **effet entier**, qu'Attila Rare
+/// et Épique annulent d'un coup (carnet, 2026-11-02).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PlayId(u32);
+
+impl PlayId {
+    /// L'identité du premier jeu de la partie.
+    pub(crate) const FIRST: PlayId = PlayId(0);
+
+    /// L'identité suivante ; resterait bloquée au maximum, impossible dans une partie.
+    pub(crate) fn next(self) -> PlayId {
+        PlayId(self.0.saturating_add(1))
+    }
+}
+
+/// « jeu 3 », pour les journaux et le débogage.
+impl fmt::Display for PlayId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "jeu {}", self.0)
+    }
+}
+
+/// Le jeu de carte qui crée des effets continus : son identité et sa carte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct CardPlay {
+    pub id: PlayId,
+    pub attack: Attack,
+}
+
 /// Ce que fait un effet continu. D'autres sortes viendront avec les cartes qui en ont
 /// besoin (jetons…).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -56,6 +86,12 @@ impl EffectKind {
     pub fn is_status(self) -> bool {
         matches!(self, EffectKind::Immobilized | EffectKind::Protected)
     }
+
+    /// Vrai si Attila Rare et Épique peuvent l'annuler : tout, sauf la couronne (la reine
+    /// reste reine ; ses gardes, eux, s'annulent ; carnet, 2026-11-02).
+    pub fn is_cancellable(self) -> bool {
+        self != EffectKind::Crown
+    }
 }
 
 /// « immobilisé », « protégé », « lié par un pacte avec #3 », « couronné », « gardé ».
@@ -80,6 +116,7 @@ pub struct ActiveEffect {
     pion: PionId,
     creator: Player,
     source: Attack,
+    play: PlayId,
     last_turn: Option<u32>,
     framed_by: Option<[PionId; 2]>,
 }
@@ -90,7 +127,7 @@ impl ActiveEffect {
         kind: EffectKind,
         pion: PionId,
         creator: Player,
-        source: Attack,
+        play: CardPlay,
         last_turn: Option<u32>,
         framed_by: Option<[PionId; 2]>,
     ) -> ActiveEffect {
@@ -99,7 +136,8 @@ impl ActiveEffect {
             kind,
             pion,
             creator,
-            source,
+            source: play.attack,
+            play: play.id,
             last_turn,
             framed_by,
         }
@@ -128,6 +166,11 @@ impl ActiveEffect {
     /// La carte qui l'a créé.
     pub fn source(self) -> Attack {
         self.source
+    }
+
+    /// Le jeu de carte qui l'a créé : les effets d'un même jeu forment un effet entier.
+    pub fn play(self) -> PlayId {
+        self.play
     }
 
     /// Le dernier tour où il agit ([`crate::Game::turn`]) : il s'éteint à la fin de ce tour.
@@ -181,6 +224,25 @@ impl Patient {
     pub fn last_turn(self) -> u32 {
         self.last_turn
     }
+}
+
+/// Les jeux de carte de `creator` dont un effet annulable (voir
+/// [`EffectKind::is_cancellable`]) vise ce pion, sans doublon, dans l'ordre des effets :
+/// les effets entiers qu'Attila Rare et Épique annulent en visant ce pion. Partagé par la
+/// carte (ses cibles) et par la partie (l'annulation).
+pub(crate) fn cancellable_plays_on(
+    effects: &[ActiveEffect],
+    pion: PionId,
+    creator: Player,
+) -> Vec<PlayId> {
+    let mut plays = Vec::new();
+    for effect in effects {
+        let ours = effect.pion == pion && effect.creator == creator;
+        if ours && effect.kind.is_cancellable() && !plays.contains(&effect.play) {
+            plays.push(effect.play);
+        }
+    }
+    plays
 }
 
 /// Vrai si ce pion est un enfant (Familia) : protégé tant que sa famille l'encadre.

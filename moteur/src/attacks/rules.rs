@@ -135,10 +135,11 @@ pub(crate) fn is_complete(
 /// Vrai si, à partir des cibles déjà choisies, on peut encore finir l'attaque. C'est ce qui
 /// garantit qu'aucun choix proposé ne mène à une impasse : le moteur n'a pas d'« annuler ».
 ///
-/// C'est une recherche en profondeur, sans mémoire. Elle reste courte parce que toutes les
-/// familles actuelles deviennent complètes dès leur premier choix utile (un pas, un saut,
-/// une cible) : la recherche s'arrête au premier choix qui réussit. Une famille où ce
-/// n'est plus vrai devra être mesurée (`random_games`).
+/// C'est une recherche en profondeur, sans mémoire. Elle reste courte parce que presque
+/// toutes les familles deviennent complètes dès leur premier choix utile (un pas, un saut,
+/// une cible) : la recherche s'arrête au premier choix qui réussit. Exception : Meilleurs
+/// amis demande 2 choix, mais son second choix est direct (une case libre). Une famille plus profonde devra être
+/// mesurée (`random_games`).
 pub(crate) fn can_complete(
     rules: &dyn AttackRules,
     context: &AttackContext,

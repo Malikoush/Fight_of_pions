@@ -7,6 +7,7 @@
 //! est déjà complète (« jusqu'à 2 »).
 
 use super::kill::{Death, Hit};
+use super::lasting::CardPlay;
 use super::state::{Game, PendingAttack};
 use crate::attacks::{
     AttackContext, Effect, Launch, can_act, can_choose_more, can_complete, is_complete,
@@ -196,6 +197,11 @@ impl Game {
             &pending.targets,
         );
         let killer = self.board.get(launcher).and_then(Cell::pion).map(Pion::id);
+        let play = CardPlay {
+            id: self.next_play_id,
+            attack,
+        };
+        self.next_play_id = play.id.next();
 
         // Le coût a été vérifié au début de l'attaque, et rien ne l'a changé depuis.
         self.actions_left = self.actions_left.saturating_sub(stats.cost);
@@ -226,7 +232,7 @@ impl Game {
             {
                 continue;
             }
-            if let Some(at) = self.apply_effect(effect, attack, killer, &mut deaths, events) {
+            if let Some(at) = self.apply_effect(effect, play, killer, &mut deaths, events) {
                 shielded.push(at);
             }
         }
@@ -241,7 +247,7 @@ impl Game {
     fn apply_effect(
         &mut self,
         effect: Effect,
-        source: Attack,
+        play: CardPlay,
         by: Option<PionId>,
         deaths: &mut Vec<Death>,
         events: &mut Vec<Event>,
@@ -253,8 +259,9 @@ impl Game {
                 Hit::Missed => {}
             },
             Effect::Apply { at, kind, turns } => {
-                self.start_effect(at, kind, turns, source, events);
+                self.start_effect(at, kind, turns, play, events);
             }
+            Effect::CancelEnemyEffects { at } => self.cancel_enemy_effects(at, events),
             Effect::RemoveEnemyStatuses { at } => {
                 let pion = self.board.get(at).and_then(Cell::pion)?;
                 let enemy = self.current_player.opponent();
@@ -263,9 +270,9 @@ impl Game {
             Effect::Place { at } => {
                 self.put_pion(at, events);
             }
-            Effect::Bind { a, b } => self.bind(a, b, source, events),
-            Effect::Crown { at, guards } => self.crown(at, guards, source, events),
-            Effect::MakeChild { at, framed_by } => self.make_child(at, framed_by, source, events),
+            Effect::Bind { a, b } => self.bind(a, b, play, events),
+            Effect::Crown { at, guards } => self.crown(at, guards, play, events),
+            Effect::MakeChild { at, framed_by } => self.make_child(at, framed_by, play, events),
             Effect::Resurrect { pion, at } => {
                 let ours = self.infirmary.iter().any(|patient| {
                     patient.pion().id() == pion && patient.pion().owner() == self.current_player

@@ -124,7 +124,9 @@ fn queen_can_act(game: &Game, player: Player) -> bool {
 /// - Meilleurs amis pose 2 pions de la réserve sur 2 cases libres ;
 /// - le Garde royal (Reine Commune) protège le lanceur : toujours possible ; les autres
 ///   Reines posent une reine, s'il reste un pion en réserve, une case libre, et pas de reine ;
-/// - Attila Commune retire des statuts : sans statut, jamais possible ;
+/// - Attila vise un pion qui porte un effet adverse (sans durée : un pacte, des gardes, un
+///   enfant) : un statut pour la Commune (un enfant), tout sauf la couronne pour la Rare et
+///   l'Épique (son second pion est facultatif) ;
 /// - le Médecin ressuscite sur une tombe : personne à l'infirmerie, donc aucune tombe ;
 /// - le Saut du loup a besoin d'une case libre à 2 cases en ligne droite ;
 /// - l'Interchange Rare vise un ennemi à 1 ou 2 cases en ligne droite, même derrière un
@@ -180,6 +182,36 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
     let any_killable = board.positions().any(killable);
     let reserve = game.reserve_pions(player);
     let free_cells = board.positions().filter(|&pos| free(pos)).count();
+    // Attila : pour chaque pion, les jeux de carte adverses qui l'ont touché.
+    let enemy_effects = |pos: Position| -> Vec<fight_of_pions::ActiveEffect> {
+        let Some(pion) = board.get(pos).and_then(|cell| cell.pion()) else {
+            return Vec::new();
+        };
+        game.active_effects()
+            .iter()
+            .filter(|effect| effect.pion() == pion.id() && effect.creator() == player.opponent())
+            .copied()
+            .collect()
+    };
+    let enemy_statuses: Vec<Position> = board
+        .positions()
+        .filter(|&pos| {
+            enemy_effects(pos)
+                .iter()
+                .any(|effect| effect.kind().is_status())
+        })
+        .collect();
+    let plays_at = |pos: Position| -> Vec<fight_of_pions::PlayId> {
+        enemy_effects(pos)
+            .iter()
+            .filter(|effect| effect.kind() != EffectKind::Crown)
+            .map(|effect| effect.play())
+            .collect()
+    };
+    let enemy_plays: Vec<Position> = board
+        .positions()
+        .filter(|&pos| !plays_at(pos).is_empty())
+        .collect();
     let familia = |launcher: Position, rarity: Rarity| {
         let parents = match rarity {
             Rarity::Common => 0,
@@ -224,7 +256,8 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             (AttackKind::Reine, _) => {
                 reserve > 0 && free_cells > 0 && game.queen_of(player).is_none()
             }
-            (AttackKind::Attila, _) => false,
+            (AttackKind::Attila, Rarity::Common) => !enemy_statuses.is_empty(),
+            (AttackKind::Attila, _) => !enemy_plays.is_empty(),
             (AttackKind::Medecin, _) => false,
             (AttackKind::SautDuLoup, _) => free_two_away(launcher),
             (AttackKind::Interchange, Rarity::Rare) => enemy_in_line(launcher),

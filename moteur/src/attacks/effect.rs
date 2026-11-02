@@ -32,6 +32,13 @@ pub(crate) enum Effect {
         /// La case du pion visé.
         at: Position,
     },
+    /// Annuler en entier les effets de l'adversaire du joueur qui attaque qui visent le pion
+    /// de cette case : chaque jeu de carte adverse qui l'a touché perd tous ses effets
+    /// annulables, sur tous les pions (Attila Rare et Épique). La couronne reste.
+    CancelEnemyEffects {
+        /// La case du pion visé.
+        at: Position,
+    },
     /// Déplacer le pion de `from` vers la case libre `to`. C'est la famille qui calcule le
     /// trajet (pas, saut…) ; seule l'arrivée compte pour la partie.
     Move {
@@ -97,6 +104,7 @@ impl Effect {
             Effect::Kill { at }
             | Effect::Apply { at, .. }
             | Effect::RemoveEnemyStatuses { at }
+            | Effect::CancelEnemyEffects { at }
             | Effect::Place { at }
             | Effect::Resurrect { at, .. }
             | Effect::Crown { at, .. }

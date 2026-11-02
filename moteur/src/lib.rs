@@ -44,6 +44,6 @@ pub use config::{ConfigError, GameConfig};
 pub use error::GameError;
 pub use game::{
     Action, ActiveEffect, ArsenalSlot, Decision, EffectId, EffectKind, EndReason, Event, Game,
-    GameEnd, GameRecord, Outcome, Patient, ReplayError,
+    GameEnd, GameRecord, Outcome, Patient, PlayId, ReplayError,
 };
 pub use rng::Rng;

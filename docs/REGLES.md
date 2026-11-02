@@ -142,7 +142,17 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
 ### Attila Commune (2026-10-30)
 
 - **Commune** : sur tout le plateau, retire d'un pion tous les **statuts** placés par l'adversaire (immobilisé, protégé ; pas un pacte), quelle que soit la carte qui les a posés. Le pion peut être à toi (le libérer) ou à l'adversaire (lui ôter sa protection). Un pion qui ne porte que tes propres effets ne peut pas être visé.
-- La Rare, l'Épique et la Légendaire (effets entiers, Terre brûlée) viendront avec l'annulation (B6).
+- La Légendaire (Terre brûlée) viendra en B6d.
+
+### Attila Rare et Épique (2026-11-02)
+
+- **Effet entier** : tout ce qu'**un seul jeu de carte** a laissé en jeu. Par exemple : toutes les immobilisations d'un Rugissement, les deux pions immobilisés d'une Beauté fatale Rare, les deux moitiés d'un pacte, les deux enfants d'une Familia Légendaire, les gardes d'une Reine.
+- **Rare** : le joueur vise, n'importe où, un pion qui porte au moins un effet de l'adversaire. Tous les effets adverses de ce pion sont annulés, **chacun en entier** : sur tous les pions qu'ils touchent. Le pion peut être à toi ou à l'adversaire ; tes propres effets ne sont jamais annulés.
+- **Épique** : pareil, sur 1 ou 2 pions différents. Le second est facultatif (« Terminer l'attaque ») ; il doit porter un effet adverse que le premier n'annule pas déjà. Jouable dès qu'un seul effet adverse est en jeu : l'annuler seul est permis, à perte.
+- **La couronne reste** : la reine reste reine, avec son pas gratuit ; ses gardes, eux, sont annulés.
+- Sans effet adverse à annuler, la carte n'est pas jouable. Pour l'Épique, l'ordre des choix compte : si X porte deux jeux et Y l'un des deux, « Y puis X » annule les deux, « X puis Y » n'est pas proposé (X seul les annule déjà).
+- Ne touchent ni l'infirmerie, ni les tombes, ni (plus tard) les cases creusées.
+- **Inébranlable** est retiré (2026-11-02) : aucun effet n'échappe à Attila Rare et Épique, le Massacre divin Légendaire compris.
 
 ### Mouvement (2026-10-30)
 
@@ -338,11 +348,16 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B5d | Familia Épique (ou Légendaire) avec un seul pion en réserve ? | Impossible : la carte pose ses parents ou rien | **2026-11-02** : oui. La Rare demande 1 pion. |
 | B5d | Familia Légendaire : comment se joue-t-elle ? | Lanceur, puis second enfant collé ; parents posés tout seuls aux deux bouts libres ; les deux enfants sont des lanceurs | **2026-11-02** : oui. |
 | B5d | Familia Rare : comment se choisit le parent ? | Sa case libre, collée au lanceur, en face d'un de tes pions, qui entre dans la famille | **2026-11-02** : oui. |
-| B5d | Pendant une même attaque, un enfant dont un parent vient d'être tué (par exemple, un Saut du loup Épique qui survole le parent puis l'enfant) est-il encore protégé ? | Oui : une attaque est calculée sur la situation du début ; la famille se défait à la fin des effets de l'attaque. Codé ainsi, en attendant la réponse. | |
-| B5d | Un enfant qui sort de sa famille pendant son attaque (un saut du loup) et tue un ami d'un pacte : est-il encore protégé quand l'autre ami le venge ? | Non : les familles se défont à la fin des effets de l'attaque, avant les vengeances. Codé ainsi, en attendant la réponse. | |
+| B5d | Pendant une même attaque, un enfant dont un parent vient d'être tué (par exemple, un Saut du loup Épique qui survole le parent puis l'enfant) est-il encore protégé ? | Oui : une attaque est calculée sur la situation du début ; la famille se défait à la fin des effets de l'attaque. | **2026-11-02** : oui (réponse par défaut). |
+| B5d | Un enfant qui sort de sa famille pendant son attaque (un saut du loup) et tue un ami d'un pacte : est-il encore protégé quand l'autre ami le venge ? | Non : les familles se défont à la fin des effets de l'attaque, avant les vengeances. | **2026-11-02** : oui (réponse par défaut). |
+| B6a | Qu'est-ce qu'un « effet entier » ? | Tout ce qu'un seul jeu de carte a laissé en jeu | **2026-11-02** : oui. |
+| B6a | Attila Rare sur une reine : et sa couronne ? | La couronne reste ; seuls les gardes partent | **2026-11-02** : oui. |
+| B6a | Comment choisir l'effet à annuler ? | Viser un pion : tous ses effets adverses partent, chacun en entier ; l'Épique vise 2 pions différents | **2026-11-02** : oui. |
+| B6a | Attila Rare ou Épique sans effet adverse en jeu ? | Carte injouable | **2026-11-02** : oui. |
+| B6a | Attila Épique quand un seul pion porte deux jeux adverses, ou qu'un pion X porte deux jeux et un pion Y l'un des deux : l'ordre des choix compte-t-il ? Aujourd'hui : viser X puis Y est impossible (Y n'a plus rien de nouveau), Y puis X marche ; un seul pion X ne suffit pas. | Oui, l'ordre compte, et il faut toujours deux pions (lettre de la règle « 2 pions différents ») | **2026-11-02** : l'ordre compte, mais l'Épique vise 1 ou 2 pions et se joue dès qu'un effet adverse est en jeu (à perte si un seul). |
 | B6 | Le retour d'Interchange Commune est-il un effet continu (Attila peut l'annuler) ? La fiche dit « elle ne peut pas faire gagner », or le retour peut compléter une ligne de 5 avant la vérification. | Oui, c'est un effet continu ; le retour qui complète une ligne gagne (l'adversaire a eu un tour pour casser les 5 autres pions) : corriger la phrase de la fiche | |
 | B6 | Terre brûlée : « les cartes adverses s'appliquent sans leur partie continue » rend Interchange Commune plus forte (téléportation sans retour) | « Pendant Terre brûlée, l'adversaire ne peut jouer aucune carte qui crée un effet continu » | |
-| B6 | Garder le mot-clé Inébranlable, qui ne sert qu'à une carte ? | Le retirer (principe de simplicité) | |
+| B6 | Garder le mot-clé Inébranlable, qui ne sert qu'à une carte ? | Le retirer (principe de simplicité) | **2026-11-02** : retiré. Le Massacre divin Légendaire s'annule comme les autres ; Terre brûlée garde seulement « l'adversaire ne crée aucun nouvel effet ». |
 | B6 | Un pion tué par une carte de son propriétaire (le retour d'Interchange Commune tue « tout pion qui occupe » la case) : l'infirmerie se compte-t-elle en tours de son propriétaire, ou de l'adversaire de celui qui a joué la carte ? Aujourd'hui c'est pareil : on ne tue que des pions adverses. | En tours de son propriétaire | **2026-10-30** : en tours de son **propriétaire**, toujours. Codé en B5a : un pion tué par la vengeance pendant le tour de son propriétaire compte les tours suivants de son propriétaire (testé). |
 | B6 | Un ami tué par une carte de son propre camp (le retour d'Interchange Commune) : son ami venge-t-il sa mort sur son propre lanceur, ou sur lui-même s'il est le lanceur ? Aujourd'hui, on ne tue que des pions adverses, et le moteur tuerait le lanceur allié. | Pas de vengeance si l'assassin est du même camp ; le pacte prend fin quand même | |
 | Statuts | Une attaque « sans effet » n'est jamais proposée : mais une immobilisation qui se superpose à une autre plus longue (Grognement juste après un Rugissement), ou une seconde protection sur un pion déjà protégé, compte-t-elle comme un effet ? Elle ne change rien en jeu. | Oui, elle compte (c'est ce que fait le moteur depuis B3) : « sans effet » veut dire « aucune primitive », pas « rien ne change ». Plus simple à expliquer et à calculer. | **2026-10-30** : oui, elle compte. |
