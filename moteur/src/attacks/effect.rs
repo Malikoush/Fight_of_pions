@@ -49,6 +49,9 @@ pub(crate) enum Effect {
         /// La case du pion visé.
         at: Position,
     },
+    /// Terre brûlée : jusqu'à la fin de son prochain tour, l'adversaire du joueur qui
+    /// attaque ne peut jouer aucun coup qui créerait un effet continu. Ce n'en est pas un.
+    ScorchEarth,
     /// Annuler toutes les piles de jetons de l'adversaire du joueur qui attaque (Attila Rare
     /// et Épique) : chacune est un effet entier.
     CancelEnemyTokens,
@@ -117,6 +120,28 @@ pub(crate) enum Effect {
 }
 
 impl Effect {
+    /// Vrai si cet effet crée un effet continu ou une pile de jetons : ce que Terre brûlée
+    /// interdit à l'adversaire. Sans joker : chaque nouvelle primitive doit trancher.
+    pub(crate) fn creates_lasting(self) -> bool {
+        match self {
+            Effect::Apply { .. }
+            | Effect::Attach { .. }
+            | Effect::Bind { .. }
+            | Effect::Crown { .. }
+            | Effect::MakeChild { .. }
+            | Effect::AddTokens { .. } => true,
+            Effect::Kill { .. }
+            | Effect::RemoveEnemyStatuses { .. }
+            | Effect::CancelEnemyEffects { .. }
+            | Effect::CancelEnemyTokens
+            | Effect::ScorchEarth
+            | Effect::Move { .. }
+            | Effect::Place { .. }
+            | Effect::Resurrect { .. }
+            | Effect::Swap { .. } => false,
+        }
+    }
+
     /// La case du seul pion que vise cet effet, s'il n'en vise qu'un : si une attaque y a
     /// été annulée par un garde, elle ne lui fait plus rien d'autre. `None` pour les effets
     /// qui touchent plusieurs cases (déplacer, échanger, lier) ou aucune (les jetons).
@@ -135,6 +160,7 @@ impl Effect {
             | Effect::Swap { .. }
             | Effect::Bind { .. }
             | Effect::CancelEnemyTokens
+            | Effect::ScorchEarth
             | Effect::AddTokens { .. } => None,
         }
     }

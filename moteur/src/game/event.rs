@@ -152,6 +152,19 @@ pub enum Event {
         /// Tours avant de pouvoir la relancer ; 0 si elle est prête.
         turns_left: u32,
     },
+    /// Terre brûlée (Attila Légendaire) : jusqu'à la fin du tour `last_turn`, ce joueur ne
+    /// peut jouer aucun coup qui créerait un effet continu.
+    ScorchedEarthStarted {
+        /// Le joueur visé.
+        player: Player,
+        /// Le dernier tour concerné.
+        last_turn: u32,
+    },
+    /// Terre brûlée s'arrête pour ce joueur.
+    ScorchedEarthEnded {
+        /// Le joueur libéré.
+        player: Player,
+    },
     /// Le tour est fini.
     TurnEnded {
         /// Le joueur qui joue maintenant.

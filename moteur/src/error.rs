@@ -46,6 +46,9 @@ pub enum GameError {
     /// La reine ne peut pas faire son pas vers cette case : pas de reine, déjà fait ce tour,
     /// posée ce tour, immobilisée, ou case ni libre ni collée à elle.
     QueenCannotStep(Position),
+    /// Cette attaque créerait un effet continu, et le joueur est sous Terre brûlée (Attila
+    /// Légendaire de l'adversaire) : elle n'est pas jouable avant la fin de son tour.
+    ScorchedEarth(Attack),
     /// Le pion de `from` ne peut pas faire un pas du Lièvre vers `to` : pas de jeton de pas,
     /// déjà dépensé et ses pas faits ce tour, immobilisé, case ni libre ni collée, ou retour
     /// sur sa case de départ.
@@ -100,6 +103,11 @@ impl fmt::Display for GameError {
             GameError::QueenCannotStep(pos) => {
                 write!(f, "la reine ne peut pas avancer en {}", pos)
             }
+            GameError::ScorchedEarth(attack) => write!(
+                f,
+                "{} créerait un effet continu : interdit sous Terre brûlée",
+                attack
+            ),
             GameError::HareCannotStep { from, to } => {
                 write!(f, "le pion en {} ne peut pas avancer en {}", from, to)
             }

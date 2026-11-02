@@ -27,6 +27,9 @@ impl Game {
         }
         self.ensure_actions(self.attack_stats(attack).cost)?;
         if !self.attack_has_a_target(player, attack, Launch::Now) {
+            if self.only_scorched_earth_forbids(player, attack) {
+                return Err(GameError::ScorchedEarth(attack));
+            }
             // Des cibles, mais seulement depuis des pions qui ne peuvent pas lancer
             // maintenant (posés ce tour, immobilisés) : le dire.
             return Err(
@@ -142,6 +145,18 @@ impl Game {
                 .is_some_and(|launcher| self.can_complete_from(player, attack, launcher, when));
         }
         launchers.any(|launcher| self.can_complete_from(player, attack, launcher, when))
+    }
+
+    /// Vrai si ce joueur est sous Terre brûlée et que, sans elle, l'attaque serait jouable
+    /// maintenant : seulement pour dire pourquoi elle est refusée. La copie n'est faite que
+    /// sous Terre brûlée.
+    fn only_scorched_earth_forbids(&self, player: Player, attack: Attack) -> bool {
+        if self.scorched_until(player).is_none() {
+            return false;
+        }
+        let mut free = self.clone();
+        free.scorched_until = [None, None];
+        free.attack_has_a_target(player, attack, Launch::Now)
     }
 
     /// Vrai si le pion de cette case est à ce joueur et peut lancer une attaque `when` :
@@ -294,6 +309,7 @@ impl Game {
             }
             Effect::CancelEnemyEffects { at } => self.cancel_enemy_effects(at, events),
             Effect::CancelEnemyTokens => self.cancel_enemy_tokens(events),
+            Effect::ScorchEarth => self.scorch_earth(events),
             Effect::AddTokens { reward, tokens } => self.add_tokens(reward, tokens, play, events),
             Effect::Attach { at, kind, end } => self.add_effect_at(at, kind, play, end, events),
             Effect::RemoveEnemyStatuses { at } => {
@@ -368,6 +384,8 @@ impl Game {
             launch,
             sick_from: self.sick_from(),
             reserve: self.reserve_pions[player.index()],
+            // Terre brûlée s'arrêtera : « un jour », tout redevient permis.
+            may_create_effects: launch == Launch::Someday || self.scorched_until(player).is_none(),
         }
     }
 

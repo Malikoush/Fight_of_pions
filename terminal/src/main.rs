@@ -135,6 +135,15 @@ fn main() {
                                 terminal::player_name(pile.owner()),
                                 pile.source()
                             ),
+                            Event::ScorchedEarthStarted { player, last_turn } => println!(
+                                "Terre brûlée : {} ne peut créer aucun effet continu jusqu'à la fin du tour {}.",
+                                terminal::player_name(player),
+                                last_turn
+                            ),
+                            Event::ScorchedEarthEnded { player } => println!(
+                                "Terre brûlée s'arrête pour {}.",
+                                terminal::player_name(player)
+                            ),
                             Event::TurnEnded { next } => {
                                 println!("Au tour de {}.", terminal::player_name(next));
                             }

@@ -40,10 +40,12 @@ fn assert_placed_then(events: &[Event], end: Event) {
 /// lancer une attaque qui a une cible, ni faire agir sa reine (un pas vers une case libre
 /// collée, ou un tir s'il lui reste un garde et un ennemi au bout d'une ligne droite).
 fn frozen_by_the_rules(game: &Game) -> bool {
-    // Une durée ou un retour d'Interchange changeront la partie tout seuls.
+    // Une durée, un retour d'Interchange ou la fin de Terre brûlée changeront la partie.
     let timed_effect = game.active_effects().iter().any(|effect| {
         effect.last_turn().is_some() || matches!(effect.kind(), EffectKind::Return { .. })
-    });
+    }) || [Player::One, Player::Two]
+        .into_iter()
+        .any(|player| game.scorched_until(player).is_some());
     if timed_effect || !game.infirmary().is_empty() {
         return false;
     }
@@ -144,7 +146,8 @@ fn hare_can_act(game: &Game, player: Player) -> bool {
 ///   Reines posent une reine, s'il reste un pion en réserve, une case libre, et pas de reine ;
 /// - Attila vise un pion qui porte un effet adverse (sans durée : un pacte, des gardes, un
 ///   enfant) : un statut pour la Commune (un enfant), tout sauf la couronne pour la Rare et
-///   l'Épique (son second pion est facultatif), qui visent aussi les jetons adverses ;
+///   l'Épique (son second pion est facultatif), qui visent aussi les jetons adverses ; la
+///   Légendaire (Terre brûlée) est toujours jouable ;
 /// - le Massacre divin pose ses jetons depuis n'importe lequel de tes pions : toujours
 ///   possible ;
 /// - le Médecin ressuscite sur une tombe : personne à l'infirmerie, donc aucune tombe ;
@@ -294,6 +297,7 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
                 reserve > 0 && free_cells > 0 && game.queen_of(player).is_none()
             }
             (AttackKind::Attila, Rarity::Common) => !enemy_statuses.is_empty(),
+            (AttackKind::Attila, Rarity::Legendary) => true,
             (AttackKind::Attila, _) => !enemy_plays.is_empty() || enemy_tokens,
             (AttackKind::MassacreDivin, _) => true,
             (AttackKind::Medecin, _) => false,

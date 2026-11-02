@@ -21,7 +21,7 @@ use std::ops::RangeInclusive;
 
 use super::Effect;
 use super::reach::around;
-use super::rules::{AttackContext, AttackRules};
+use super::rules::{AttackContext, AttackRules, Targets};
 use crate::{Board, Cell, EffectEnd, EffectKind, PionId, Position, Rarity};
 
 /// Les jetons de pas de l'Épique.
@@ -103,9 +103,9 @@ impl AttackRules for Lievre {
 
     /// Le dernier pion choisi doit avoir bougé ; l'Épique, qui ne fait bouger personne,
     /// s'arrête toujours.
-    fn can_stop(&self, context: &AttackContext, chosen: &[Position]) -> bool {
+    fn can_stop(&self, context: &AttackContext, chosen: &Targets) -> bool {
         context.rarity == Rarity::Epic
-            || Walk::replay(context, chosen).is_some_and(|walk| walk.current.is_done())
+            || Walk::replay(context, &chosen.cells).is_some_and(|walk| walk.current.is_done())
     }
 }
 

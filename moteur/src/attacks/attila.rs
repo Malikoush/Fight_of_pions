@@ -19,12 +19,15 @@
 //! visent à part ([`crate::Action::ChooseEnemyTokens`]) et comptent pour un pion : toutes
 //! ses piles sont annulées, chacune étant un effet entier.
 //!
-//! La Légendaire (Terre brûlée) viendra en B6d.
+//! - Légendaire, Terre brûlée : annule comme l'Épique (1 ou 2 cibles), puis, jusqu'à la
+//!   fin de son prochain tour, l'adversaire ne peut jouer aucun coup qui créerait un effet
+//!   continu (carnet, 2026-11-02). Jouable sans rien à annuler, alors sans cible. L'interdiction n'est pas un
+//!   effet continu : Attila ne l'annule pas.
 
 use std::ops::RangeInclusive;
 
 use super::Effect;
-use super::rules::{AttackContext, AttackRules};
+use super::rules::{AttackContext, AttackRules, Targets};
 use crate::game::cancellable_plays_on;
 use crate::{Cell, PlayId, Position, Rarity};
 
@@ -32,7 +35,12 @@ pub(crate) struct Attila;
 
 impl AttackRules for Attila {
     fn rarities(&self) -> &'static [Rarity] {
-        &[Rarity::Common, Rarity::Rare, Rarity::Epic]
+        &[
+            Rarity::Common,
+            Rarity::Rare,
+            Rarity::Epic,
+            Rarity::Legendary,
+        ]
     }
 
     fn ignores_launcher(&self, _rarity: Rarity) -> bool {
@@ -42,6 +50,7 @@ impl AttackRules for Attila {
     fn target_count(&self, rarity: Rarity) -> RangeInclusive<usize> {
         match rarity {
             Rarity::Epic => 1..=2,
+            Rarity::Legendary => 0..=2,
             _ => 1..=1,
         }
     }
@@ -53,6 +62,15 @@ impl AttackRules for Attila {
         }
     }
 
+    /// Terre brûlée annule comme l'Épique : au moins une cible s'il y a quelque chose à
+    /// annuler, aucune sinon (carnet, 2026-11-02).
+    fn can_stop(&self, context: &AttackContext, chosen: &Targets) -> bool {
+        context.rarity != Rarity::Legendary
+            || chosen.len() > 0
+            || (carrying_new_enemy_plays(context, &[]).is_empty()
+                && self.enemy_tokens_effects(context).is_empty())
+    }
+
     fn enemy_tokens_effects(&self, context: &AttackContext) -> Vec<Effect> {
         if context.rarity == Rarity::Common || !context.enemy_has_tokens() {
             return Vec::new();
@@ -61,13 +79,17 @@ impl AttackRules for Attila {
     }
 
     fn effects(&self, context: &AttackContext, targets: &[Position]) -> Vec<Effect> {
-        targets
+        let mut effects: Vec<Effect> = targets
             .iter()
             .map(|&at| match context.rarity {
                 Rarity::Common => Effect::RemoveEnemyStatuses { at },
                 _ => Effect::CancelEnemyEffects { at },
             })
-            .collect()
+            .collect();
+        if context.rarity == Rarity::Legendary {
+            effects.push(Effect::ScorchEarth);
+        }
+        effects
     }
 }
 

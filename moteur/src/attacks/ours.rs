@@ -98,6 +98,7 @@ mod tests {
             launch: Launch::Now,
             sick_from: None,
             reserve: 0,
+            may_create_effects: true,
         };
         let mut targets = Ours.candidate_targets(&context, &[]);
         targets.sort_by_key(|pos| (pos.row, pos.col));

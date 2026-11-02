@@ -152,6 +152,14 @@ pub fn render(game: &Game) -> String {
             patient.last_turn()
         ));
     }
+    for player in [Player::One, Player::Two] {
+        if let Some(turn) = game.scorched_until(player) {
+            out.push_str(&format!(
+                "\n  Terre brûlée : {} ne crée aucun effet continu jusqu'à la fin du tour {turn}",
+                player_name(player)
+            ));
+        }
+    }
     for pile in game.token_piles() {
         out.push_str(&format!("\n  {}", token_pile(*pile)));
     }

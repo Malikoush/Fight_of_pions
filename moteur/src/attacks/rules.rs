@@ -58,6 +58,9 @@ pub(crate) struct AttackContext<'a> {
     /// Les pions que le joueur qui attaque a en réserve (les cartes qui posent en ont
     /// besoin).
     pub reserve: u32,
+    /// Faux si le joueur qui attaque est sous Terre brûlée : un coup qui créerait un effet
+    /// continu n'est alors pas jouable (carnet, 2026-11-02). Toujours vrai pour « un jour ».
+    pub may_create_effects: bool,
 }
 
 impl AttackContext<'_> {
@@ -141,7 +144,7 @@ pub(crate) trait AttackRules {
 
     /// Vrai si l'attaque peut s'arrêter après ces cibles, quand leur nombre le permet. Par
     /// défaut, toujours ; le Lièvre, par exemple, attend qu'un pion choisi ait bougé.
-    fn can_stop(&self, _context: &AttackContext, _chosen: &[Position]) -> bool {
+    fn can_stop(&self, _context: &AttackContext, _chosen: &Targets) -> bool {
         true
     }
 
@@ -169,15 +172,20 @@ pub(crate) fn effects_of(
 }
 
 /// Vrai si l'attaque peut être résolue avec ces cibles : leur nombre est permis, elle peut
-/// s'arrêter là, et elle fait quelque chose.
+/// s'arrêter là, elle fait quelque chose, et rien d'interdit par Terre brûlée.
 pub(crate) fn is_complete(
     rules: &dyn AttackRules,
     context: &AttackContext,
     chosen: &Targets,
 ) -> bool {
-    rules.target_count(context.rarity).contains(&chosen.len())
-        && rules.can_stop(context, &chosen.cells)
-        && !effects_of(rules, context, chosen).is_empty()
+    if !rules.target_count(context.rarity).contains(&chosen.len())
+        || !rules.can_stop(context, chosen)
+    {
+        return false;
+    }
+    let effects = effects_of(rules, context, chosen);
+    !effects.is_empty()
+        && (context.may_create_effects || !effects.iter().any(|effect| effect.creates_lasting()))
 }
 
 /// Vrai si les jetons de l'adversaire peuvent être la prochaine cible : pas encore choisis,

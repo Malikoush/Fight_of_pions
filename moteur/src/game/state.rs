@@ -51,6 +51,9 @@ pub struct Game {
     pub(super) queen_shot: bool,
     /// Les pions du joueur courant qui ont dépensé un jeton de pas ce tour (Lièvre Épique).
     pub(super) hare_walks: Vec<HareWalk>,
+    /// Pour chaque joueur sous Terre brûlée, le dernier tour où il ne peut créer aucun effet
+    /// continu.
+    pub(super) scorched_until: [Option<u32>; 2],
 }
 
 /// Une attaque commencée dont les choix ne sont pas finis. Rien n'est modifié tant que le
@@ -150,6 +153,29 @@ impl Game {
         self.config
             .summoning_sickness
             .then_some(self.turn_start_pion_id)
+    }
+
+    /// Le dernier tour où ce joueur est sous Terre brûlée (Attila Légendaire), s'il l'est :
+    /// il ne peut jouer aucun coup qui créerait un effet continu. Chaque changement est
+    /// annoncé par [`Event::ScorchedEarthStarted`] et [`Event::ScorchedEarthEnded`].
+    pub fn scorched_until(&self, player: Player) -> Option<u32> {
+        self.scorched_until[player.index()]
+    }
+
+    /// Terre brûlée sur l'adversaire du joueur courant, pendant son prochain tour.
+    pub(super) fn scorch_earth(&mut self, events: &mut Vec<Event>) {
+        let enemy = self.current_player.opponent();
+        let last_turn = self.turn.saturating_add(1);
+        let scorched = &mut self.scorched_until[enemy.index()];
+        // Une seconde Terre brûlée dans le même tour ne change rien.
+        if *scorched == Some(last_turn) {
+            return;
+        }
+        *scorched = Some(last_turn);
+        events.push(Event::ScorchedEarthStarted {
+            player: enemy,
+            last_turn,
+        });
     }
 
     /// Le joueur qui doit jouer.
@@ -305,6 +331,7 @@ impl Game {
             queen_stepped: false,
             queen_shot: false,
             hare_walks: Vec::new(),
+            scorched_until: [None, None],
             config,
         })
     }

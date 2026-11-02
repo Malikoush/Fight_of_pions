@@ -345,14 +345,23 @@ impl Game {
                 self.return_to_reserve(pion.owner(), events);
             }
         }
+        for player in [Player::One, Player::Two] {
+            let scorched = &mut self.scorched_until[player.index()];
+            if scorched.is_some_and(|last| last <= turn) {
+                *scorched = None;
+                events.push(Event::ScorchedEarthEnded { player });
+            }
+        }
         events.len() > before
     }
 
     /// Vrai si quelque chose est programmé pour changer la partie plus tard : un effet
     /// continu qui s'arrêtera à un tour donné, un retour d'Interchange, un pion qui sortira
-    /// de l'infirmerie. Un effet sans durée (le pacte) ne change rien tout seul : il ne
-    /// compte pas, ni des jetons de pas, qui attendent leur joueur.
+    /// de l'infirmerie, la fin de Terre brûlée. Un effet sans durée (le pacte) ne change
+    /// rien tout seul : il ne compte pas, ni des jetons de pas, qui attendent leur joueur.
     pub(super) fn something_is_scheduled(&self) -> bool {
-        self.effects.iter().any(|effect| effect.is_scheduled()) || !self.infirmary.is_empty()
+        self.effects.iter().any(|effect| effect.is_scheduled())
+            || !self.infirmary.is_empty()
+            || self.scorched_until.iter().any(Option::is_some)
     }
 }

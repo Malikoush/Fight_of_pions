@@ -36,6 +36,8 @@ struct EventMirror {
     token_piles: Vec<TokenPile>,
     /// Les pions au cimetière, dans l'ordre d'arrivée.
     graveyard: Vec<Pion>,
+    /// Le dernier tour de Terre brûlée de chaque joueur, s'il y est.
+    scorched_until: [Option<u32>; 2],
     pions_per_player: u32,
 }
 
@@ -63,6 +65,7 @@ impl EventMirror {
             tombs: vec![None; config.board_size * config.board_size],
             token_piles: Vec::new(),
             graveyard: Vec::new(),
+            scorched_until: [None, None],
             pions_per_player: config.pions_per_player,
         }
     }
@@ -231,6 +234,16 @@ impl EventMirror {
                 let index = index.unwrap_or_else(|| panic!("pile inconnue : {event:?}"));
                 self.token_piles.remove(index);
             }
+            Event::ScorchedEarthStarted { player, last_turn } => {
+                let scorched = &mut self.scorched_until[player.index()];
+                assert_ne!(*scorched, Some(last_turn), "annonce inutile : {event:?}");
+                *scorched = Some(last_turn);
+            }
+            Event::ScorchedEarthEnded { player } => {
+                let scorched = &mut self.scorched_until[player.index()];
+                assert!(scorched.is_some(), "Terre brûlée inconnue : {event:?}");
+                *scorched = None;
+            }
             // L'attaque elle-même ne change rien : ses effets sont annoncés à part.
             Event::AttackUsed { .. } | Event::QueenShot { .. } => {}
             Event::TurnEnded { next } => {
@@ -285,6 +298,13 @@ impl EventMirror {
         assert_eq!(self.infirmary, game.infirmary(), "infirmerie");
         assert_eq!(self.token_piles, game.token_piles(), "piles de jetons");
         assert_eq!(self.graveyard, game.graveyard(), "cimetière");
+        for player in [Player::One, Player::Two] {
+            assert_eq!(
+                self.scorched_until[player.index()],
+                game.scorched_until(player),
+                "Terre brûlée de {player:?}"
+            );
+        }
         for pos in game.board().positions() {
             let mirrored = self.tombs[pos.row * self.size + pos.col];
             assert_eq!(mirrored, game.board().tomb(pos), "tombe en {pos}");
@@ -380,6 +400,7 @@ fn events_are_enough_to_follow_the_board() {
     let (mut attacks, mut epics, mut kills) = (0, 0, 0);
     let (mut effects_ended, mut healed, mut moved, mut swapped) = (0, 0, 0, 0);
     let (mut tokens_used, mut buried, mut tokens_spent, mut returns) = (0, 0, 0, 0);
+    let mut scorched = 0;
     let mut kinds_played = Vec::new();
     for seed in 0..500 {
         let mut rng = Rng::new(seed);
@@ -402,6 +423,12 @@ fn events_are_enough_to_follow_the_board() {
             played.count(|event| matches!(event, Event::TokenUsed(_) | Event::TokenPileEnded(_)));
         buried += played.count(|event| matches!(event, Event::GraveyardEntered(_)));
         tokens_spent += played.count(|event| matches!(event, Event::EffectChanged(_)));
+        scorched += played.count(|event| {
+            matches!(
+                event,
+                Event::ScorchedEarthStarted { .. } | Event::ScorchedEarthEnded { .. }
+            )
+        });
         returns += played.count(|event| {
             matches!(event, Event::EffectEnded(effect) if matches!(effect.kind(), EffectKind::Return { .. }))
         });
@@ -432,6 +459,10 @@ fn events_are_enough_to_follow_the_board() {
     // ou Légendaire, puis un kill. Les tests de règles couvrent le cimetière.
     assert!(buried > 0, "aucun pion au cimetière");
     assert!(returns > 5, "seulement {returns} retours d'Interchange");
+    assert!(
+        scorched > 5,
+        "seulement {scorched} débuts ou fins de Terre brûlée"
+    );
     assert!(
         tokens_spent > 5,
         "seulement {tokens_spent} jetons de pas dépensés"

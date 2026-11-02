@@ -473,6 +473,11 @@ fn etat(ui: &mut egui::Ui, game: &Game) {
             cimetiere,
             game.banked_actions(player)
         ));
+        if let Some(tour) = game.scorched_until(player) {
+            ui.label(format!(
+                "    Terre brûlée : aucun effet continu jusqu'à la fin du tour {tour}"
+            ));
+        }
         for pile in game
             .token_piles()
             .iter()
@@ -595,6 +600,15 @@ fn decrire(event: &Event) -> Option<String> {
         | Event::PlacementsChanged { .. }
         | Event::ReserveChanged { .. }
         | Event::CooldownChanged { .. } => None,
+        Event::ScorchedEarthStarted { player, last_turn } => Some(format!(
+            "Terre brûlée : {} ne peut créer aucun effet continu jusqu'à la fin du tour {}",
+            theme::nom_joueur(*player),
+            last_turn
+        )),
+        Event::ScorchedEarthEnded { player } => Some(format!(
+            "Terre brûlée s'arrête pour {}",
+            theme::nom_joueur(*player)
+        )),
         Event::TurnEnded { next } => Some(format!("Au tour de {}", theme::nom_joueur(*next))),
         Event::GameEnded(fin) => Some(texte_fin(*fin)),
     }

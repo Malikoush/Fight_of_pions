@@ -115,6 +115,7 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
         entry(AttackKind::Attila, Rarity::Common, 1),
         entry(AttackKind::Attila, Rarity::Rare, 2),
         entry(AttackKind::Attila, Rarity::Epic, 3),
+        entry(AttackKind::Attila, Rarity::Legendary, 4),
         entry(AttackKind::Medecin, Rarity::Common, 1),
         entry(AttackKind::Medecin, Rarity::Rare, 2),
         entry(AttackKind::Medecin, Rarity::Epic, 3),
@@ -585,8 +586,8 @@ mod tests {
             assert_eq!(entry.stats.cost, card_cost, "{}", entry.attack);
         }
         let not_yet = Attack {
-            kind: AttackKind::Attila,
-            rarity: Rarity::Legendary,
+            kind: AttackKind::MeilleursAmis,
+            rarity: Rarity::Common,
         };
         assert!(config.attack_stats(not_yet).is_none());
     }
@@ -594,8 +595,8 @@ mod tests {
     #[test]
     fn catalog_only_holds_attacks_the_engine_can_play() {
         let attack = Attack {
-            kind: AttackKind::Attila,
-            rarity: Rarity::Legendary,
+            kind: AttackKind::MeilleursAmis,
+            rarity: Rarity::Common,
         };
         assert_eq!(
             problem(with_catalog(attack, 1, 1)),
