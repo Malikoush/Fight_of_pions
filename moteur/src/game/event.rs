@@ -59,6 +59,12 @@ pub enum Event {
         /// La case où il arrive, libre jusque-là.
         to: Position,
     },
+    /// Une case de mur a été creusée (Coup du taureau) : elle est maintenant sur le plateau,
+    /// libre, pour toujours. Le lanceur y entre ensuite ([`Event::PionMoved`]).
+    WallDug {
+        /// La case creusée.
+        at: Position,
+    },
     /// Deux pions ont échangé leurs cases, d'un coup : `first` était en `first_at` et
     /// arrive en `second_at`, et inversement.
     PionsSwapped {

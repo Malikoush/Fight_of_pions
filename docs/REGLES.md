@@ -6,7 +6,7 @@ Ce carnet dit **ce que le moteur implémente réellement**, avec la date de chaq
 
 ### Plateau et objectif (2026-10-26)
 
-- Plateau de `board_size × board_size` cases (10 par défaut), toutes jouables.
+- Plateau de `board_size × board_size` cases (10 par défaut), toutes jouables, entouré de `wall_thickness` rangées de **mur** (3 par défaut depuis le 2026-11-03, 0 dans les premières règles) : voir « Coup du taureau et mur ».
 - Chaque joueur a `pions_per_player` pions en réserve (15 par défaut).
 - Aligner au moins `align_to_win` pions (6 par défaut) en ligne droite (horizontale, verticale ou diagonale) **en posant** gagne immédiatement, sans la règle d'or ; avec elle, la ligne gagne au début du tour suivant de son propriétaire (voir « Fin de partie »).
 
@@ -14,7 +14,7 @@ Ce carnet dit **ce que le moteur implémente réellement**, avec la date de chaq
 
 Une partie refuse de démarrer si ses réglages sont incohérents :
 
-- la taille du plateau doit être comprise entre 2 et 26 (une colonne par lettre, de A à Z) ;
+- la taille du plateau doit être comprise entre 2 et 26 (une colonne par lettre, de A à Z), et (2026-11-03) le plateau et son mur aussi : `board_size + 2 × wall_thickness` ≤ 26 ;
 - l'alignement doit être compris entre 2 et la taille du plateau ;
 - chaque joueur doit avoir au moins un pion ;
 - chaque tour, y compris le premier, doit donner au moins une action ;
@@ -239,6 +239,18 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
 - **Attila Rare et Épique** visent les jetons de l'adversaire à part (« Viser les jetons adverses ») : ils comptent pour un pion, et **toutes** ses piles sont annulées, chacune étant un effet entier. Attila Commune n'y touche pas (ce ne sont pas des statuts).
 - Les jetons ne programment rien : une pile ne compte pas pour la partie figée.
 
+### Coup du taureau et mur (2026-11-03)
+
+- **Le mur** entoure le plateau de jeu : `wall_thickness` rangées (3 par défaut, réglable ; 0 : pas de mur). Les noms couvrent toute la grille, mur compris : avec 3 rangées, la grille va de A1 à P16 et le plateau de jeu de D4 à M13.
+- Une case de mur **n'est pas sur le plateau** : on n'y pose pas, on ne la vise pas, elle arrête le regard (Beauté fatale), la ligne droite (Interchange Rare), le tir d'un garde, les sauts (on ne saute pas par-dessus du mur) et les lignes.
+- Seule la charge du Coup du taureau la **creuse** : la case creusée devient une case normale **pour toujours** (on peut y poser, elle compte pour les alignements, toutes les cartes l'atteignent).
+- **La charge** : le joueur choisit le lanceur, puis la direction en désignant la case collée au lanceur (8 directions, une case de mur comprise). La charge va aussi loin que sa rareté le permet ; elle n'est proposée que dans les directions où elle avance d'au moins une case.
+  - Commune (1 case) : le pion adverse qui s'y trouve recule d'1 case et le lanceur prend sa place ; s'il ne peut pas reculer, la charge est impossible. Un pion protégé est poussé aussi.
+  - Rare (1 case) : le pion adverse recule de 2 cases et le lanceur prend sa place. S'il ne peut pas reculer des 2 cases, il est **écrasé** (tué). Un pion **protégé** recule aussi loin que possible et n'est jamais tué ; s'il ne peut pas reculer du tout, la charge est impossible.
+  - Épique (2 cases), Légendaire (3 cases) : chaque pion adverse sur le passage est tué. Un pion adverse protégé arrête la charge : le lanceur s'arrête devant.
+  - Le lanceur qui atteint le mur le creuse et continue dans la case creusée ; un pion poussé ne creuse pas : le mur le bloque. Tes propres pions arrêtent la charge, une tombe non. Au-delà du mur, le bord de la grille l'arrête.
+- **Une reine sauvée par un garde** arrête la charge : le lanceur ne peut pas entrer sur sa case, et le reste de la charge n'a pas lieu (2026-11-03). Plus généralement, dans toute attaque, un déplacement impossible arrête la suite.
+
 ### Fin de partie (2026-10-26)
 
 Une partie se termine dans l'un de ces cas, vérifiés dans cet ordre (le manque de pions, ajouté en B6b, se vérifie à la fin de chaque action, avant la partie figée) :
@@ -256,7 +268,7 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 
 ## Pas encore implémenté
 
-- Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, la Reine, Attila Commune, Rare et Épique, le Médecin, le Massacre divin, l'Interchange, le Lièvre, et Meilleurs amis ; et les réactions.
+- Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, la Reine, Attila, le Médecin, le Massacre divin, l'Interchange, le Coup du taureau, le Lièvre, la Familia et Meilleurs amis ; et les réactions.
 - Le draft et la cache secrète.
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
 
@@ -334,9 +346,10 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B4 | Saut du loup Épique ou Légendaire : le loup peut-il finir sur sa case de départ sans avoir survolé de pion (aller et retour dans le vide) ? Ce n'est pas « sans effet » au sens décidé (deux déplacements), mais rien ne change, pour 3 ou 4 actions. Le Lièvre, lui, ne peut pas finir sur sa case de départ. | Non, comme le Lièvre | **2026-10-30** : oui, le loup peut revenir sur sa case de départ, même sans avoir survolé de pion. |
 | B7 | Coup du taureau Rare : le pion adverse ne peut faire qu'une partie de son recul de 2 cases | Écrasé | **2026-10-30** : un pion non protégé est écrasé (infirmerie) s'il ne peut pas reculer des 2 cases. Un pion **protégé** recule aussi loin que possible et n'est jamais tué ; s'il ne peut pas reculer d'au moins une case, la charge est impossible dans cette direction. |
 | B7 | Coup du taureau : que choisit le joueur ? | La direction seulement | **2026-10-30** : la direction seulement ; la charge va aussi loin que sa rareté le permet. Le bord ne l'arrête pas : **à toutes les raretés, le taureau creuse le mur** (fiche). Seuls ses propres pions et un pion adverse protégé (Épique, Légendaire) l'arrêtent. |
-| B7 | Le mur : jusqu'où le plateau peut-il grandir ? (La fiche propose un plateau 14 × 14, soit 2 rangées de mur autour du 10 × 10.) Au-delà, la charge s'arrête-t-elle ? | Épaisseur du mur réglable (2 par défaut) ; au-delà, la limite est infranchissable et arrête la charge | |
-| B7 | Les noms des cases avec le mur : le 10 × 10 garde-t-il « A1 » à « J10 » (les cases creusées ont alors des noms nouveaux), ou le plateau entier, mur compris, est-il nommé de A1 à N14 (le 10 × 10 devient C3 à L12) ? | Le plateau entier est nommé (A1 à N14) : un seul système de noms, sans coordonnées négatives | |
-| B7 | Le mur arrête-t-il le regard (Beauté fatale), l'Interchange Rare et le saut du loup (sauter par-dessus du mur vers une case creusée) ? | Oui : le mur n'est pas une case du plateau tant qu'il n'est pas creusé | |
+| B7 | Le mur : jusqu'où le plateau peut-il grandir ? (La fiche propose un plateau 14 × 14, soit 2 rangées de mur autour du 10 × 10.) Au-delà, la charge s'arrête-t-elle ? | Épaisseur du mur réglable (2 par défaut) ; au-delà, la limite est infranchissable et arrête la charge | **2026-11-03** : réglable, **3 rangées** par défaut ; au-delà, la charge s'arrête. |
+| B7 | Les noms des cases avec le mur : le 10 × 10 garde-t-il « A1 » à « J10 » (les cases creusées ont alors des noms nouveaux), ou le plateau entier, mur compris, est-il nommé de A1 à N14 (le 10 × 10 devient C3 à L12) ? | Le plateau entier est nommé (A1 à N14) : un seul système de noms, sans coordonnées négatives | **2026-11-03** : oui (avec 3 rangées : A1 à P16, le plateau de jeu de D4 à M13). |
+| B7 | Le mur arrête-t-il le regard (Beauté fatale), l'Interchange Rare et le saut du loup (sauter par-dessus du mur vers une case creusée) ? | Oui : le mur n'est pas une case du plateau tant qu'il n'est pas creusé | **2026-11-03** : oui. Une case creusée est une case normale pour toujours (pose, alignements, toutes les cartes). La direction se choisit par la case collée au lanceur. Une charge interrompue (Épique, Légendaire) va aussi loin que possible ; les pions déjà traversés sont tués. |
+| B7 | Une reine sauvée par un garde sur le passage de la charge (écrasée par la Rare, ou tuée par l'Épique ou la Légendaire) : que fait la charge ? | Elle s'arrête : le lanceur ne peut pas entrer sur la case de la reine, et rien d'autre n'a lieu (les pions derrière elle ne sont pas touchés). Même règle pour toute attaque : un déplacement impossible arrête la suite | **2026-11-03** : oui. |
 | B5 | Les pions invoqués (Familia, Meilleurs amis, Sentinelle…) viennent-ils de la réserve ? Réserve vide = impossible ? | Oui, ils viennent de la réserve | **2026-10-29** (fiches) : oui ; réserve vide, l'invocation pose ce qu'elle peut. Seul le Médecin ressuscite depuis l'infirmerie. |
 | B5 | Un pion séduit qui meurt retourne dans la réserve de quel joueur ? | Son camp actuel | **2026-10-29** (fiches) : la question disparaît. Personne ne change de camp : séduire, c'est tuer le pion adverse puis poser un des siens à sa place. |
 | B5 | Qu'est-ce qu'un kill (pour le Massacre divin, la Queue du lézard, la vengeance et les tombes) ? | Tout pion envoyé à l'infirmerie ou au cimetière : séduction, charme fatal, écrasement, tir de la reine, retour d'Interchange, résurrection sur une tombe occupée, vengeance | **2026-10-30** : oui. La séduction reste « tuer puis poser » (fiche), donc un kill : plus simple et déjà équilibrée (3,5) ; un vrai changement de camp pourra être essayé après les playtests. L'**assassin** est le lanceur de l'attaque, même s'il a bougé. |
@@ -421,3 +434,4 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-11-02 | B6c : Interchange Commune (téléportation, retour au début du tour suivant, avant la règle d'or, qui tue l'occupant) et Légendaire (double échange) ; Lièvre Épique (jetons de pas, un geste gratuit par tour) ; un kill de son propre camp n'use aucun jeton et n'est pas vengé. |
 | 2026-11-02 | B6d : Terre brûlée (Attila Légendaire) : annule comme l'Épique, puis l'adversaire ne peut jouer aucun coup qui créerait un effet continu pendant son tour suivant. |
 | 2026-11-02 | Correctif de lecture : un pion qui attend son retour (Interchange Commune) ne peut pas être téléporté de nouveau, comme en B6c (Martin avait répondu « non »). |
+| 2026-11-03 | B7 : le mur (3 rangées par défaut, réglable ; la grille entière est nommée) et le Coup du taureau (Commune à Légendaire) : charge qui pousse, écrase ou tue, et creuse le mur ; un déplacement impossible arrête la suite d'une attaque. |

@@ -14,7 +14,7 @@ struct Geometrie {
     origine: Pos2,
     /// Côté d'une case, en points.
     cote: f32,
-    /// Nombre de cases par côté.
+    /// Nombre de cases par côté, mur compris.
     taille: usize,
 }
 
@@ -70,6 +70,8 @@ pub fn show(ui: &mut egui::Ui, game: &Game, intentions: &mut Vec<Intention>) {
                 let rect = geo.case_vers_rect(pos);
                 let fond = if survol == Some(pos) {
                     theme::CASE_SURVOL
+                } else if game.board().is_wall(pos) {
+                    theme::CASE_MUR
                 } else if (row + col) % 2 == 0 {
                     theme::CASE_CLAIRE
                 } else {

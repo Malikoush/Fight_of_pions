@@ -157,7 +157,10 @@ fn hare_can_act(game: &Game, player: Player) -> bool {
 ///   derrière un pion ; l'Épique, n'importe quel ennemi ; la Légendaire, deux ennemis collés,
 ///   avec un second de tes pions ;
 /// - le Lièvre a besoin d'une case libre collée au lanceur ; l'Épique, d'un lanceur sans
-///   jetons de pas.
+///   jetons de pas ;
+/// - le Coup du taureau charge vers une case collée libre ou de mur, ou vers un ennemi :
+///   avec une case libre derrière lui (Commune), avec une case libre derrière lui ou non
+///   protégé (Rare, qui l'écrase), non protégé (Épique, Légendaire).
 fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> bool {
     let board = game.board();
     let enemy = |pos: Position| board.owner(pos) == Some(player.opponent());
@@ -252,6 +255,22 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
         .positions()
         .filter(|&pos| !plays_at(pos).is_empty())
         .collect();
+    let charges = |launcher: Position, rarity: Rarity| {
+        Direction::ALL.iter().any(|&dir| {
+            let Some(first) = launcher.step(dir) else {
+                return false;
+            };
+            let room_behind = board.neighbor(first, dir).is_some_and(free);
+            board.is_wall(first)
+                || (board.contains(first) && free(first))
+                || (enemy(first)
+                    && match rarity {
+                        Rarity::Common => room_behind,
+                        Rarity::Rare => room_behind || !protected(game, first),
+                        Rarity::Epic | Rarity::Legendary => !protected(game, first),
+                    })
+        })
+    };
     let familia = |launcher: Position, rarity: Rarity| {
         let parents = match rarity {
             Rarity::Common => 0,
@@ -311,6 +330,7 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             }
             (AttackKind::Lievre, _) => free_neighbor(launcher),
             (AttackKind::Familia, rarity) => familia(launcher, rarity),
+            (AttackKind::CoupDuTaureau, rarity) => charges(launcher, rarity),
         })
 }
 

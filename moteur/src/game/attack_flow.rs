@@ -15,6 +15,17 @@ use crate::attacks::{
 };
 use crate::{Attack, AttackStats, Cell, Event, GameError, Pion, PionId, Player, Position};
 
+/// Ce qu'a donné un effet, pour la suite de l'attaque.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Applied {
+    /// Joué (ou sans objet) : l'attaque continue.
+    Done,
+    /// Un garde a sauvé la reine de cette case : l'attaque ne lui fait plus rien.
+    Shielded(Position),
+    /// Un déplacement impossible : le reste de l'attaque n'a pas lieu.
+    Stopped,
+}
+
 impl Game {
     pub(super) fn validate_use_attack(&self, slot: usize) -> Result<(), GameError> {
         let player = self.current_player;
@@ -268,8 +279,8 @@ impl Game {
 
         let mut deaths = Vec::new();
         // Les pions sauvés par un garde : l'attaque ne leur fait plus rien. Ils sont reconnus
-        // par leur case, ce qui suffit tant qu'aucune famille ne pose ou ne pousse un autre
-        // pion sur cette case après le kill (à revoir avec le Coup du taureau, B7).
+        // par leur case, ce qui suffit puisqu'aucune famille ne pose ou ne pousse un autre
+        // pion sur cette case après le kill : un déplacement impossible arrête l'attaque.
         let mut shielded = Vec::new();
         for effect in effects {
             if effect
@@ -278,8 +289,10 @@ impl Game {
             {
                 continue;
             }
-            if let Some(at) = self.apply_effect(effect, play, killer, &mut deaths, events) {
-                shielded.push(at);
+            match self.apply_effect(effect, play, killer, &mut deaths, events) {
+                Applied::Done => {}
+                Applied::Shielded(at) => shielded.push(at),
+                Applied::Stopped => break,
             }
         }
         // Les vengeances, une fois l'attaque entière jouée (carnet, 2026-10-30).
@@ -288,8 +301,7 @@ impl Game {
     }
 
     /// Le résolveur central : le seul endroit où un effet d'attaque modifie la partie. Les
-    /// pions tués s'ajoutent à `deaths`, pour les vengeances de fin d'attaque. Renvoie la
-    /// case d'une reine qu'un garde vient de sauver.
+    /// pions tués s'ajoutent à `deaths`, pour les vengeances de fin d'attaque.
     fn apply_effect(
         &mut self,
         effect: Effect,
@@ -297,11 +309,11 @@ impl Game {
         by: Option<PionId>,
         deaths: &mut Vec<Death>,
         events: &mut Vec<Event>,
-    ) -> Option<Position> {
+    ) -> Applied {
         match effect {
             Effect::Kill { at } => match self.kill(at, by, self.current_player, events) {
                 Hit::Killed(death) => deaths.push(death),
-                Hit::Shielded => return Some(at),
+                Hit::Shielded => return Applied::Shielded(at),
                 Hit::Missed => {}
             },
             Effect::Apply { at, kind, turns } => {
@@ -313,9 +325,10 @@ impl Game {
             Effect::AddTokens { reward, tokens } => self.add_tokens(reward, tokens, play, events),
             Effect::Attach { at, kind, end } => self.add_effect_at(at, kind, play, end, events),
             Effect::RemoveEnemyStatuses { at } => {
-                let pion = self.board.get(at).and_then(Cell::pion)?;
-                let enemy = self.current_player.opponent();
-                self.end_effects(|effect| effect.is_status_on_by(pion.id(), enemy), events);
+                if let Some(pion) = self.board.get(at).and_then(Cell::pion) {
+                    let enemy = self.current_player.opponent();
+                    self.end_effects(|effect| effect.is_status_on_by(pion.id(), enemy), events);
+                }
             }
             Effect::Place { at } => {
                 self.put_pion(at, events);
@@ -332,9 +345,19 @@ impl Game {
                 }
             }
             Effect::Move { from, to } => {
-                let pion = self.board.get(from).and_then(Cell::pion)?;
-                if self.board.move_pion(from, to).is_ok() {
-                    events.push(Event::PionMoved { pion, from, to });
+                // Un déplacement impossible arrête l'attaque : une charge ne passe pas une
+                // reine qu'un garde vient de sauver.
+                let Some(pion) = self.board.get(from).and_then(Cell::pion) else {
+                    return Applied::Stopped;
+                };
+                if self.board.move_pion(from, to).is_err() {
+                    return Applied::Stopped;
+                }
+                events.push(Event::PionMoved { pion, from, to });
+            }
+            Effect::Dig { at } => {
+                if self.board.dig(at).is_ok() {
+                    events.push(Event::WallDug { at });
                 }
             }
             Effect::Swap { a, b } => {
@@ -343,7 +366,7 @@ impl Game {
                     self.board.get(b).and_then(Cell::pion),
                 );
                 let (Some(first), Some(second)) = pions else {
-                    return None;
+                    return Applied::Done;
                 };
                 if self.board.swap(a, b).is_ok() {
                     events.push(Event::PionsSwapped {
@@ -355,7 +378,7 @@ impl Game {
                 }
             }
         }
-        None
+        Applied::Done
     }
 
     /// Le coût et la recharge d'une attaque. La configuration validée garantit que toute

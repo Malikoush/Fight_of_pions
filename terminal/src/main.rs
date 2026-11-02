@@ -77,6 +77,9 @@ fn main() {
                                 from,
                                 to
                             ),
+                            Event::WallDug { at } => {
+                                println!("Le mur est creusé en {}.", at)
+                            }
                             Event::PionsSwapped {
                                 first,
                                 first_at,

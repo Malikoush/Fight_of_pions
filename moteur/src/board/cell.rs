@@ -3,8 +3,8 @@ use crate::{Pion, Player};
 /// Le contenu d'une case du plateau.
 ///
 /// C'est une structure en couches, et non un choix exclusif : un pion, et sous lui, la
-/// tombe d'un pion tué (le Médecin) ; une tombe ne bloque pas la case. D'autres couches
-/// (case creusée…) s'ajouteront quand une attaque en aura besoin.
+/// tombe d'un pion tué (le Médecin) ; une tombe ne bloque pas la case. Le mur n'est pas
+/// une couche : une case de mur n'est pas sur le plateau ([`crate::Board::is_wall`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Cell {
     pub(super) pion: Option<Pion>,

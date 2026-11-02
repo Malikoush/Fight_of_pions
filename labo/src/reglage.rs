@@ -100,6 +100,7 @@ impl ReglageDePartie {
         let config = &mut self.config;
         egui::Grid::new((self.intitule, "reglages")).show(ui, |ui| {
             ligne(ui, "Taille du plateau", &mut config.board_size);
+            ligne(ui, "Rangées de mur", &mut config.wall_thickness);
             ligne(ui, "Pions à aligner", &mut config.align_to_win);
             ligne(ui, "Pions par joueur", &mut config.pions_per_player);
             ligne(

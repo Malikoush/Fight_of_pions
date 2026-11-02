@@ -125,6 +125,7 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
   | Poser (`Effect::Place`), ressusciter (`Effect::Resurrect`) | Un pion de la réserve, ou de l'infirmerie (le Médecin, sur sa tombe), arrive sur une case et compte comme posé ce tour | Pose, Beauté fatale, Reine, Familia, Meilleurs amis, Médecin, Sentinelle, Queue du lézard | B5a (réserve) ; B5b (infirmerie) |
   | Créer un effet continu | Couronne, gardes (`Effect::Crown`, B5c), pacte (`Effect::Bind`, B5a), enfant (`Effect::MakeChild`, B5d), retour programmé et jetons de pas (`Effect::Attach`, B6c) | Reine, Lièvre Épique, Meilleurs amis, Interchange Commune, Familia, Attila Légendaire | B3 à B6 |
   | Terre brûlée (`Effect::ScorchEarth`) | Pendant son tour suivant, l'adversaire ne peut jouer aucun coup dont un effet crée un effet continu (`Effect::creates_lasting`) : `is_complete` le refuse, via `AttackContext::may_create_effects` | Attila Légendaire | B6d |
+  | Creuser (`Effect::Dig`) | Une case de mur devient une case normale, pour toujours ; le lanceur y entre ensuite par un `Effect::Move` | Coup du taureau | B7 |
   | Annuler un effet (`Effect::CancelEnemyEffects`, `Effect::CancelEnemyTokens`) | Les effets continus adverses entiers qui touchent un pion ; toutes les piles de jetons adverses | Attila Rare à Légendaire | B6a (Rare, Épique) ; B6b (jetons) ; B6d (Légendaire) |
   | Poser des jetons (`Effect::AddTokens`) | Une pile devant le joueur ; ses prochains kills usent un jeton de chaque pile : points rendus tout de suite, ou cimetière (`game/tokens.rs`, appelé par `kill`) | Massacre divin | B6b |
 
@@ -134,13 +135,14 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
   - **Une seule horloge** (`game/clock.rs`) : une durée se compte en tours d'un joueur (l'adversaire de celui qui a joué l'effet ; pour l'infirmerie, le propriétaire du pion), sans le tour en cours, et s'éteint à la fin du dernier (carnet, 2026-10-30). Le dernier tour est calculé une fois, à la création : rien ne décompte à chaque tour, et la fin d'un tour arrête simplement ce dont c'était le dernier tour.
   - **Déclencheurs** auxquels réagissent les effets continus et les réactions : pion tué, pion posé, pion déplacé, pion visé (avant la résolution), attaque terminée, début de tour, fin de tour.
   - **Portées** (où sont les cibles), chaque famille dit la sienne, sans portée par défaut : collé au lanceur, regard (en ligne droite jusqu'à N cases, sans pion entre), ligne de tir (le premier pion rencontré), n'importe où. **Trajets** (comment un pion bouge) : pas, saut, charge.
-  - Le **mur** du Coup du taureau (creuser) n'est pas une primitive tant qu'il n'est pas gardé (B7).
+  - **Le mur** (B7) est dans le plateau, pas dans les cases : `Board` connaît la grille entière (`size()`, mur compris) et ses cases de mur, qui ne sont pas sur le plateau (`contains`, `get`, `neighbor`, `positions` les ignorent). Toutes les portées, les trajets et les alignements s'arrêtent donc au mur sans le savoir ; seul le Coup du taureau le regarde (`Board::is_wall`) pour le creuser.
+  - **Un déplacement impossible arrête l'attaque** (B7) : si un `Effect::Move` ne peut pas se faire (une reine sauvée par un garde occupe encore sa case), le résolveur ne joue pas la suite des effets. C'est ce qui arrête une charge devant la reine.
 - **Les nombres d'une famille** (portée, nombre de cibles, durée) sont des constantes nommées dans son fichier. Ils passeront dans la configuration quand l'équilibrage par bots en aura besoin (principe 6).
 
 ### Les pions et les cases
 
 - Chaque pion (`Pion`) a une **identité stable `PionId`**, donnée dans l'ordre des poses à partir de 0. Un effet en cours vise un pion, pas une position, car un pion peut être attiré, échangé ou téléporté. Seul le moteur crée des pions ; les clients les lisent dans `Event::PionPlaced` ou sur le plateau.
-- Une case (`Cell`) est une **structure en couches** : un pion optionnel et, depuis B5b, une tombe optionnelle ; d'autres couches (case creusée) s'ajouteront quand une attaque en aura besoin. Ce n'est pas un enum exclusif : une tombe n'empêche pas un pion d'être sur la même case. Le plateau ne s'écrit que **pion par pion** (`place_pion`, `remove_pion`, `move_pion`, `swap`) : une tombe reste sur sa case quand les pions bougent.
+- Une case (`Cell`) est une **structure en couches** : un pion optionnel et, depuis B5b, une tombe optionnelle  ; le mur n'est pas une couche (voir « Le mur », plus haut). Ce n'est pas un enum exclusif : une tombe n'empêche pas un pion d'être sur la même case. Le plateau ne s'écrit que **pion par pion** (`place_pion`, `remove_pion`, `move_pion`, `swap`) : une tombe reste sur sa case quand les pions bougent.
 
 ### La victoire et la fin de partie
 

@@ -83,7 +83,7 @@ pub fn random_below(rng: &mut Rng, len: usize) -> usize {
 /// Une configuration valide tirée au hasard, petite pour que les fins arrivent vite.
 /// Elle couvre les cas où il faut économiser ses actions pour poser ou attaquer, les poses
 /// limitées par tour (parfois gratuites), la banque de départ, le mal du débarquement, la
-/// règle d'or et l'infirmerie, et donne souvent des attaques aux joueurs, prises parmi
+/// règle d'or, l'infirmerie et le mur, et donne souvent des attaques aux joueurs, prises parmi
 /// toutes celles que le moteur sait jouer (parfois deux fois la même carte).
 pub fn random_config(rng: &mut Rng) -> GameConfig {
     let board_size = 2 + random_below(rng, 4);
@@ -131,6 +131,8 @@ pub fn random_config(rng: &mut Rng) -> GameConfig {
         max_turns: 1 + random_below(rng, 60) as u32,
         attack_catalog,
         starting_attacks,
+        // Tiré en dernier : les autres tirages restent ceux d'avant le mur.
+        wall_thickness: random_below(rng, 3),
     };
     assert_eq!(config.validate(), Ok(()), "{config:?}");
     config

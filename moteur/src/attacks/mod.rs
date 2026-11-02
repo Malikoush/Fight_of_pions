@@ -5,6 +5,7 @@
 mod attila;
 mod beaute_fatale;
 mod card;
+mod coup_du_taureau;
 mod effect;
 mod familia;
 mod interchange;
@@ -37,6 +38,7 @@ impl AttackKind {
             AttackKind::Attila => &attila::Attila,
             AttackKind::Medecin => &medecin::Medecin,
             AttackKind::Interchange => &interchange::Interchange,
+            AttackKind::CoupDuTaureau => &coup_du_taureau::CoupDuTaureau,
             AttackKind::MassacreDivin => &massacre_divin::MassacreDivin,
             AttackKind::Ours => &ours::Ours,
             AttackKind::Lievre => &lievre::Lievre,

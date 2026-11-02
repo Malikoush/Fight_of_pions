@@ -43,6 +43,8 @@ pub const INTERVALLE_CALCUL_MS: u64 = 200;
 pub const CASE_CLAIRE: Color32 = Color32::from_rgb(252, 228, 236);
 pub const CASE_FONCEE: Color32 = Color32::from_rgb(244, 143, 177);
 pub const CASE_SURVOL: Color32 = Color32::from_rgb(255, 241, 118);
+/// Une case de mur, que seul le Coup du taureau creuse.
+pub const CASE_MUR: Color32 = Color32::from_rgb(141, 110, 99);
 pub const ERREUR: Color32 = Color32::from_rgb(211, 47, 47);
 
 /// Place laissée autour du damier pour les lettres et les numéros.

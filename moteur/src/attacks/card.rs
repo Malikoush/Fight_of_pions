@@ -18,6 +18,8 @@ pub enum AttackKind {
     Medecin,
     /// L'échange de cases avec un pion adverse (fiche n°06).
     Interchange,
+    /// La charge en ligne droite, qui pousse, écrase ou tue, et creuse le mur (fiche n°07).
+    CoupDuTaureau,
     /// Tes prochains kills rapportent : des points, puis le cimetière (fiche n°08).
     MassacreDivin,
     /// Le corps à corps, sur les 8 cases collées au lanceur (fiche n°09).
@@ -40,6 +42,7 @@ impl fmt::Display for AttackKind {
             AttackKind::Attila => write!(f, "Attila"),
             AttackKind::Medecin => write!(f, "Médecin"),
             AttackKind::Interchange => write!(f, "Interchange"),
+            AttackKind::CoupDuTaureau => write!(f, "Coup du taureau"),
             AttackKind::MassacreDivin => write!(f, "Massacre divin"),
             AttackKind::Ours => write!(f, "Ours"),
             AttackKind::Lievre => write!(f, "Lièvre"),

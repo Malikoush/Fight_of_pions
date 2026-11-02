@@ -106,6 +106,19 @@ mod tests {
     }
 
     #[test]
+    fn a_line_goes_through_dug_cells_and_stops_at_the_wall() {
+        // 3 × 3 entouré de 2 rangées de mur : le plateau de jeu va de 2 à 4.
+        let mut board = Board::walled(3, 2);
+        for col in 2..5 {
+            put_pion(&mut board, 2, col, Player::One);
+        }
+        assert_eq!(longest_line(&board, Position { row: 2, col: 2 }), 3);
+        board.dig(Position { row: 2, col: 1 }).unwrap();
+        put_pion(&mut board, 2, 1, Player::One);
+        assert_eq!(longest_line(&board, Position { row: 2, col: 2 }), 4);
+    }
+
+    #[test]
     fn line_stops_at_the_edge() {
         let mut board = Board::new(10);
         for col in 5..10 {

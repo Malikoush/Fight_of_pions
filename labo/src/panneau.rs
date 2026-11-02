@@ -530,6 +530,7 @@ fn decrire(event: &Event) -> Option<String> {
             from,
             to
         )),
+        Event::WallDug { at } => Some(format!("Le mur est creusé en {}", at)),
         Event::PionsSwapped {
             first,
             first_at,

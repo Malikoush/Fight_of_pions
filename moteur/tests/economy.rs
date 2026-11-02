@@ -8,7 +8,7 @@ use fight_of_pions::{Action, Event, Game, GameConfig, GameError, Player, Positio
 
 const RARE: usize = 0;
 
-/// L'économie des règles actuelles, sans règle d'or ni infirmerie : 1 pose gratuite par
+/// L'économie des règles actuelles, sans règle d'or, infirmerie ni mur : 1 pose gratuite par
 /// tour, 1 action par tour gardée jusqu'à 3, la Pièce et le mal du débarquement ; chaque
 /// joueur a l'Ours Rare (2 actions) et l'Épique (3).
 fn current_economy() -> GameConfig {
@@ -16,6 +16,7 @@ fn current_economy() -> GameConfig {
     GameConfig {
         golden_rule: false,
         infirmary_turns: 0,
+        wall_thickness: 0,
         starting_attacks: [arsenal.clone(), arsenal],
         ..GameConfig::default()
     }

@@ -128,6 +128,7 @@ Crowd control, Mouvement, Kill. Un saut comme aux dames : le lanceur bondit de 2
 - À surveiller en test : l'Épique et la Légendaire sont à la limite haute, freinées par la difficulté à enchaîner les sauts. Si elles dominent, on interdit les sauts dans le vide ou on limite le nombre de kills par saut (exemple : 3 sauts dont 2 kills).
 - Si un saut complète une de tes lignes, la règle d'or s'applique.
 - Combo repéré : Saut du loup Commune puis Beauté fatale Commune dans le même tour (un kill et un déplacement pour 2 points).
+- Buff possible (Martin, 2026-11-03), pas appliqué : pouvoir resurvoler une reine sauvée par un garde, chaque saut usant un garde puis la tuant. Aujourd'hui, elle ne se survole qu'une fois, comme tout pion.
 - Sauts dans le vide et par-dessus ses propres pions autorisés ; immobilisation fixée à 2 tours.
 
 ### 03 · Reine

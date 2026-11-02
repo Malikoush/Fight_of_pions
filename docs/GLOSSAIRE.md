@@ -56,8 +56,8 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
-| Plateau | `Board` | Le damier `board_size × board_size` |
-| Case | `Cell` | Le contenu d'une case : une structure en couches, un pion et une tombe, chacun optionnel |
+| Plateau | `Board` | La grille de `board_size + 2 × wall_thickness` cases de côté ; le plateau de jeu en est la partie hors du mur (`Board::contains`, `Board::positions`) |
+| Case | `Cell` | Le contenu d'une case du plateau : une structure en couches, un pion et une tombe, chacun optionnel (le mur n'est pas une couche : voir « Mur ») |
 | Position | `Position` | Rangée et colonne à partir de 0, affichée « C5 » |
 | Direction | `Direction` | Un pas d'une case parmi les 8 directions |
 | Pion | `Pion` | Un pion posé, avec son identité et son propriétaire |
@@ -70,7 +70,8 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Tombe | `Cell::tomb`, `Board::tomb(pos)`, `Board::tomb_of(pion)`, `Event::TombAdded`, `Event::TombRemoved` | Ce que laisse un pion tué qui part à l'infirmerie, sur la case où il est mort, jusqu'à ce qu'il en sorte. Elle ne bloque pas la case ; une case en porte au plus une. |
 | Opérations sur les pions | `Board::place_pion`, `remove_pion`, `move_pion`, `swap` (internes) | Le plateau ne s'écrit que pion par pion : une tombe reste sur sa case quand un pion y arrive, en part, bouge ou est échangé |
 | Ressusciter | `Effect::Resurrect { pion, at }`, `Game::leave_infirmary`, `Game::create_pion` (internes) | Un pion sort de l'infirmerie (sa tombe s'efface) et revient sur le plateau avec une nouvelle identité, posé ce tour, sans passer par la réserve |
-| Trou | couche terrain de `Cell` (cible) | Case détruite par le Coup du taureau, injouable |
+| Mur | `wall_thickness`, `Board::is_wall(pos)`, `ConfigError::WallTooThick` | Les rangées qui entourent le plateau de jeu (3 par défaut). Une case de mur n'est pas sur le plateau (`Board::contains` est faux) : ni libre, ni visible, ni franchissable. `Board::size()` compte la grille entière, mur compris, et les noms « A1 » la couvrent. |
+| Case creusée | `Effect::Dig { at }` (interne), `Board::dig` (interne), `Event::WallDug { at }` | Une case de mur que la charge du Coup du taureau a percée : une case normale, pour toujours |
 | Axe d'alignement | `Direction::AXES`, `axis` | Une des 4 directions de ligne : horizontale, verticale, deux diagonales |
 | Alignement | `rules::complete_line` | Une ligne droite d'au moins `align_to_win` pions d'un joueur |
 | Règle d'or | `golden_rule`, `rules::has_line` | Une ligne ne gagne qu'au début du tour de son propriétaire, si elle y est encore. Une ligne présente au début de son tour gagne dans tous les cas ; une ligne en attente gagne aussi quand la partie s'arrête. |
@@ -80,7 +81,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
 | Attaque | `Attack` | Une carte : une famille dans une rareté (« Ours (Rare) ») |
-| Famille d'attaque | `AttackKind` | `BeauteFatale`, `SautDuLoup`, `Reine`, `Attila`, `Interchange`, `Ours`, `Lievre`, `MeilleursAmis`, `Medecin`, `Familia`… Le nom de la carte, tel quel (« Beauté fatale »). Une famille par fichier dans `attacks/`. |
+| Famille d'attaque | `AttackKind` | `BeauteFatale`, `SautDuLoup`, `Reine`, `Attila`, `Interchange`, `Ours`, `Lievre`, `MeilleursAmis`, `Medecin`, `Familia`, `CoupDuTaureau`… Le nom de la carte, tel quel (« Beauté fatale »). Une famille par fichier dans `attacks/`. |
 | Rareté | `Rarity` | `Common`, `Rare`, `Epic`, `Legendary` : la variante de l'attaque et sa place dans le draft, **sans lien imposé avec le coût** |
 | Caractéristiques | `AttackStats` | Coût et recharge d'une attaque |
 | Catalogue | `attack_catalog`, `CatalogEntry` | Dans `GameConfig` : les attaques jouables et leurs caractéristiques |

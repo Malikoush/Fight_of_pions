@@ -7,9 +7,15 @@ use std::fmt;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct GameConfig {
-    /// Nombre de cases par côté du plateau, entre [`GameConfig::MIN_BOARD_SIZE`]
-    /// et [`GameConfig::MAX_BOARD_SIZE`].
+    /// Nombre de cases par côté du plateau de jeu, mur exclu, entre
+    /// [`GameConfig::MIN_BOARD_SIZE`] et [`GameConfig::MAX_BOARD_SIZE`].
     pub board_size: usize,
+    /// Rangées de mur autour du plateau, que le Coup du taureau creuse (fiche n°07). La
+    /// grille entière, mur compris, tient au plus [`GameConfig::MAX_BOARD_SIZE`] cases par
+    /// côté. 0 : pas de mur, la charge s'arrête au bord. Absent d'une partie enregistrée
+    /// avant le mur : 0, pour la rejouer telle qu'elle a été jouée.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub wall_thickness: usize,
     /// Longueur de la ligne qui fait gagner, entre [`GameConfig::MIN_ALIGN_TO_WIN`]
     /// et `board_size`.
     pub align_to_win: usize,
@@ -66,9 +72,9 @@ pub struct GameConfig {
 }
 
 /// Les règles actuelles (carnet, « Tour de jeu », 2026-11-02) : 1 pose gratuite par tour,
-/// 1 action par tour gardée jusqu'à 3, la Pièce, le mal du débarquement, la règle d'or et
-/// l'infirmerie de 2 tours. Le reste suit les premières règles
-/// ([`GameConfig::first_rules`]).
+/// 1 action par tour gardée jusqu'à 3, la Pièce, le mal du débarquement, la règle d'or,
+/// l'infirmerie de 2 tours et 3 rangées de mur (carnet, 2026-11-03). Le reste suit les
+/// premières règles ([`GameConfig::first_rules`]).
 impl Default for GameConfig {
     fn default() -> Self {
         Self {
@@ -81,6 +87,7 @@ impl Default for GameConfig {
             summoning_sickness: true,
             golden_rule: true,
             infirmary_turns: 2,
+            wall_thickness: 3,
             ..Self::first_rules()
         }
     }
@@ -124,6 +131,10 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
         entry(AttackKind::Interchange, Rarity::Rare, 2),
         entry(AttackKind::Interchange, Rarity::Epic, 3),
         entry(AttackKind::Interchange, Rarity::Legendary, 4),
+        entry(AttackKind::CoupDuTaureau, Rarity::Common, 1),
+        entry(AttackKind::CoupDuTaureau, Rarity::Rare, 2),
+        entry(AttackKind::CoupDuTaureau, Rarity::Epic, 3),
+        entry(AttackKind::CoupDuTaureau, Rarity::Legendary, 4),
         entry(AttackKind::MassacreDivin, Rarity::Common, 1),
         entry(AttackKind::MassacreDivin, Rarity::Rare, 2),
         entry(AttackKind::MassacreDivin, Rarity::Epic, 3),
@@ -149,6 +160,8 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
 pub enum ConfigError {
     /// La taille du plateau sort des bornes permises.
     BoardSizeOutOfRange,
+    /// Le plateau et son mur dépasseraient la grille qu'on sait nommer.
+    WallTooThick,
     /// La ligne gagnante est trop courte.
     AlignmentTooShort,
     /// La ligne gagnante est plus longue que le plateau.
@@ -191,6 +204,11 @@ impl fmt::Display for ConfigError {
                 f,
                 "la taille du plateau doit être comprise entre {} et {}",
                 GameConfig::MIN_BOARD_SIZE,
+                GameConfig::MAX_BOARD_SIZE
+            ),
+            ConfigError::WallTooThick => write!(
+                f,
+                "le plateau et son mur doivent tenir dans {} cases par côté",
                 GameConfig::MAX_BOARD_SIZE
             ),
             ConfigError::AlignmentTooShort => write!(
@@ -256,7 +274,7 @@ impl fmt::Display for ConfigError {
 impl GameConfig {
     /// Le plus petit plateau accepté.
     pub const MIN_BOARD_SIZE: usize = 2;
-    /// Le plus grand plateau accepté : une colonne par lettre, de A à Z.
+    /// Le plus grand plateau accepté, mur compris : une colonne par lettre, de A à Z.
     pub const MAX_BOARD_SIZE: usize = Position::NAMED_COLUMNS;
     /// La plus courte ligne gagnante acceptée.
     pub const MIN_ALIGN_TO_WIN: usize = 2;
@@ -264,10 +282,11 @@ impl GameConfig {
     /// Les premières règles, par défaut jusqu'au 2026-11-02 et gardées au cas où (carnet,
     /// « Premières règles ») : 2 actions par tour partagées entre poser (1 action) et
     /// attaquer, 2 gardées au plus, sans limite de poses, sans mal du débarquement, sans
-    /// règle d'or ni infirmerie.
+    /// règle d'or ni infirmerie, sans mur.
     pub fn first_rules() -> GameConfig {
         GameConfig {
             board_size: 10,
+            wall_thickness: 0,
             align_to_win: 6,
             pions_per_player: 15,
             first_turn_actions: 1,
@@ -334,6 +353,13 @@ impl GameConfig {
     fn find_problem(&self) -> Option<ConfigError> {
         if !(Self::MIN_BOARD_SIZE..=Self::MAX_BOARD_SIZE).contains(&self.board_size) {
             return Some(ConfigError::BoardSizeOutOfRange);
+        }
+        let side = self
+            .wall_thickness
+            .checked_mul(2)
+            .and_then(|wall| wall.checked_add(self.board_size));
+        if side.is_none_or(|side| side > Self::MAX_BOARD_SIZE) {
+            return Some(ConfigError::WallTooThick);
         }
         if self.align_to_win < Self::MIN_ALIGN_TO_WIN {
             return Some(ConfigError::AlignmentTooShort);
@@ -446,6 +472,18 @@ mod tests {
         }
         assert_eq!(problem(with_size(2)), None);
         assert_eq!(problem(with_size(26)), None);
+    }
+
+    #[test]
+    fn the_board_and_its_wall_must_fit_in_26_cells() {
+        let with_wall = |wall_thickness| GameConfig {
+            wall_thickness,
+            ..GameConfig::first_rules()
+        };
+        assert_eq!(problem(with_wall(8)), None);
+        for wall in [9, usize::MAX / 2, usize::MAX] {
+            assert_eq!(problem(with_wall(wall)), Some(ConfigError::WallTooThick));
+        }
     }
 
     #[test]

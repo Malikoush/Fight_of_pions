@@ -27,7 +27,8 @@ Commandes :
   t C5   faire tirer un garde de sa reine sur le pion en C5
   l C5 D6  faire avancer d'un pas le pion en C5, qui a des jetons du Lièvre, vers D6
   f      finir le tour (les actions restantes sont gardées, {} maximum)
-  Sur le plateau : X et O les pions, + une tombe libre (le Médecin y ressuscite).
+  Sur le plateau : X et O les pions, + une tombe libre (le Médecin y ressuscite), # le mur
+  (le Coup du taureau le creuse).
   h      afficher l'aide
   q      quitter",
         config.max_banked_actions
@@ -100,6 +101,7 @@ pub fn render(game: &Game) -> String {
         for col in 0..size {
             let pos = Position { row, col };
             let c = match (board.owner(pos), board.tomb(pos)) {
+                _ if board.is_wall(pos) => '#',
                 (Some(player), _) => symbol(player),
                 (None, Some(_)) => '+',
                 (None, None) => '.',

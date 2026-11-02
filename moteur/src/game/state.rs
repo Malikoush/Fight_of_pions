@@ -308,7 +308,7 @@ impl Game {
 
         Ok(Self {
             seed,
-            board: Board::new(config.board_size),
+            board: Board::walled(config.board_size, config.wall_thickness),
             current_player: Player::One,
             turn: 1,
             // Le premier joueur reçoit tout de suite sa banque de départ, comme on reçoit

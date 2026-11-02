@@ -13,8 +13,11 @@ use fight_of_pions::{
 /// désynchronise : c'est ce que ces tests interdisent. Chaque annonce doit aussi changer
 /// quelque chose : une annonce inutile est refusée.
 struct EventMirror {
+    /// Cases par côté de la grille, mur compris.
     size: usize,
     cells: Vec<Option<Pion>>,
+    /// Vrai pour chaque case de mur pas encore creusée.
+    walls: Vec<bool>,
     reserves: [u32; 2],
     actions_left: [u32; 2],
     banked: [u32; 2],
@@ -48,9 +51,15 @@ impl EventMirror {
     fn new(config: &GameConfig, game: &Game) -> EventMirror {
         let ready = |player: Player| vec![0; config.starting_attacks[player.index()].len()];
         let [first_bank, second_bank] = config.starting_banked_actions;
+        let (wall, size) = (config.wall_thickness, config.board_size);
+        let side = size + 2 * wall;
+        let in_wall = |i: usize| i < wall || i >= wall + size;
         EventMirror {
-            size: config.board_size,
-            cells: vec![None; config.board_size * config.board_size],
+            size: side,
+            cells: vec![None; side * side],
+            walls: (0..side)
+                .flat_map(|row| (0..side).map(move |col| in_wall(row) || in_wall(col)))
+                .collect(),
             reserves: [config.pions_per_player; 2],
             actions_left: [config.first_turn_actions + first_bank, 0],
             banked: [0, second_bank],
@@ -62,7 +71,7 @@ impl EventMirror {
             summoning_sickness: config.summoning_sickness,
             effects: Vec::new(),
             infirmary: Vec::new(),
-            tombs: vec![None; config.board_size * config.board_size],
+            tombs: vec![None; side * side],
             token_piles: Vec::new(),
             graveyard: Vec::new(),
             scorched_until: [None, None],
@@ -75,7 +84,12 @@ impl EventMirror {
     }
 
     fn cell(&mut self, at: Position) -> &mut Option<Pion> {
+        assert!(!self.is_wall(at), "pion dans le mur en {at}");
         &mut self.cells[at.row * self.size + at.col]
+    }
+
+    fn is_wall(&self, at: Position) -> bool {
+        self.walls[at.row * self.size + at.col]
     }
 
     fn follow(&mut self, event: &Event) {
@@ -97,6 +111,10 @@ impl EventMirror {
             Event::PionKilled { pion, at, .. } => {
                 assert_eq!(*self.cell(at), Some(pion), "pion tué absent : {event:?}");
                 *self.cell(at) = None;
+            }
+            Event::WallDug { at } => {
+                assert!(self.is_wall(at), "case déjà creusée : {event:?}");
+                self.walls[at.row * self.size + at.col] = false;
             }
             Event::PionMoved { pion, from, to } => {
                 assert_eq!(
@@ -305,6 +323,13 @@ impl EventMirror {
                 "Terre brûlée de {player:?}"
             );
         }
+        assert_eq!(self.size, game.board().size());
+        for row in 0..self.size {
+            for col in 0..self.size {
+                let pos = Position { row, col };
+                assert_eq!(self.is_wall(pos), game.board().is_wall(pos), "mur en {pos}");
+            }
+        }
         for pos in game.board().positions() {
             let mirrored = self.tombs[pos.row * self.size + pos.col];
             assert_eq!(mirrored, game.board().tomb(pos), "tombe en {pos}");
@@ -400,7 +425,7 @@ fn events_are_enough_to_follow_the_board() {
     let (mut attacks, mut epics, mut kills) = (0, 0, 0);
     let (mut effects_ended, mut healed, mut moved, mut swapped) = (0, 0, 0, 0);
     let (mut tokens_used, mut buried, mut tokens_spent, mut returns) = (0, 0, 0, 0);
-    let mut scorched = 0;
+    let (mut scorched, mut dug) = (0, 0);
     let mut kinds_played = Vec::new();
     for seed in 0..500 {
         let mut rng = Rng::new(seed);
@@ -429,6 +454,7 @@ fn events_are_enough_to_follow_the_board() {
                 Event::ScorchedEarthStarted { .. } | Event::ScorchedEarthEnded { .. }
             )
         });
+        dug += played.count(|event| matches!(event, Event::WallDug { .. }));
         returns += played.count(|event| {
             matches!(event, Event::EffectEnded(effect) if matches!(effect.kind(), EffectKind::Return { .. }))
         });
@@ -447,7 +473,8 @@ fn events_are_enough_to_follow_the_board() {
     assert!(epics > 20, "seulement {epics} Épiques jouées");
     assert!(moved > 50, "seulement {moved} pions déplacés");
     assert!(swapped > 10, "seulement {swapped} échanges");
-    assert!(kills > 100, "seulement {kills} pions tués");
+    // Une centaine : plus il y a de cartes, moins chacune est tirée (99 avec le taureau).
+    assert!(kills > 80, "seulement {kills} pions tués");
     assert!(effects_ended > 50, "seulement {effects_ended} effets finis");
     assert!(
         healed > 20,
@@ -459,6 +486,7 @@ fn events_are_enough_to_follow_the_board() {
     // ou Légendaire, puis un kill. Les tests de règles couvrent le cimetière.
     assert!(buried > 0, "aucun pion au cimetière");
     assert!(returns > 5, "seulement {returns} retours d'Interchange");
+    assert!(dug > 5, "seulement {dug} cases de mur creusées");
     assert!(
         scorched > 5,
         "seulement {scorched} débuts ou fins de Terre brûlée"
@@ -474,6 +502,7 @@ fn events_are_enough_to_follow_the_board() {
         AttackKind::Attila,
         AttackKind::Medecin,
         AttackKind::Interchange,
+        AttackKind::CoupDuTaureau,
         AttackKind::MassacreDivin,
         AttackKind::Ours,
         AttackKind::Lievre,

@@ -110,6 +110,12 @@ pub(crate) enum Effect {
         /// La case du second ami.
         b: Position,
     },
+    /// Creuser cette case de mur : elle devient une case normale, pour toujours (Coup du
+    /// taureau). Le lanceur y entre ensuite par un [`Effect::Move`].
+    Dig {
+        /// La case de mur creusée.
+        at: Position,
+    },
     /// Échanger les pions de deux cases, d'un coup.
     Swap {
         /// La case du premier pion.
@@ -138,13 +144,15 @@ impl Effect {
             | Effect::Move { .. }
             | Effect::Place { .. }
             | Effect::Resurrect { .. }
+            | Effect::Dig { .. }
             | Effect::Swap { .. } => false,
         }
     }
 
     /// La case du seul pion que vise cet effet, s'il n'en vise qu'un : si une attaque y a
     /// été annulée par un garde, elle ne lui fait plus rien d'autre. `None` pour les effets
-    /// qui touchent plusieurs cases (déplacer, échanger, lier) ou aucune (les jetons).
+    /// qui touchent plusieurs cases (déplacer, échanger, lier), aucun pion (creuser) ou
+    /// aucune case (les jetons).
     pub(crate) fn single_target(self) -> Option<Position> {
         match self {
             Effect::Kill { at }
@@ -159,6 +167,7 @@ impl Effect {
             Effect::Move { .. }
             | Effect::Swap { .. }
             | Effect::Bind { .. }
+            | Effect::Dig { .. }
             | Effect::CancelEnemyTokens
             | Effect::ScorchEarth
             | Effect::AddTokens { .. } => None,
