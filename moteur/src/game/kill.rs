@@ -4,13 +4,14 @@
 //!
 //! Est un kill tout pion envoyé à l'infirmerie ou au cimetière ; l'assassin est le pion
 //! qui a lancé l'attaque, même s'il a bougé (carnet, 2026-10-30). Un garde de la reine la
-//! sauve de ce qui la tuerait, une fois (carnet, 2026-10-31). Un kill compte pour
-//! l'adversaire du pion tué, pendant son tour ou non : il use un jeton de chacune de ses
-//! piles du Massacre divin (`tokens.rs`), qui peuvent l'envoyer au cimetière.
+//! sauve de ce qui la tuerait, une fois (carnet, 2026-10-31). Le kill d'un pion adverse,
+//! pendant son tour ou non, use un jeton de chacune des piles du Massacre divin du joueur
+//! qui tue (`tokens.rs`), qui peuvent l'envoyer au cimetière ; un pion de son propre camp
+//! (le retour d'Interchange) n'en use aucun (carnet, 2026-11-02).
 
 use super::lasting::EffectKind;
 use super::state::Game;
-use crate::{Cell, Event, PionId, Position};
+use crate::{Cell, Event, PionId, Player, Position};
 
 /// Ce qu'a donné un kill.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,13 +34,15 @@ pub(super) struct Death {
 }
 
 impl Game {
-    /// Tue le pion de cette case : il quitte le plateau, ses effets s'arrêtent, le kill use
-    /// les jetons de son assassin, puis il part au cimetière, à l'infirmerie ou dans la
-    /// réserve. Une reine gardée dépense un garde à la place, et survit.
+    /// Tue le pion de cette case, pour le joueur `killer` : il quitte le plateau, ses effets
+    /// s'arrêtent, le kill use les jetons de `killer` si le pion est à l'adversaire, puis il
+    /// part au cimetière, à l'infirmerie ou dans la réserve. Une reine gardée dépense un
+    /// garde à la place, et survit.
     pub(super) fn kill(
         &mut self,
         at: Position,
         by: Option<PionId>,
+        killer: Player,
         events: &mut Vec<Event>,
     ) -> Hit {
         let Some(pion) = self.board.get(at).and_then(Cell::pion) else {
@@ -57,9 +60,8 @@ impl Game {
             .find_map(|effect| effect.friend_of(pion.id()));
         events.push(Event::PionKilled { pion, at, by });
         self.end_effects_on(pion.id(), events);
-        // Toutes les familles ne tuent que des pions adverses : le kill est à l'adversaire du
-        // pion tué, même pendant une vengeance.
-        if self.use_tokens(pion.owner().opponent(), events) {
+        let enemy_kill = pion.owner() != killer;
+        if enemy_kill && self.use_tokens(killer, events) {
             self.send_to_graveyard(pion, events);
         } else {
             self.send_to_infirmary(pion, at, events);
@@ -72,7 +74,9 @@ impl Game {
     /// amis sont morts pendant la même attaque, personne ne se venge. Le pacte de l'ami
     /// survivant prend fin, même si l'assassin est protégé ou déjà mort. Une vengeance est
     /// un kill comme un autre : elle peut déclencher la vengeance d'un autre pacte. La
-    /// chaîne s'arrête, puisque chaque vengeance met fin à un pacte.
+    /// chaîne s'arrête, puisque chaque vengeance met fin à un pacte. Un ami ne se venge
+    /// jamais sur un pion de son propre camp (un retour d'Interchange, carnet, 2026-11-02) :
+    /// son pacte prend fin quand même.
     ///
     /// Avant chaque vague de vengeances, les enfants que leur famille n'encadre plus perdent
     /// leur protection (carnet, 2026-11-02) : un enfant sorti de sa famille par l'attaque
@@ -97,10 +101,20 @@ impl Game {
                 let Some(assassin_at) = assassin_at else {
                     continue;
                 };
-                if self.has_effect(assassin_at, EffectKind::Protected) {
+                let Some(avenger) = self
+                    .board
+                    .position_of(friend)
+                    .and_then(|pos| self.board.owner(pos))
+                else {
+                    continue;
+                };
+                if self.board.owner(assassin_at) == Some(avenger)
+                    || self.has_effect(assassin_at, EffectKind::Protected)
+                {
                     continue;
                 }
-                if let Hit::Killed(revenge) = self.kill(assassin_at, Some(friend), events) {
+                if let Hit::Killed(revenge) = self.kill(assassin_at, Some(friend), avenger, events)
+                {
                     next.push(revenge);
                 }
             }

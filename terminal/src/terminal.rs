@@ -2,7 +2,8 @@
 //! Elle ne décide jamais si un coup est légal : c'est le travail du moteur.
 
 use fight_of_pions::{
-    Action, ActiveEffect, Decision, Game, GameConfig, Player, Position, TokenPile, TokenReward,
+    Action, ActiveEffect, Decision, EffectEnd, Game, GameConfig, Player, Position, TokenPile,
+    TokenReward,
 };
 
 /// Ce que le joueur peut taper.
@@ -24,6 +25,7 @@ Commandes :
   v      jouer l'attaque en cours avec les cibles déjà choisies (« jusqu'à 2 »)
   r C5   faire avancer sa reine en C5 (son pas gratuit, une fois par tour)
   t C5   faire tirer un garde de sa reine sur le pion en C5
+  l C5 D6  faire avancer d'un pas le pion en C5, qui a des jetons du Lièvre, vers D6
   f      finir le tour (les actions restantes sont gardées, {} maximum)
   Sur le plateau : X et O les pions, + une tombe libre (le Médecin y ressuscite).
   h      afficher l'aide
@@ -47,14 +49,19 @@ pub fn token_pile(pile: TokenPile) -> String {
 }
 
 /// « jusqu'à la fin du tour 6 », « tant que sa famille l'encadre » (un enfant de la
-/// Familia), ou rien pour un autre effet sans durée (un pacte).
+/// Familia), « jusqu'au début du prochain tour de … » (un retour), « (2 jeton(s)) », ou
+/// rien pour un autre effet sans durée (un pacte).
 pub fn until(effect: ActiveEffect) -> String {
-    if effect.framed_by().is_some() {
-        return " tant que sa famille l'encadre".to_string();
+    match effect.end() {
+        EffectEnd::Turn(turn) => format!(" jusqu'à la fin du tour {turn}"),
+        EffectEnd::Framed(_) => " tant que sa famille l'encadre".to_string(),
+        EffectEnd::NextTurn => format!(
+            " jusqu'au début du prochain tour de {}",
+            player_name(effect.creator())
+        ),
+        EffectEnd::Tokens(n) => format!(" ({n} jeton(s))"),
+        EffectEnd::Never => String::new(),
     }
-    effect.last_turn().map_or(String::new(), |turn| {
-        format!(" jusqu'à la fin du tour {turn}")
-    })
 }
 
 /// Le symbole d'un joueur sur le plateau.
@@ -196,6 +203,10 @@ pub fn parse_command(line: &str) -> Result<Command, String> {
         ["v"] => Ok(Command::Play(Action::FinishAttack)),
         ["r", pos] => Ok(Command::Play(Action::StepQueen(pos.parse()?))),
         ["t", pos] => Ok(Command::Play(Action::Shoot(pos.parse()?))),
+        ["l", from, to] => Ok(Command::Play(Action::HareStep {
+            from: from.parse()?,
+            to: to.parse()?,
+        })),
         ["f"] => Ok(Command::Play(Action::EndTurn)),
         ["h"] => Ok(Command::Help),
         ["q"] => Ok(Command::Quit),

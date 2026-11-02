@@ -13,19 +13,26 @@
 //! Les cibles choisies mêlent les pas (une case libre) et les pions suivants (une case
 //! occupée par un de tes pions) : les deux ne se confondent jamais.
 //!
-//! L'Épique (jetons) viendra avec les jetons (B6).
+//! - Épique : 3 jetons de pas sur le lanceur ; à chacun de tes tours, il peut en dépenser
+//!   1 pour avancer de jusqu'à 2 pas (un geste gratuit, `game/hare.rs`). Pas jouable
+//!   depuis un pion qui a encore des jetons (carnet, 2026-11-02).
 
 use std::ops::RangeInclusive;
 
 use super::Effect;
 use super::reach::around;
 use super::rules::{AttackContext, AttackRules};
-use crate::{Board, Cell, PionId, Position, Rarity};
+use crate::{Board, Cell, EffectEnd, EffectKind, PionId, Position, Rarity};
+
+/// Les jetons de pas de l'Épique.
+const HARE_TOKENS: u32 = 3;
+/// Les pas que permet un jeton de l'Épique, au plus.
+pub(crate) const HARE_TOKEN_STEPS: u32 = 2;
 
 pub(crate) struct Lievre;
 
-/// Combien de pions avancent, et de combien de pas chacun, au plus. L'Épique n'est jamais
-/// jouée ici (le catalogue validé n'accepte que les raretés de `rarities`).
+/// Combien de pions avancent, et de combien de pas chacun, au plus. L'Épique ne passe
+/// jamais par ici : elle ne choisit aucune cible.
 fn limits(rarity: Rarity) -> (usize, usize) {
     match rarity {
         Rarity::Common | Rarity::Epic => (1, 2),
@@ -36,16 +43,28 @@ fn limits(rarity: Rarity) -> (usize, usize) {
 
 impl AttackRules for Lievre {
     fn rarities(&self) -> &'static [Rarity] {
-        &[Rarity::Common, Rarity::Rare, Rarity::Legendary]
+        &[
+            Rarity::Common,
+            Rarity::Rare,
+            Rarity::Epic,
+            Rarity::Legendary,
+        ]
     }
 
     /// Au plus : les pas du lanceur, puis pour chaque pion suivant, son choix et ses pas.
+    /// L'Épique pose ses jetons sur le lanceur, sans cible.
     fn target_count(&self, rarity: Rarity) -> RangeInclusive<usize> {
+        if rarity == Rarity::Epic {
+            return 0..=0;
+        }
         let (pions, steps) = limits(rarity);
         1..=steps + (pions - 1) * (1 + steps)
     }
 
     fn candidate_targets(&self, context: &AttackContext, chosen: &[Position]) -> Vec<Position> {
+        if context.rarity == Rarity::Epic {
+            return Vec::new();
+        }
         let Some(walk) = Walk::replay(context, chosen) else {
             return Vec::new();
         };
@@ -61,6 +80,16 @@ impl AttackRules for Lievre {
     }
 
     fn effects(&self, context: &AttackContext, targets: &[Position]) -> Vec<Effect> {
+        if context.rarity == Rarity::Epic {
+            if context.has(context.launcher, EffectKind::StepTokens) {
+                return Vec::new();
+            }
+            return vec![Effect::Attach {
+                at: context.launcher,
+                kind: EffectKind::StepTokens,
+                end: EffectEnd::Tokens(HARE_TOKENS),
+            }];
+        }
         Walk::replay(context, targets).map_or_else(Vec::new, |walk| {
             walk.legs()
                 .filter(|leg| leg.is_done())
@@ -72,9 +101,11 @@ impl AttackRules for Lievre {
         })
     }
 
-    /// Le dernier pion choisi doit avoir bougé.
+    /// Le dernier pion choisi doit avoir bougé ; l'Épique, qui ne fait bouger personne,
+    /// s'arrête toujours.
     fn can_stop(&self, context: &AttackContext, chosen: &[Position]) -> bool {
-        Walk::replay(context, chosen).is_some_and(|walk| walk.current.is_done())
+        context.rarity == Rarity::Epic
+            || Walk::replay(context, chosen).is_some_and(|walk| walk.current.is_done())
     }
 }
 

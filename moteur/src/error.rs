@@ -46,6 +46,15 @@ pub enum GameError {
     /// La reine ne peut pas faire son pas vers cette case : pas de reine, déjà fait ce tour,
     /// posée ce tour, immobilisée, ou case ni libre ni collée à elle.
     QueenCannotStep(Position),
+    /// Le pion de `from` ne peut pas faire un pas du Lièvre vers `to` : pas de jeton de pas,
+    /// déjà dépensé et ses pas faits ce tour, immobilisé, case ni libre ni collée, ou retour
+    /// sur sa case de départ.
+    HareCannotStep {
+        /// La case du pion.
+        from: Position,
+        /// La case visée.
+        to: Position,
+    },
     /// La reine ne peut pas tirer sur cette case : pas de reine ni de garde, déjà tiré ce
     /// tour, posée ce tour, immobilisée, ou pas un pion adverse non protégé au bout d'une
     /// ligne droite depuis elle.
@@ -90,6 +99,9 @@ impl fmt::Display for GameError {
             GameError::InvalidChoice(pos) => write!(f, "la case {} ne peut pas être choisie", pos),
             GameError::QueenCannotStep(pos) => {
                 write!(f, "la reine ne peut pas avancer en {}", pos)
+            }
+            GameError::HareCannotStep { from, to } => {
+                write!(f, "le pion en {} ne peut pas avancer en {}", from, to)
             }
             GameError::QueenCannotShoot(pos) => {
                 write!(f, "aucun garde de la reine ne peut tirer sur {}", pos)

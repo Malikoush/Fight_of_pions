@@ -1,4 +1,5 @@
 use super::arsenal::ArsenalSlot;
+use super::hare::HareWalk;
 use super::lasting::{ActiveEffect, EffectId, Patient, PlayId};
 use super::tokens::TokenPile;
 use crate::attacks::{Launch, Targets, is_new};
@@ -48,6 +49,8 @@ pub struct Game {
     pub(super) queen_stepped: bool,
     /// Vrai si un garde de la reine du joueur courant a déjà tiré ce tour.
     pub(super) queen_shot: bool,
+    /// Les pions du joueur courant qui ont dépensé un jeton de pas ce tour (Lièvre Épique).
+    pub(super) hare_walks: Vec<HareWalk>,
 }
 
 /// Une attaque commencée dont les choix ne sont pas finis. Rien n'est modifié tant que le
@@ -224,7 +227,8 @@ impl Game {
     /// Toutes les actions que [`Game::apply`] accepterait maintenant, dans un ordre
     /// toujours identique : les poses rangée par rangée (A1, B1… puis A2…), les attaques
     /// dans l'ordre de l'arsenal, les pas de la reine puis ses tirs (dans l'ordre des
-    /// directions, [`crate::Direction::ALL`]), puis `EndTurn` ; pendant une attaque, les
+    /// directions, [`crate::Direction::ALL`]), les pas du Lièvre (par case de départ), puis
+    /// `EndTurn` ; pendant une attaque, les
     /// choix de case rangée par rangée, puis `ChooseEnemyTokens`, puis `FinishAttack`. Vide
     /// si la partie est finie.
     ///
@@ -245,6 +249,7 @@ impl Game {
                     .chain(slots.map(Action::UseAttack))
                     .chain(self.queen_steps().into_iter().map(Action::StepQueen))
                     .chain(self.queen_shots().into_iter().map(Action::Shoot))
+                    .chain(self.hare_steps())
                     .chain([Action::EndTurn])
                     .collect()
             }
@@ -299,6 +304,7 @@ impl Game {
             graveyard: Vec::new(),
             queen_stepped: false,
             queen_shot: false,
+            hare_walks: Vec::new(),
             config,
         })
     }
@@ -320,6 +326,7 @@ impl Game {
             (None, Action::UseAttack(slot)) => self.validate_use_attack(slot),
             (None, Action::StepQueen(to)) => self.validate_step(to),
             (None, Action::Shoot(at)) => self.validate_shot(at),
+            (None, Action::HareStep { from, to }) => self.validate_hare_step(from, to),
             (None, Action::EndTurn) => Ok(()),
             (Some(pending), Action::Choose(pos)) => self.validate_choice(pending, pos),
             (Some(pending), Action::ChooseEnemyTokens) => self.validate_enemy_tokens(pending),
@@ -371,6 +378,7 @@ impl Game {
             Action::FinishAttack => self.resolve_attack(&mut events),
             Action::StepQueen(to) => self.execute_step(to, &mut events),
             Action::Shoot(at) => self.execute_shot(at, &mut events),
+            Action::HareStep { from, to } => self.execute_hare_step(from, to, &mut events),
             Action::EndTurn => self.finish_turn(&mut events),
         }
         self.announce_placements(placements_before, &mut events);
@@ -459,18 +467,32 @@ impl Game {
     /// manque de pions, la partie se figer, ou le tour se terminer quand il ne reste ni
     /// action, ni pose, ni pas de reine.
     pub(super) fn after_action(&mut self, events: &mut Vec<Event>) {
+        if self.settle_board(events) {
+            return;
+        }
+        if self.actions_left == 0
+            && self.placements_left() == 0
+            && self.queen_steps().is_empty()
+            && self.hare_steps().is_empty()
+        {
+            // Plus rien à faire, pas même un geste gratuit : le tour se termine.
+            self.finish_turn(events);
+        }
+    }
+
+    /// Ce qui suit tout changement du plateau (une action, les retours d'Interchange) : les
+    /// enfants que leur famille n'encadre plus perdent leur protection, puis un joueur peut
+    /// perdre par manque de pions, ou la partie se figer. Vrai si la partie est finie.
+    fn settle_board(&mut self, events: &mut Vec<Event>) -> bool {
         self.end_unframed_children(events);
         if let Some(outcome) = self.lack_of_pions() {
             self.finish_game(outcome, EndReason::TooFewPions, events);
         } else if self.is_frozen() {
             self.stop_game(EndReason::Frozen, events);
-        } else if self.actions_left == 0
-            && self.placements_left() == 0
-            && self.queen_steps().is_empty()
-        {
-            // Plus rien à faire, pas même le pas gratuit de la reine : le tour se termine.
-            self.finish_turn(events);
+        } else {
+            return false;
         }
+        true
     }
 
     /// Vrai si ce joueur a une ligne gagnante n'importe où sur le plateau.
@@ -524,6 +546,7 @@ impl Game {
         self.placements_this_turn = 0;
         self.queen_stepped = false;
         self.queen_shot = false;
+        self.hare_walks.clear();
         self.turn_start_pion_id = self.next_pion_id;
         if ending_counters_change {
             events.push(self.actions_changed(ending));
@@ -534,11 +557,16 @@ impl Game {
         self.start_turn(events);
     }
 
-    /// Le début du tour du nouveau joueur courant, dans l'ordre du carnet : 1) la règle
-    /// d'or, 2) ses actions, 3) la recharge de ses attaques. Le tout premier tour de la
-    /// partie est réglé dans [`Game::new`] : ici, c'est toujours un tour ordinaire.
+    /// Le début du tour du nouveau joueur courant, dans l'ordre du carnet : 0) les retours
+    /// d'Interchange, 1) la règle d'or, 2) ses actions, 3) la recharge de ses attaques. Le
+    /// tout premier tour de la partie est réglé dans [`Game::new`] : ici, c'est toujours un
+    /// tour ordinaire.
     fn start_turn(&mut self, events: &mut Vec<Event>) {
         let player = self.current_player;
+        // 0) Ses retours : ils changent le plateau, comme une action, avant la règle d'or.
+        if self.play_returns(events) && self.settle_board(events) {
+            return;
+        }
         // 1) Une ligne encore là au début de son tour fait gagner, quelle que soit la façon
         // dont elle a été faite : le joueur ne reçoit alors ni actions ni recharges.
         if self.has_winning_line(player) {
@@ -626,6 +654,7 @@ impl Game {
         let can_place = self.reserve_pions[player.index()] > 0 && self.has_free_cell();
         can_place
             || self.queen_can_ever_act(player)
+            || self.hare_can_ever_act(player)
             || self
                 .arsenal(player)
                 .iter()

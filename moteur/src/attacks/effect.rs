@@ -1,4 +1,4 @@
-use crate::{EffectKind, PionId, Position, TokenReward};
+use crate::{EffectEnd, EffectKind, PionId, Position, TokenReward};
 
 /// Une opération de base produite par une attaque. Les familles décrivent leurs effets avec
 /// ces primitives ; seul le résolveur de la partie les applique, émet les événements et
@@ -25,6 +25,16 @@ pub(crate) enum Effect {
         kind: EffectKind,
         /// Sa durée, en tours de l'adversaire du joueur qui attaque.
         turns: u32,
+    },
+    /// Donner au pion de cette case un effet continu qui finit autrement que par une durée :
+    /// un retour programmé (Interchange Commune), des jetons de pas (Lièvre Épique).
+    Attach {
+        /// La case du pion visé.
+        at: Position,
+        /// L'effet donné.
+        kind: EffectKind,
+        /// Comment il finit.
+        end: EffectEnd,
     },
     /// Retirer du pion de cette case tous les statuts (immobilisé, protégé) posés par
     /// l'adversaire du joueur qui attaque.
@@ -114,6 +124,7 @@ impl Effect {
         match self {
             Effect::Kill { at }
             | Effect::Apply { at, .. }
+            | Effect::Attach { at, .. }
             | Effect::RemoveEnemyStatuses { at }
             | Effect::CancelEnemyEffects { at }
             | Effect::Place { at }

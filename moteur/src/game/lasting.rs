@@ -59,7 +59,7 @@ pub(crate) struct CardPlay {
 }
 
 /// Ce que fait un effet continu. D'autres sortes viendront avec les cartes qui en ont
-/// besoin (jetons…).
+/// besoin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EffectKind {
     /// Statut immobilisé : le pion ne peut pas lancer d'attaque, donc pas non plus bouger
@@ -79,6 +79,31 @@ pub enum EffectKind {
     /// Un garde de la reine : il la sauve de la prochaine attaque qui la tuerait, ou tire
     /// ([`crate::Action::Shoot`]). Chaque garde sert une fois. Sans durée.
     Guard,
+    /// Le retour programmé de l'Interchange Commune : au début du prochain tour de son
+    /// créateur, ce pion revient sur `origin`, et le pion qui l'occupe est tué.
+    Return {
+        /// La case où il revient.
+        origin: Position,
+    },
+    /// Les jetons de pas du Lièvre Épique ([`EffectEnd::Tokens`]) : à chacun de ses tours,
+    /// ce pion peut en dépenser un pour avancer ([`crate::Action::HareStep`]).
+    StepTokens,
+}
+
+/// Comment un effet continu finit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EffectEnd {
+    /// À la fin de ce tour ([`crate::Game::turn`]).
+    Turn(u32),
+    /// Au début du prochain tour de son créateur, où il agit (le retour d'Interchange).
+    NextTurn,
+    /// Quand ces deux pions n'encadrent plus le sien, de part et d'autre, en ligne droite
+    /// (la protection d'un enfant de la Familia).
+    Framed([PionId; 2]),
+    /// Quand il ne reste plus de jetons : il en reste ce nombre (au moins 1).
+    Tokens(u32),
+    /// Jamais tout seul : seulement par un événement (le pacte, la couronne, les gardes).
+    Never,
 }
 
 impl EffectKind {
@@ -94,7 +119,7 @@ impl EffectKind {
     }
 }
 
-/// « immobilisé », « protégé », « lié par un pacte avec #3 », « couronné », « gardé ».
+/// « immobilisé », « protégé », « lié par un pacte avec #3 », « couronné », « gardé »…
 impl fmt::Display for EffectKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -103,6 +128,8 @@ impl fmt::Display for EffectKind {
             EffectKind::Pact { friend } => write!(f, "lié par un pacte avec {friend}"),
             EffectKind::Crown => write!(f, "couronné"),
             EffectKind::Guard => write!(f, "gardé"),
+            EffectKind::Return { origin } => write!(f, "attendu en {origin} (retour)"),
+            EffectKind::StepTokens => write!(f, "porteur de jetons de pas"),
         }
     }
 }
@@ -117,8 +144,7 @@ pub struct ActiveEffect {
     creator: Player,
     source: Attack,
     play: PlayId,
-    last_turn: Option<u32>,
-    framed_by: Option<[PionId; 2]>,
+    end: EffectEnd,
 }
 
 impl ActiveEffect {
@@ -128,8 +154,7 @@ impl ActiveEffect {
         pion: PionId,
         creator: Player,
         play: CardPlay,
-        last_turn: Option<u32>,
-        framed_by: Option<[PionId; 2]>,
+        end: EffectEnd,
     ) -> ActiveEffect {
         ActiveEffect {
             id,
@@ -138,8 +163,19 @@ impl ActiveEffect {
             creator,
             source: play.attack,
             play: play.id,
-            last_turn,
-            framed_by,
+            end,
+        }
+    }
+
+    /// Cet effet avec un jeton de moins, s'il lui en reste après ; `None` s'il n'en avait
+    /// plus qu'un (ou n'a pas de jetons).
+    pub(crate) fn with_one_token_less(self) -> Option<ActiveEffect> {
+        match self.end {
+            EffectEnd::Tokens(n) if n > 1 => Some(ActiveEffect {
+                end: EffectEnd::Tokens(n - 1),
+                ..self
+            }),
+            _ => None,
         }
     }
 
@@ -173,17 +209,42 @@ impl ActiveEffect {
         self.play
     }
 
+    /// Comment il finit.
+    pub fn end(self) -> EffectEnd {
+        self.end
+    }
+
     /// Le dernier tour où il agit ([`crate::Game::turn`]) : il s'éteint à la fin de ce tour.
     /// `None` pour un effet sans durée (le pacte), qui ne s'arrête que par un événement.
     pub fn last_turn(self) -> Option<u32> {
-        self.last_turn
+        match self.end {
+            EffectEnd::Turn(turn) => Some(turn),
+            _ => None,
+        }
     }
 
     /// Les deux membres de sa famille qui encadrent ce pion, si c'est la protection d'un
     /// enfant (Familia) : elle tombe dès qu'ils ne l'encadrent plus, de part et d'autre, en
     /// ligne droite.
     pub fn framed_by(self) -> Option<[PionId; 2]> {
-        self.framed_by
+        match self.end {
+            EffectEnd::Framed(pions) => Some(pions),
+            _ => None,
+        }
+    }
+
+    /// Les jetons qui lui restent, s'il finit avec eux (le Lièvre Épique).
+    pub fn tokens(self) -> Option<u32> {
+        match self.end {
+            EffectEnd::Tokens(n) => Some(n),
+            _ => None,
+        }
+    }
+
+    /// Vrai s'il changera la partie tout seul plus tard (pour la partie figée) : une
+    /// durée, ou le retour d'Interchange.
+    pub fn is_scheduled(self) -> bool {
+        matches!(self.end, EffectEnd::Turn(_) | EffectEnd::NextTurn)
     }
 
     /// Vrai si cet effet est un statut sur ce pion, posé par ce joueur : ce qu'Attila
@@ -249,7 +310,7 @@ pub(crate) fn cancellable_plays_on(
 pub(crate) fn is_child(effects: &[ActiveEffect], pion: PionId) -> bool {
     effects
         .iter()
-        .any(|effect| effect.pion == pion && effect.framed_by.is_some())
+        .any(|effect| effect.pion == pion && matches!(effect.end, EffectEnd::Framed(_)))
 }
 
 /// Vrai si ce pion a un effet de cette sorte : la seule lecture d'un statut.

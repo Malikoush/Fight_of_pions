@@ -141,7 +141,7 @@ impl Game {
         events.push(Event::QueenShot { queen: at, target });
         events.push(self.actions_changed(player));
         self.use_guard(queen.id(), events);
-        if let Hit::Killed(death) = self.kill(target, Some(queen.id()), events) {
+        if let Hit::Killed(death) = self.kill(target, Some(queen.id()), player, events) {
             self.avenge(vec![death], events);
         }
         self.after_action(events);

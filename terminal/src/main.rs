@@ -96,6 +96,12 @@ fn main() {
                                 terminal::until(effect),
                                 effect.source()
                             ),
+                            Event::EffectChanged(effect) => println!(
+                                "Le pion {} dépense un jeton : encore {}{}.",
+                                effect.pion(),
+                                effect.kind(),
+                                terminal::until(effect)
+                            ),
                             Event::EffectEnded(effect) => {
                                 println!("Le pion {} n'est plus {}.", effect.pion(), effect.kind())
                             }

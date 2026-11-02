@@ -35,6 +35,15 @@ pub enum Action {
     /// depuis elle : une attaque, une fois par tour, qui coûte
     /// [`crate::GameConfig::guard_shot_cost`] et le garde.
     Shoot(Position),
+    /// Faire avancer d'un pas, vers la case libre collée `to`, le pion de `from` qui porte
+    /// des jetons de pas (Lièvre Épique) : le premier pas du tour dépense un jeton, le
+    /// second est facultatif. Un geste gratuit, pas une attaque.
+    HareStep {
+        /// La case du pion.
+        from: Position,
+        /// La case où il avance.
+        to: Position,
+    },
     /// Finir son tour, gratuitement ; les actions restantes sont gardées dans la limite
     /// de [`crate::GameConfig::max_banked_actions`].
     EndTurn,

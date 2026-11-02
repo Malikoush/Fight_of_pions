@@ -284,7 +284,7 @@ impl Game {
         events: &mut Vec<Event>,
     ) -> Option<Position> {
         match effect {
-            Effect::Kill { at } => match self.kill(at, by, events) {
+            Effect::Kill { at } => match self.kill(at, by, self.current_player, events) {
                 Hit::Killed(death) => deaths.push(death),
                 Hit::Shielded => return Some(at),
                 Hit::Missed => {}
@@ -295,6 +295,7 @@ impl Game {
             Effect::CancelEnemyEffects { at } => self.cancel_enemy_effects(at, events),
             Effect::CancelEnemyTokens => self.cancel_enemy_tokens(events),
             Effect::AddTokens { reward, tokens } => self.add_tokens(reward, tokens, play, events),
+            Effect::Attach { at, kind, end } => self.add_effect_at(at, kind, play, end, events),
             Effect::RemoveEnemyStatuses { at } => {
                 let pion = self.board.get(at).and_then(Cell::pion)?;
                 let enemy = self.current_player.opponent();

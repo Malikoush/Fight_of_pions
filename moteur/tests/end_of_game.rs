@@ -40,10 +40,10 @@ fn assert_placed_then(events: &[Event], end: Event) {
 /// lancer une attaque qui a une cible, ni faire agir sa reine (un pas vers une case libre
 /// collée, ou un tir s'il lui reste un garde et un ennemi au bout d'une ligne droite).
 fn frozen_by_the_rules(game: &Game) -> bool {
-    let timed_effect = game
-        .active_effects()
-        .iter()
-        .any(|effect| effect.last_turn().is_some());
+    // Une durée ou un retour d'Interchange changeront la partie tout seuls.
+    let timed_effect = game.active_effects().iter().any(|effect| {
+        effect.last_turn().is_some() || matches!(effect.kind(), EffectKind::Return { .. })
+    });
     if timed_effect || !game.infirmary().is_empty() {
         return false;
     }
@@ -55,6 +55,7 @@ fn frozen_by_the_rules(game: &Game) -> bool {
         let can_place = !board_full && game.reserve_pions(player) > 0;
         can_place
             || queen_can_act(game, player)
+            || hare_can_act(game, player)
             || game
                 .arsenal(player)
                 .iter()
@@ -109,6 +110,23 @@ fn queen_can_act(game: &Game, player: Player) -> bool {
     free_step || (guards > 0 && enemy_in_a_line)
 }
 
+/// Vrai si un pion de ce joueur porte des jetons de pas (Lièvre Épique) et a une case
+/// libre collée.
+fn hare_can_act(game: &Game, player: Player) -> bool {
+    let board = game.board();
+    board
+        .positions()
+        .filter(|&pos| board.owner(pos) == Some(player))
+        .any(|pos| {
+            game.has_effect(pos, EffectKind::StepTokens)
+                && Direction::ALL.iter().any(|&dir| {
+                    board
+                        .neighbor(pos, dir)
+                        .is_some_and(|next| board.owner(next).is_none())
+                })
+        })
+}
+
 /// Vrai si l'attaque a une cible depuis un des pions du joueur, sur un plateau où aucun
 /// pion n'a de statut à durée (seuls les enfants peuvent être protégés, et personne n'est
 /// immobilisé). Écrit sans réutiliser le moteur, d'après les fiches :
@@ -131,9 +149,12 @@ fn queen_can_act(game: &Game, player: Player) -> bool {
 ///   possible ;
 /// - le Médecin ressuscite sur une tombe : personne à l'infirmerie, donc aucune tombe ;
 /// - le Saut du loup a besoin d'une case libre à 2 cases en ligne droite ;
-/// - l'Interchange Rare vise un ennemi à 1 ou 2 cases en ligne droite, même derrière un
-///   pion ; l'Épique, n'importe quel ennemi ;
-/// - le Lièvre a besoin d'une case libre collée au lanceur.
+/// - l'Interchange Commune téléporte sur une case libre (sans retour en attente, puisque
+///   rien n'est programmé) ; la Rare vise un ennemi à 1 ou 2 cases en ligne droite, même
+///   derrière un pion ; l'Épique, n'importe quel ennemi ; la Légendaire, deux ennemis collés,
+///   avec un second de tes pions ;
+/// - le Lièvre a besoin d'une case libre collée au lanceur ; l'Épique, d'un lanceur sans
+///   jetons de pas.
 fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> bool {
     let board = game.board();
     let enemy = |pos: Position| board.owner(pos) == Some(player.opponent());
@@ -181,6 +202,16 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             .any(free)
     };
     let any_enemy = board.positions().any(enemy);
+    let enemy_pair = board.positions().any(|pos| {
+        enemy(pos)
+            && Direction::ALL
+                .iter()
+                .any(|&dir| board.neighbor(pos, dir).is_some_and(enemy))
+    });
+    let own_pions = board
+        .positions()
+        .filter(|&pos| board.owner(pos) == Some(player))
+        .count();
     let any_killable = board.positions().any(killable);
     let reserve = game.reserve_pions(player);
     let free_cells = board.positions().filter(|&pos| free(pos)).count();
@@ -267,8 +298,13 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             (AttackKind::MassacreDivin, _) => true,
             (AttackKind::Medecin, _) => false,
             (AttackKind::SautDuLoup, _) => free_two_away(launcher),
+            (AttackKind::Interchange, Rarity::Common) => free_cells > 0,
             (AttackKind::Interchange, Rarity::Rare) => enemy_in_line(launcher),
-            (AttackKind::Interchange, _) => any_enemy,
+            (AttackKind::Interchange, Rarity::Epic) => any_enemy,
+            (AttackKind::Interchange, Rarity::Legendary) => enemy_pair && own_pions >= 2,
+            (AttackKind::Lievre, Rarity::Epic) => {
+                !game.has_effect(launcher, EffectKind::StepTokens)
+            }
             (AttackKind::Lievre, _) => free_neighbor(launcher),
             (AttackKind::Familia, rarity) => familia(launcher, rarity),
         })

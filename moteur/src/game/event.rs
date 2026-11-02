@@ -81,6 +81,9 @@ pub enum Event {
     },
     /// Un effet continu commence (un pion immobilisé, protégé…).
     EffectStarted(ActiveEffect),
+    /// Un effet continu change sans s'arrêter : un jeton de pas dépensé (il en reste
+    /// [`ActiveEffect::tokens`]). Il garde son identité.
+    EffectChanged(ActiveEffect),
     /// Un effet continu s'arrête : sa durée est écoulée, une carte l'a retiré, ou son pion
     /// a été tué.
     EffectEnded(ActiveEffect),

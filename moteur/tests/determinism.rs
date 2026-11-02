@@ -160,6 +160,15 @@ impl EventMirror {
                 );
                 self.effects.push(effect);
             }
+            Event::EffectChanged(effect) => {
+                let known = self
+                    .effects
+                    .iter_mut()
+                    .find(|known| known.id() == effect.id());
+                let known = known.unwrap_or_else(|| panic!("effet inconnu : {event:?}"));
+                assert_ne!(*known, effect, "annonce inutile : {event:?}");
+                *known = effect;
+            }
             Event::EffectEnded(effect) => {
                 let index = self.effects.iter().position(|known| *known == effect);
                 let index = index.unwrap_or_else(|| panic!("effet inconnu : {event:?}"));
@@ -370,7 +379,7 @@ fn play_random_game(config: GameConfig, seed: u64, rng: &mut Rng) -> PlayedGame 
 fn events_are_enough_to_follow_the_board() {
     let (mut attacks, mut epics, mut kills) = (0, 0, 0);
     let (mut effects_ended, mut healed, mut moved, mut swapped) = (0, 0, 0, 0);
-    let (mut tokens_used, mut buried) = (0, 0);
+    let (mut tokens_used, mut buried, mut tokens_spent, mut returns) = (0, 0, 0, 0);
     let mut kinds_played = Vec::new();
     for seed in 0..500 {
         let mut rng = Rng::new(seed);
@@ -392,6 +401,10 @@ fn events_are_enough_to_follow_the_board() {
         tokens_used +=
             played.count(|event| matches!(event, Event::TokenUsed(_) | Event::TokenPileEnded(_)));
         buried += played.count(|event| matches!(event, Event::GraveyardEntered(_)));
+        tokens_spent += played.count(|event| matches!(event, Event::EffectChanged(_)));
+        returns += played.count(|event| {
+            matches!(event, Event::EffectEnded(effect) if matches!(effect.kind(), EffectKind::Return { .. }))
+        });
         for (events, _) in &played.steps {
             for event in events {
                 if let Event::AttackUsed { attack, .. } = event
@@ -415,7 +428,14 @@ fn events_are_enough_to_follow_the_board() {
     );
     assert!(tokens_used > 20, "seulement {tokens_used} jetons usés");
     // Rare au hasard : il faut un Massacre Épique ou Légendaire, puis un kill.
-    assert!(buried > 3, "seulement {buried} pions au cimetière");
+    // Rare au hasard, d'autant que les cartes sont nombreuses : il faut un Massacre Épique
+    // ou Légendaire, puis un kill. Les tests de règles couvrent le cimetière.
+    assert!(buried > 0, "aucun pion au cimetière");
+    assert!(returns > 5, "seulement {returns} retours d'Interchange");
+    assert!(
+        tokens_spent > 5,
+        "seulement {tokens_spent} jetons de pas dépensés"
+    );
     for kind in [
         AttackKind::BeauteFatale,
         AttackKind::SautDuLoup,

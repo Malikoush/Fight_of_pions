@@ -5,7 +5,8 @@
 //! et elle s'éteint à la fin de son dernier tour (carnet, 2026-10-30).
 
 use super::lasting::{
-    ActiveEffect, CardPlay, EffectId, EffectKind, Patient, PlayId, cancellable_plays_on, pion_has,
+    ActiveEffect, CardPlay, EffectEnd, EffectId, EffectKind, Patient, PlayId, cancellable_plays_on,
+    pion_has,
 };
 use super::state::Game;
 use crate::attacks::both_sides;
@@ -65,7 +66,7 @@ impl Game {
             return;
         };
         let last_turn = self.last_turn_of(self.current_player.opponent(), turns);
-        self.add_effect(pion.id(), kind, play, Some(last_turn), None, events);
+        self.add_effect(pion.id(), kind, play, EffectEnd::Turn(last_turn), events);
     }
 
     /// Lie les pions de ces deux cases par un pacte (Meilleurs amis) : chacun porte le sien,
@@ -87,8 +88,8 @@ impl Game {
         let pact = |friend: Pion| EffectKind::Pact {
             friend: friend.id(),
         };
-        self.add_effect(first.id(), pact(second), play, None, None, events);
-        self.add_effect(second.id(), pact(first), play, None, None, events);
+        self.add_effect(first.id(), pact(second), play, EffectEnd::Never, events);
+        self.add_effect(second.id(), pact(first), play, EffectEnd::Never, events);
     }
 
     /// Couronne le pion de cette case (il devient une reine) et lui donne ces gardes, sans
@@ -103,9 +104,21 @@ impl Game {
         let Some(queen) = self.board.get(at).and_then(Cell::pion) else {
             return;
         };
-        self.add_effect(queen.id(), EffectKind::Crown, play, None, None, events);
+        self.add_effect(
+            queen.id(),
+            EffectKind::Crown,
+            play,
+            EffectEnd::Never,
+            events,
+        );
         for _ in 0..guards {
-            self.add_effect(queen.id(), EffectKind::Guard, play, None, None, events);
+            self.add_effect(
+                queen.id(),
+                EffectKind::Guard,
+                play,
+                EffectEnd::Never,
+                events,
+            );
         }
     }
 
@@ -125,8 +138,8 @@ impl Game {
         else {
             return;
         };
-        let framed_by = Some([first, second]);
-        self.add_effect(child, EffectKind::Protected, play, None, framed_by, events);
+        let end = EffectEnd::Framed([first, second]);
+        self.add_effect(child, EffectKind::Protected, play, end, events);
     }
 
     /// La protection d'un enfant tombe pour de bon dès que les deux membres de sa famille ne
@@ -204,14 +217,28 @@ impl Game {
         );
     }
 
+    /// Crée un effet continu du joueur courant sur le pion de cette case, qui finit ainsi,
+    /// et l'annonce (retour d'Interchange, jetons du Lièvre).
+    pub(super) fn add_effect_at(
+        &mut self,
+        at: Position,
+        kind: EffectKind,
+        play: CardPlay,
+        end: EffectEnd,
+        events: &mut Vec<Event>,
+    ) {
+        if let Some(pion) = self.board.get(at).and_then(Cell::pion) {
+            self.add_effect(pion.id(), kind, play, end, events);
+        }
+    }
+
     /// Crée un effet continu du joueur courant sur ce pion, et l'annonce.
     fn add_effect(
         &mut self,
         pion: PionId,
         kind: EffectKind,
         play: CardPlay,
-        last_turn: Option<u32>,
-        framed_by: Option<[PionId; 2]>,
+        end: EffectEnd,
         events: &mut Vec<Event>,
     ) {
         let effect = ActiveEffect::new(
@@ -220,8 +247,7 @@ impl Game {
             pion,
             self.current_player,
             play,
-            last_turn,
-            framed_by,
+            end,
         );
         self.next_effect_id = self.next_effect_id.next();
         self.effects.push(effect);
@@ -323,12 +349,10 @@ impl Game {
     }
 
     /// Vrai si quelque chose est programmé pour changer la partie plus tard : un effet
-    /// continu qui s'arrêtera à un tour donné, un pion qui sortira de l'infirmerie. Un
-    /// effet sans durée (le pacte) ne change rien tout seul : il ne compte pas.
+    /// continu qui s'arrêtera à un tour donné, un retour d'Interchange, un pion qui sortira
+    /// de l'infirmerie. Un effet sans durée (le pacte) ne change rien tout seul : il ne
+    /// compte pas, ni des jetons de pas, qui attendent leur joueur.
     pub(super) fn something_is_scheduled(&self) -> bool {
-        self.effects
-            .iter()
-            .any(|effect| effect.last_turn().is_some())
-            || !self.infirmary.is_empty()
+        self.effects.iter().any(|effect| effect.is_scheduled()) || !self.infirmary.is_empty()
     }
 }

@@ -119,8 +119,10 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
         entry(AttackKind::Medecin, Rarity::Rare, 2),
         entry(AttackKind::Medecin, Rarity::Epic, 3),
         entry(AttackKind::Medecin, Rarity::Legendary, 4),
+        entry(AttackKind::Interchange, Rarity::Common, 1),
         entry(AttackKind::Interchange, Rarity::Rare, 2),
         entry(AttackKind::Interchange, Rarity::Epic, 3),
+        entry(AttackKind::Interchange, Rarity::Legendary, 4),
         entry(AttackKind::MassacreDivin, Rarity::Common, 1),
         entry(AttackKind::MassacreDivin, Rarity::Rare, 2),
         entry(AttackKind::MassacreDivin, Rarity::Epic, 3),
@@ -131,6 +133,7 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
         entry(AttackKind::Ours, Rarity::Legendary, 4),
         entry(AttackKind::Lievre, Rarity::Common, 1),
         entry(AttackKind::Lievre, Rarity::Rare, 2),
+        entry(AttackKind::Lievre, Rarity::Epic, 3),
         entry(AttackKind::Lievre, Rarity::Legendary, 4),
         entry(AttackKind::Familia, Rarity::Common, 1),
         entry(AttackKind::Familia, Rarity::Rare, 2),
@@ -582,8 +585,8 @@ mod tests {
             assert_eq!(entry.stats.cost, card_cost, "{}", entry.attack);
         }
         let not_yet = Attack {
-            kind: AttackKind::Lievre,
-            rarity: Rarity::Epic,
+            kind: AttackKind::Attila,
+            rarity: Rarity::Legendary,
         };
         assert!(config.attack_stats(not_yet).is_none());
     }
@@ -591,8 +594,8 @@ mod tests {
     #[test]
     fn catalog_only_holds_attacks_the_engine_can_play() {
         let attack = Attack {
-            kind: AttackKind::Lievre,
-            rarity: Rarity::Epic,
+            kind: AttackKind::Attila,
+            rarity: Rarity::Legendary,
         };
         assert_eq!(
             problem(with_catalog(attack, 1, 1)),

@@ -9,8 +9,8 @@ use crate::theme;
 use bots::BotKind;
 use eframe::egui;
 use fight_of_pions::{
-    Action, ActiveEffect, Event, Game, GameConfig, GameEnd, GameRecord, Outcome, Player, Position,
-    TokenPile, TokenReward,
+    Action, ActiveEffect, EffectEnd, Event, Game, GameConfig, GameEnd, GameRecord, Outcome, Player,
+    Position, TokenPile, TokenReward,
 };
 use std::time::Duration;
 
@@ -360,7 +360,7 @@ fn attaques(
             ui.label(format!("{attaque}{cout}{etat}"));
         });
     }
-    reine(ui, &legales, tour_humain && !selection_en_cours, intentions);
+    gestes(ui, &legales, tour_humain && !selection_en_cours, intentions);
     if en_choix.attack_in_progress() {
         ui.label("Clique le pion lanceur, puis la ou les cibles.");
         // Une attaque « jusqu'à 2 » peut se jouer avant son nombre maximal de cibles.
@@ -392,22 +392,23 @@ fn attaques(
     }
 }
 
-/// Les gestes de la reine que le moteur permet maintenant, un bouton chacun : son pas
-/// gratuit vers une case, ou le tir d'un garde sur un pion. Cliquer une case libre sert
-/// déjà à poser : un bouton évite toute confusion.
-fn reine(ui: &mut egui::Ui, legales: &[Action], permis: bool, intentions: &mut Vec<Intention>) {
+/// Les gestes que le moteur permet maintenant hors attaque, un bouton chacun : le pas
+/// gratuit de la reine vers une case, le tir d'un garde sur un pion, un pas du Lièvre.
+/// Cliquer une case libre sert déjà à poser : un bouton évite toute confusion.
+fn gestes(ui: &mut egui::Ui, legales: &[Action], permis: bool, intentions: &mut Vec<Intention>) {
     let gestes: Vec<(Action, String)> = legales
         .iter()
         .filter_map(|&action| match action {
             Action::StepQueen(vers) => Some((action, format!("Reine → {vers}"))),
             Action::Shoot(cible) => Some((action, format!("Tir sur {cible}"))),
+            Action::HareStep { from, to } => Some((action, format!("Lièvre {from} → {to}"))),
             _ => None,
         })
         .collect();
     if gestes.is_empty() {
         return;
     }
-    ui.label("Reine");
+    ui.label("Gestes gratuits");
     ui.horizontal_wrapped(|ui| {
         for (action, texte) in gestes {
             if ui.add_enabled(permis, egui::Button::new(texte)).clicked() {
@@ -543,6 +544,12 @@ fn decrire(event: &Event) -> Option<String> {
             jusqu_a(*effet),
             effet.source()
         )),
+        Event::EffectChanged(effet) => Some(format!(
+            "Le pion {} dépense un jeton : encore {}{}",
+            effet.pion(),
+            effet.kind(),
+            jusqu_a(*effet)
+        )),
         Event::EffectEnded(effet) => Some(format!(
             "Le pion {} n'est plus {}",
             effet.pion(),
@@ -608,14 +615,20 @@ fn texte_pile(pile: TokenPile) -> String {
 }
 
 /// « jusqu'à la fin du tour 6 », « tant que sa famille l'encadre » (un enfant de la
-/// Familia), ou rien pour un autre effet sans durée (un pacte).
+/// Familia), « au début du prochain tour de … » (un retour), « (2 jetons) », ou rien pour
+/// un autre effet sans durée (un pacte).
 fn jusqu_a(effet: ActiveEffect) -> String {
-    if effet.framed_by().is_some() {
-        return " tant que sa famille l'encadre".to_string();
+    match effet.end() {
+        EffectEnd::Turn(tour) => format!(" jusqu'à la fin du tour {tour}"),
+        EffectEnd::Framed(_) => " tant que sa famille l'encadre".to_string(),
+        EffectEnd::NextTurn => format!(
+            " jusqu'au début du prochain tour de {}",
+            theme::nom_joueur(effet.creator())
+        ),
+        EffectEnd::Tokens(1) => " (1 jeton)".to_string(),
+        EffectEnd::Tokens(n) => format!(" ({n} jetons)"),
+        EffectEnd::Never => String::new(),
     }
-    effet.last_turn().map_or(String::new(), |tour| {
-        format!(" jusqu'à la fin du tour {tour}")
-    })
 }
 
 /// « Joueur 1 (violet) gagne la partie (alignement) » ou « Match nul (…) ».

@@ -20,6 +20,7 @@ mod saut_du_loup;
 
 pub use card::{Attack, AttackKind, AttackStats, CatalogEntry, Rarity};
 pub(crate) use effect::Effect;
+pub(crate) use lievre::HARE_TOKEN_STEPS;
 pub(crate) use reach::{around, both_sides, first_in_lines};
 pub(crate) use rules::{
     AttackContext, AttackRules, Launch, Targets, can_act, can_choose_more, can_complete,
