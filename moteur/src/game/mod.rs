@@ -17,6 +17,6 @@ pub use decision::Decision;
 pub use end::{EndReason, GameEnd, Outcome};
 pub use event::Event;
 pub use lasting::{ActiveEffect, EffectId, EffectKind, Patient};
-pub(crate) use lasting::{has_effect_of, pion_has, queen_of};
+pub(crate) use lasting::{has_effect_of, is_child, pion_has, queen_of};
 pub use record::{GameRecord, ReplayError};
 pub use state::Game;

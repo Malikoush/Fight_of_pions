@@ -1,7 +1,7 @@
 //! Le mouvement (B4, règles précisées le 2026-10-30 dans le carnet) : Saut du loup,
 //! Lièvre, Interchange Rare et Épique.
 //!
-//! Configuration par défaut : J1 a 1 action à son premier tour, puis 2 par tour ; chacun
+//! Premières règles : J1 a 1 action à son premier tour, puis 2 par tour ; chacun
 //! garde jusqu'à 2 actions.
 
 mod common;

@@ -2,7 +2,7 @@
 #![allow(dead_code)] // chaque fichier de tests n'utilise qu'une partie de ces outils
 
 use bots::Bot;
-use fight_of_pions::{Action, Game, GameConfig, Position, Rng};
+use fight_of_pions::{Action, Game, Position, Rng};
 
 /// La case (rangée, colonne).
 pub fn at(row: usize, col: usize) -> Position {
@@ -14,9 +14,10 @@ pub fn place(row: usize, col: usize) -> Action {
     Action::Place(at(row, col))
 }
 
-/// Une partie avec la configuration par défaut, où chaque joueur a toutes les attaques.
+/// Une partie avec les premières règles, où chaque joueur a toutes les attaques : les
+/// scénarios comptent leurs actions (2 par tour, une pose coûte 1).
 pub fn duel() -> Game {
-    Game::new(GameConfig::default().with_full_arsenals(), 0).unwrap()
+    Game::new(bots::first_rules(), 0).unwrap()
 }
 
 /// Chaque joueur pose à son tour un de ces pions, puis finit son tour en gardant ses

@@ -4,7 +4,7 @@
 mod common;
 
 use bots::{
-    Banking, Bot, GreedyBot, MctsBot, RandomBot, Weights, Windows, current_rules, run, target_rules,
+    Banking, Bot, GreedyBot, MctsBot, RandomBot, Weights, Windows, current_rules, first_rules, run,
 };
 use common::{alternate, at, play_the_turn};
 use fight_of_pions::{Action, Game, GameConfig, Player, Rng};
@@ -16,12 +16,12 @@ fn mcts() -> MctsBot {
     MctsBot::new(ITERATIONS, Weights::DEFAULT)
 }
 
-/// Les règles cibles sans la règle d'or : une ligne faite en posant gagne aussitôt, et la
+/// Les règles actuelles sans la règle d'or : une ligne faite en posant gagne aussitôt, et la
 /// bonne réponse se lit en un tour.
 fn immediate_win_rules() -> Game {
     let config = GameConfig {
         golden_rule: false,
-        ..target_rules()
+        ..current_rules()
     };
     Game::new(config, 0).unwrap()
 }
@@ -117,7 +117,7 @@ fn it_plays_a_whole_attack_to_break_a_blocked_line_then_completes_it() {
 
 #[test]
 fn with_the_golden_rule_it_breaks_a_finished_line_before_it_wins() {
-    let mut game = Game::new(target_rules(), 0).unwrap();
+    let mut game = Game::new(current_rules(), 0).unwrap();
     // J2 aligne A10 à F10 : sa ligne gagnera au début de son prochain tour. J1 a un pion
     // en A9, à côté d'elle, posé depuis longtemps.
     alternate(
@@ -151,10 +151,10 @@ fn with_the_golden_rule_it_breaks_a_finished_line_before_it_wins() {
     assert_eq!(game.winner(), None);
 }
 
-/// Des configurations variées, et combien de parties y jouer : les règles cibles (une
+/// Des configurations variées, et combien de parties y jouer : les règles actuelles (une
 /// seule partie, sur le grand plateau), et en petit pour en jouer plus, avec et sans la
-/// règle d'or ; un plateau minuscule où l'on n'attaque qu'en gardant ses actions ; la
-/// règle actuelle sur un petit plateau.
+/// règle d'or ; un plateau minuscule où l'on n'attaque qu'en gardant ses actions ; les
+/// premières règles sur un petit plateau.
 fn configs() -> Vec<(GameConfig, u64)> {
     let small = |config: GameConfig| GameConfig {
         board_size: 5,
@@ -166,20 +166,20 @@ fn configs() -> Vec<(GameConfig, u64)> {
         board_size: 3,
         align_to_win: 3,
         pions_per_player: 4,
-        ..target_rules()
+        ..current_rules()
     };
     vec![
-        (target_rules(), 1),
-        (small(target_rules()), 3),
+        (current_rules(), 1),
+        (small(current_rules()), 3),
         (
             small(GameConfig {
                 golden_rule: false,
-                ..target_rules()
+                ..current_rules()
             }),
             3,
         ),
         (tiny, 3),
-        (small(current_rules()), 2),
+        (small(first_rules()), 2),
     ]
 }
 
@@ -202,7 +202,7 @@ fn it_plays_only_legal_actions_until_the_end() {
 #[test]
 fn the_same_run_gives_the_same_report() {
     let greedy = GreedyBot::new(Banking::SpendAll);
-    let config = target_rules();
+    let config = current_rules();
     let first = run(&config, [&mcts(), &greedy], 2).unwrap();
     assert_eq!(run(&config, [&mcts(), &greedy], 2).unwrap(), first);
     assert_eq!(first.bots, ["MCTS", "glouton"]);
@@ -211,7 +211,7 @@ fn the_same_run_gives_the_same_report() {
 /// `bots[seat]` gagne plus de la moitié des parties, dans cette place.
 fn wins_most_games(bots: [&dyn Bot; 2], seat: usize) -> bool {
     let games = 6;
-    let report = run(&target_rules(), bots, games).unwrap();
+    let report = run(&current_rules(), bots, games).unwrap();
     report.wins[seat] * 2 > games
 }
 

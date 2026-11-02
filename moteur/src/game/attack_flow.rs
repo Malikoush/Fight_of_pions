@@ -265,6 +265,7 @@ impl Game {
             }
             Effect::Bind { a, b } => self.bind(a, b, source, events),
             Effect::Crown { at, guards } => self.crown(at, guards, source, events),
+            Effect::MakeChild { at, framed_by } => self.make_child(at, framed_by, source, events),
             Effect::Resurrect { pion, at } => {
                 let ours = self.infirmary.iter().any(|patient| {
                     patient.pion().id() == pion && patient.pion().owner() == self.current_player
@@ -353,7 +354,7 @@ mod tests {
     fn families_that_ignore_the_launcher_really_do() {
         let config = GameConfig {
             infirmary_turns: 2,
-            ..GameConfig::default().with_full_arsenals()
+            ..GameConfig::first_rules().with_full_arsenals()
         };
         let mut checked = 0;
         for seed in 0..20 {

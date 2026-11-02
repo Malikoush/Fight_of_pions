@@ -81,6 +81,7 @@ pub struct ActiveEffect {
     creator: Player,
     source: Attack,
     last_turn: Option<u32>,
+    framed_by: Option<[PionId; 2]>,
 }
 
 impl ActiveEffect {
@@ -91,6 +92,7 @@ impl ActiveEffect {
         creator: Player,
         source: Attack,
         last_turn: Option<u32>,
+        framed_by: Option<[PionId; 2]>,
     ) -> ActiveEffect {
         ActiveEffect {
             id,
@@ -99,6 +101,7 @@ impl ActiveEffect {
             creator,
             source,
             last_turn,
+            framed_by,
         }
     }
 
@@ -131,6 +134,13 @@ impl ActiveEffect {
     /// `None` pour un effet sans durée (le pacte), qui ne s'arrête que par un événement.
     pub fn last_turn(self) -> Option<u32> {
         self.last_turn
+    }
+
+    /// Les deux membres de sa famille qui encadrent ce pion, si c'est la protection d'un
+    /// enfant (Familia) : elle tombe dès qu'ils ne l'encadrent plus, de part et d'autre, en
+    /// ligne droite.
+    pub fn framed_by(self) -> Option<[PionId; 2]> {
+        self.framed_by
     }
 
     /// Vrai si cet effet est un statut sur ce pion, posé par ce joueur : ce qu'Attila
@@ -171,6 +181,13 @@ impl Patient {
     pub fn last_turn(self) -> u32 {
         self.last_turn
     }
+}
+
+/// Vrai si ce pion est un enfant (Familia) : protégé tant que sa famille l'encadre.
+pub(crate) fn is_child(effects: &[ActiveEffect], pion: PionId) -> bool {
+    effects
+        .iter()
+        .any(|effect| effect.pion == pion && effect.framed_by.is_some())
 }
 
 /// Vrai si ce pion a un effet de cette sorte : la seule lecture d'un statut.

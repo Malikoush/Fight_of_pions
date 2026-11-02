@@ -198,7 +198,7 @@ fn available_actions(game: &Game, player: Player) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::target_rules;
+    use crate::current_rules;
     use fight_of_pions::{Action, GameConfig};
 
     /// Seules les fenêtres comptent.
@@ -212,7 +212,7 @@ mod tests {
         Position { row, col }
     }
 
-    /// Un morpion dans les règles cibles sans la règle d'or : une ligne faite en posant
+    /// Un morpion dans les règles actuelles sans la règle d'or : une ligne faite en posant
     /// gagne aussitôt.
     fn morpion() -> Game {
         let config = GameConfig {
@@ -220,7 +220,7 @@ mod tests {
             align_to_win: 3,
             pions_per_player: 5,
             golden_rule: false,
-            ..target_rules()
+            ..current_rules()
         };
         Game::new(config, 0).unwrap()
     }

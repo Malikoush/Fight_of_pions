@@ -73,39 +73,28 @@ pub struct Variant {
     pub config: GameConfig,
 }
 
-/// La règle actuelle, où chaque joueur a toutes les attaques du catalogue en attendant le
-/// draft : la première variante, et la partie avec laquelle le labo démarre.
+/// Les règles actuelles (la configuration par défaut du moteur), où chaque joueur a toutes
+/// les attaques du catalogue en attendant le draft : la première variante, et la partie
+/// avec laquelle le labo démarre.
 pub fn current_rules() -> GameConfig {
     GameConfig::default().with_full_arsenals()
 }
 
-/// Les règles cibles (carnet de règles, « Règles cibles ») : 1 pose gratuite par tour, 1
-/// action par tour gardée jusqu'à 3, la Pièce, le mal du débarquement, la règle d'or et
-/// l'infirmerie de 2 tours. Le reste suit la règle actuelle.
-pub fn target_rules() -> GameConfig {
-    GameConfig {
-        first_turn_actions: 1,
-        actions_per_turn: 1,
-        max_banked_actions: 3,
-        starting_banked_actions: [0, 1],
-        place_cost: 0,
-        max_placements_per_turn: Some(1),
-        summoning_sickness: true,
-        golden_rule: true,
-        infirmary_turns: 2,
-        ..current_rules()
-    }
+/// Les premières règles ([`GameConfig::first_rules`]), gardées au cas où, avec toutes les
+/// attaques du catalogue.
+pub fn first_rules() -> GameConfig {
+    GameConfig::first_rules().with_full_arsenals()
 }
 
-/// Les variantes comparées par défaut, la règle actuelle d'abord. Une ligne de plus ici
+/// Les variantes comparées par défaut, les règles actuelles d'abord. Une ligne de plus ici
 /// suffit pour mesurer un nouveau réglage, tant qu'il tient dans la configuration :
 /// l'arène et le labo la proposent aussitôt.
 pub fn variants() -> Vec<Variant> {
-    let current = current_rules();
+    let first = first_rules();
     // Avec 3 actions au plus par tour, les Légendaires (4) ne sont plus payables.
     let bank_of_one = GameConfig {
         max_banked_actions: 1,
-        ..current.clone()
+        ..first.clone()
     }
     .without_unaffordable_attacks();
     let ours_rare = Attack {
@@ -115,23 +104,23 @@ pub fn variants() -> Vec<Variant> {
     vec![
         Variant {
             name: "règles actuelles",
-            config: current.clone(),
+            config: current_rules(),
         },
         Variant {
-            name: "banque max 1",
+            name: "premières règles",
+            config: first.clone(),
+        },
+        Variant {
+            name: "premières règles, banque max 1",
             config: bank_of_one.clone(),
         },
         Variant {
-            name: "Ours Rare à 1 action",
-            config: with_cost(current, ours_rare, 1),
+            name: "premières règles, Ours Rare à 1 action",
+            config: with_cost(first, ours_rare, 1),
         },
         Variant {
-            name: "banque max 1 et Ours Rare à 1 action",
+            name: "premières règles, banque max 1 et Ours Rare à 1 action",
             config: with_cost(bank_of_one, ours_rare, 1),
-        },
-        Variant {
-            name: "règles cibles",
-            config: target_rules(),
         },
     ]
 }

@@ -14,11 +14,12 @@ pub fn ours(rarity: Rarity) -> Attack {
     }
 }
 
-/// La configuration par défaut, où chaque joueur commence avec ces attaques.
+/// Les premières règles, où chaque joueur commence avec ces attaques. Les scénarios des
+/// tests comptent leurs actions (2 par tour, une pose coûte 1).
 pub fn config_with_attacks(player_one: Vec<Attack>, player_two: Vec<Attack>) -> GameConfig {
     GameConfig {
         starting_attacks: [player_one, player_two],
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     }
 }
 
@@ -45,9 +46,9 @@ pub fn place(row: usize, col: usize) -> Action {
 /// La graine utilisée par les tests qui ne s'intéressent pas au hasard.
 pub const SEED: u64 = 0;
 
-/// Une partie avec la configuration par défaut.
+/// Une partie avec les premières règles.
 pub fn new_game() -> Game {
-    game_with(GameConfig::default())
+    game_with(GameConfig::first_rules())
 }
 
 /// Une partie avec cette configuration, qui doit être valide.
@@ -95,7 +96,7 @@ pub fn random_config(rng: &mut Rng) -> GameConfig {
     let cheapest_place = usize::from(max_placements_per_turn.is_none());
     let mut random_bank = || random_below(rng, max_banked_actions as usize + 1) as u32;
     let starting_banked_actions = [random_bank(), random_bank()];
-    let attacks = GameConfig::default().catalog_attacks();
+    let attacks = GameConfig::first_rules().catalog_attacks();
     let attack_catalog = attacks
         .iter()
         .map(|&attack| CatalogEntry {

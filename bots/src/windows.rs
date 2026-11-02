@@ -110,7 +110,7 @@ mod tests {
         let config = GameConfig {
             board_size,
             align_to_win,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         Game::new(config, 0).unwrap()
     }
@@ -179,7 +179,7 @@ mod tests {
             board_size: 3,
             align_to_win: 3,
             golden_rule: true,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         let mut game = Game::new(config, 0).unwrap();
         let at = |row, col| Position { row, col };

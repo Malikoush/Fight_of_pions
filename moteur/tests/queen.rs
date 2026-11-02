@@ -1,7 +1,7 @@
 //! La reine (B5c, règles précisées le 2026-10-31 dans le carnet) : la pose, le pas gratuit,
 //! le bouclier et le tir des gardes, une seule reine à la fois.
 //!
-//! Configuration par défaut : J1 a 1 action à son premier tour, puis 2 par tour ; chacun
+//! Premières règles : J1 a 1 action à son premier tour, puis 2 par tour ; chacun
 //! garde jusqu'à 2 actions ; un tir coûte 1 action.
 
 mod common;

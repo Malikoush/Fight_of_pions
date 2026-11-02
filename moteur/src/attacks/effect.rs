@@ -64,6 +64,14 @@ pub(crate) enum Effect {
         /// Ses gardes.
         guards: u32,
     },
+    /// Faire du pion de `at` un enfant (Familia) : il est protégé tant que les pions de
+    /// `framed_by` l'encadrent de part et d'autre, en ligne droite.
+    MakeChild {
+        /// La case de l'enfant.
+        at: Position,
+        /// Les cases des deux membres de sa famille qui l'encadrent.
+        framed_by: [Position; 2],
+    },
     /// Lier par un pacte (Meilleurs amis) les pions de ces deux cases.
     Bind {
         /// La case du premier ami.
@@ -91,7 +99,8 @@ impl Effect {
             | Effect::RemoveEnemyStatuses { at }
             | Effect::Place { at }
             | Effect::Resurrect { at, .. }
-            | Effect::Crown { at, .. } => Some(at),
+            | Effect::Crown { at, .. }
+            | Effect::MakeChild { at, .. } => Some(at),
             Effect::Move { .. } | Effect::Swap { .. } | Effect::Bind { .. } => None,
         }
     }

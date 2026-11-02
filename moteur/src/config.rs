@@ -65,25 +65,23 @@ pub struct GameConfig {
     pub starting_attacks: [Vec<Attack>; 2],
 }
 
+/// Les règles actuelles (carnet, « Tour de jeu », 2026-11-02) : 1 pose gratuite par tour,
+/// 1 action par tour gardée jusqu'à 3, la Pièce, le mal du débarquement, la règle d'or et
+/// l'infirmerie de 2 tours. Le reste suit les premières règles
+/// ([`GameConfig::first_rules`]).
 impl Default for GameConfig {
     fn default() -> Self {
         Self {
-            board_size: 10,
-            align_to_win: 6,
-            pions_per_player: 15,
             first_turn_actions: 1,
-            actions_per_turn: 2,
-            max_banked_actions: 2,
-            starting_banked_actions: [0, 0],
-            place_cost: 1,
-            max_placements_per_turn: None,
-            summoning_sickness: false,
-            golden_rule: false,
-            infirmary_turns: 0,
-            guard_shot_cost: default_guard_shot_cost(),
-            max_turns: 200,
-            attack_catalog: default_attack_catalog(),
-            starting_attacks: [Vec::new(), Vec::new()],
+            actions_per_turn: 1,
+            max_banked_actions: 3,
+            starting_banked_actions: [0, 1],
+            place_cost: 0,
+            max_placements_per_turn: Some(1),
+            summoning_sickness: true,
+            golden_rule: true,
+            infirmary_turns: 2,
+            ..Self::first_rules()
         }
     }
 }
@@ -128,6 +126,10 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
         entry(AttackKind::Lievre, Rarity::Common, 1),
         entry(AttackKind::Lievre, Rarity::Rare, 2),
         entry(AttackKind::Lievre, Rarity::Legendary, 4),
+        entry(AttackKind::Familia, Rarity::Common, 1),
+        entry(AttackKind::Familia, Rarity::Rare, 2),
+        entry(AttackKind::Familia, Rarity::Epic, 3),
+        entry(AttackKind::Familia, Rarity::Legendary, 4),
         entry(AttackKind::MeilleursAmis, Rarity::Epic, 3),
     ]
 }
@@ -248,6 +250,31 @@ impl GameConfig {
     pub const MAX_BOARD_SIZE: usize = Position::NAMED_COLUMNS;
     /// La plus courte ligne gagnante acceptée.
     pub const MIN_ALIGN_TO_WIN: usize = 2;
+
+    /// Les premières règles, par défaut jusqu'au 2026-11-02 et gardées au cas où (carnet,
+    /// « Premières règles ») : 2 actions par tour partagées entre poser (1 action) et
+    /// attaquer, 2 gardées au plus, sans limite de poses, sans mal du débarquement, sans
+    /// règle d'or ni infirmerie.
+    pub fn first_rules() -> GameConfig {
+        GameConfig {
+            board_size: 10,
+            align_to_win: 6,
+            pions_per_player: 15,
+            first_turn_actions: 1,
+            actions_per_turn: 2,
+            max_banked_actions: 2,
+            starting_banked_actions: [0, 0],
+            place_cost: 1,
+            max_placements_per_turn: None,
+            summoning_sickness: false,
+            golden_rule: false,
+            infirmary_turns: 0,
+            guard_shot_cost: default_guard_shot_cost(),
+            max_turns: 200,
+            attack_catalog: default_attack_catalog(),
+            starting_attacks: [Vec::new(), Vec::new()],
+        }
+    }
 
     /// Toutes les attaques du catalogue, dans son ordre.
     pub fn catalog_attacks(&self) -> Vec<Attack> {
@@ -389,11 +416,17 @@ mod tests {
     }
 
     #[test]
+    fn the_first_rules_stay_valid() {
+        assert_eq!(problem(GameConfig::first_rules()), None);
+        assert_ne!(GameConfig::first_rules(), GameConfig::default());
+    }
+
+    #[test]
     fn board_size_must_be_between_2_and_26() {
         let with_size = |board_size| GameConfig {
             board_size,
             align_to_win: 2,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         for size in [0, 1, 27, usize::MAX] {
             assert_eq!(
@@ -409,7 +442,7 @@ mod tests {
     fn alignment_must_be_between_2_and_board_size() {
         let with_align = |align_to_win| GameConfig {
             align_to_win,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         assert_eq!(problem(with_align(0)), Some(ConfigError::AlignmentTooShort));
         assert_eq!(problem(with_align(1)), Some(ConfigError::AlignmentTooShort));
@@ -425,7 +458,7 @@ mod tests {
     fn each_player_needs_at_least_one_pion() {
         let config = GameConfig {
             pions_per_player: 0,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         assert_eq!(problem(config), Some(ConfigError::NoPions));
     }
@@ -434,11 +467,11 @@ mod tests {
     fn each_turn_needs_at_least_one_action() {
         let first = GameConfig {
             first_turn_actions: 0,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         let later = GameConfig {
             actions_per_turn: 0,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         assert_eq!(problem(first), Some(ConfigError::NoActionsPerTurn));
         assert_eq!(problem(later), Some(ConfigError::NoActionsPerTurn));
@@ -448,7 +481,7 @@ mod tests {
     fn placing_is_free_only_when_limited_per_turn() {
         let free = GameConfig {
             place_cost: 0,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         assert_eq!(problem(free.clone()), Some(ConfigError::FreePlacement));
         let limited = |max| GameConfig {
@@ -463,9 +496,9 @@ mod tests {
     fn the_starting_bank_fits_in_the_bank() {
         let with_bank = |starting_banked_actions| GameConfig {
             starting_banked_actions,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
-        // On garde au plus 2 actions par défaut.
+        // On garde au plus 2 actions dans les premières règles.
         assert_eq!(problem(with_bank([0, 2])), None);
         assert_eq!(
             problem(with_bank([3, 0])),
@@ -477,7 +510,7 @@ mod tests {
     fn placing_must_be_reachable_by_saving_actions() {
         let with_cost = |place_cost| GameConfig {
             place_cost,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         // 2 actions par tour + 2 gardées = 4 au plus.
         assert_eq!(problem(with_cost(4)), None);
@@ -491,7 +524,7 @@ mod tests {
     fn impossible_victory_is_accepted_for_tests() {
         let config = GameConfig {
             pions_per_player: 2,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         assert_eq!(problem(config), None);
     }
@@ -500,7 +533,7 @@ mod tests {
     fn turn_limit_must_be_at_least_one() {
         let config = GameConfig {
             max_turns: 0,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         assert_eq!(problem(config), Some(ConfigError::NoTurnLimit));
     }
@@ -518,7 +551,7 @@ mod tests {
                 attack,
                 stats: AttackStats { cost, cooldown },
             }],
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         }
     }
 
@@ -601,7 +634,7 @@ mod tests {
         let config = GameConfig {
             attack_catalog: Vec::new(),
             starting_attacks: [vec![ours(Rarity::Rare)], Vec::new()],
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         assert_eq!(
             problem(config),
@@ -615,7 +648,7 @@ mod tests {
         let config = GameConfig {
             actions_per_turn: 1,
             max_banked_actions: 1,
-            ..GameConfig::default().with_full_arsenals()
+            ..GameConfig::first_rules().with_full_arsenals()
         };
         assert!(problem(config.clone()).is_some());
 
@@ -645,7 +678,7 @@ mod tests {
     fn a_guard_shot_costs_at_least_one_reachable_action() {
         let with_cost = |guard_shot_cost| GameConfig {
             guard_shot_cost,
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         };
         // 2 actions par tour + 2 gardées = 4 au plus.
         assert_eq!(problem(with_cost(4)), None);

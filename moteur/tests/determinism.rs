@@ -324,7 +324,7 @@ fn events_are_enough_to_follow_the_board() {
     for seed in 0..500 {
         let mut rng = Rng::new(seed);
         let config = if seed % 2 == 0 {
-            GameConfig::default()
+            GameConfig::first_rules()
         } else {
             random_config(&mut rng)
         };
@@ -369,6 +369,7 @@ fn events_are_enough_to_follow_the_board() {
         AttackKind::Ours,
         AttackKind::Lievre,
         AttackKind::MeilleursAmis,
+        AttackKind::Familia,
     ] {
         assert!(kinds_played.contains(&kind), "{kind} jamais jouée");
     }
@@ -416,7 +417,7 @@ fn same_seed_and_actions_give_same_events_and_state() {
 
 #[test]
 fn the_seed_is_part_of_the_game() {
-    let config = GameConfig::default();
+    let config = GameConfig::first_rules();
     assert_ne!(
         Game::new(config.clone(), 1).unwrap(),
         Game::new(config, 2).unwrap()
@@ -425,7 +426,7 @@ fn the_seed_is_part_of_the_game() {
 
 #[test]
 fn replay_reports_the_refused_action() {
-    let mut record = GameRecord::new(GameConfig::default(), SEED);
+    let mut record = GameRecord::new(GameConfig::first_rules(), SEED);
     // Le joueur 2 rejoue sur la case que le joueur 1 vient de prendre.
     record.actions = vec![place(0, 0), place(0, 0)];
     assert_eq!(
@@ -441,7 +442,7 @@ fn replay_reports_the_refused_action() {
 fn replay_reports_an_invalid_config() {
     let config = GameConfig {
         board_size: 0,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     let record = GameRecord::new(config, SEED);
     assert!(matches!(record.replay(), Err(ReplayError::Start(_))));
@@ -449,6 +450,6 @@ fn replay_reports_an_invalid_config() {
 
 #[test]
 fn an_empty_record_replays_to_a_new_game() {
-    let record = GameRecord::new(GameConfig::default(), SEED);
-    assert_eq!(record.replay(), Ok(game_with(GameConfig::default())));
+    let record = GameRecord::new(GameConfig::first_rules(), SEED);
+    assert_eq!(record.replay(), Ok(game_with(GameConfig::first_rules())));
 }

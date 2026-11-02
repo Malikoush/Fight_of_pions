@@ -46,6 +46,6 @@ pub use bot::Bot;
 pub use evaluation::Weights;
 pub use greedy::{Banking, GreedyBot};
 pub use mcts::MctsBot;
-pub use presets::{BotKind, STANDARD_PAIRS, Variant, current_rules, target_rules, variants};
+pub use presets::{BotKind, STANDARD_PAIRS, Variant, current_rules, first_rules, variants};
 pub use random::RandomBot;
 pub use windows::Windows;

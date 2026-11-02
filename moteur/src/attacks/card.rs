@@ -22,6 +22,9 @@ pub enum AttackKind {
     Ours,
     /// Le mouvement pur, pas à pas (fiche n°10).
     Lievre,
+    /// Des familles de pions en ligne : l'enfant encadré par sa famille est protégé
+    /// (fiche n°11).
+    Familia,
     /// Deux pions liés par un pacte : si l'un est tué, l'autre le venge (fiche n°12).
     MeilleursAmis,
 }
@@ -37,6 +40,7 @@ impl fmt::Display for AttackKind {
             AttackKind::Interchange => write!(f, "Interchange"),
             AttackKind::Ours => write!(f, "Ours"),
             AttackKind::Lievre => write!(f, "Lièvre"),
+            AttackKind::Familia => write!(f, "Familia"),
             AttackKind::MeilleursAmis => write!(f, "Meilleurs amis"),
         }
     }

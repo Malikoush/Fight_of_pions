@@ -1,8 +1,8 @@
-//! L'infirmerie (règles cibles, fiches du 2026-10-29 ; horloge du carnet, 2026-10-30) :
+//! L'infirmerie (règles actuelles, fiches du 2026-10-29 ; horloge du carnet, 2026-10-30) :
 //! un pion tué passe `infirmary_turns` tours à l'infirmerie, comptés en tours de
 //! l'adversaire du joueur qui l'a tué (ici son propriétaire), puis revient dans sa réserve.
 //!
-//! Configuration par défaut : J1 a 1 action à son premier tour, puis 2 par tour.
+//! Premières règles : J1 a 1 action à son premier tour, puis 2 par tour.
 
 mod common;
 

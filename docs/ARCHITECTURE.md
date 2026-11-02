@@ -1,6 +1,6 @@
 # Architecture de Fight of Pions
 
-Dernière mise à jour : 2026-10-29.
+Dernière mise à jour : 2026-11-02.
 
 Ce document décrit comment le code est organisé et **pourquoi**. Il sert de référence pour toutes les tâches de la [feuille de route](FEUILLE_DE_ROUTE.md). Ce qui n'existe pas encore est marqué **(cible)**.
 
@@ -77,7 +77,7 @@ moteur/src/
   attacks/      attaques : données (Attack, AttackKind, Rarity, AttackStats), trait AttackRules,
                 Effect, portées partagées (reach.rs), et une famille par fichier
                 (ours.rs, beaute_fatale.rs, saut_du_loup.rs, reine.rs, attila.rs,
-                interchange.rs, lievre.rs)
+                medecin.rs, interchange.rs, lievre.rs, meilleurs_amis.rs, familia.rs)
 ```
 
 ### Le contrat d'une action : valider, puis exécuter
@@ -121,12 +121,12 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
   | Déplacer (`Effect::Move`) | Le pion change de case ; c'est la famille qui calcule le trajet (pas, saut, poussée, charge, téléportation) | Saut du loup, Lièvre, Coup du taureau, Interchange Commune, reine, Feintaille, Hibou | B4 |
   | Échanger (`Effect::Swap`) | Deux pions échangent leurs cases d'un coup | Interchange | B4 |
   | Poser (`Effect::Place`), ressusciter (`Effect::Resurrect`) | Un pion de la réserve, ou de l'infirmerie (le Médecin, sur sa tombe), arrive sur une case et compte comme posé ce tour | Pose, Beauté fatale, Reine, Familia, Meilleurs amis, Médecin, Sentinelle, Queue du lézard | B5a (réserve) ; B5b (infirmerie) |
-  | Créer un effet continu | Couronne, gardes, jetons, pacte (`Effect::Bind`, B5a), retour programmé, famille, Terre brûlée | Reine, Massacre divin, Lièvre Épique, Meilleurs amis, Interchange Commune, Familia, Attila Légendaire | B3 à B6 |
+  | Créer un effet continu | Couronne, gardes (`Effect::Crown`, B5c), jetons, pacte (`Effect::Bind`, B5a), retour programmé, enfant (`Effect::MakeChild`, B5d), Terre brûlée | Reine, Massacre divin, Lièvre Épique, Meilleurs amis, Interchange Commune, Familia, Attila Légendaire | B3 à B6 |
   | Annuler un effet | Un effet continu adverse entier | Attila Rare à Légendaire | B6 |
   | Gagner des actions | Points rendus tout de suite | Massacre divin Commune et Rare | B6 |
 
   - **Pas de « changer de camp »** : séduire (Beauté fatale), c'est tuer puis poser un des siens sur la même case. Ressusciter sur une tombe occupée (Médecin), c'est tuer l'occupant puis poser depuis l'infirmerie. Le retour d'Interchange, c'est tuer l'occupant puis déplacer.
-  - **Un effet continu** (`ActiveEffect`) retient qui l'a créé, la carte qui l'a créé, ce sur quoi il porte, et sa fin. Depuis B3 : il porte sur un pion (par son identité), et sa fin est une durée (`last_turn`, le numéro du dernier tour où il agit). Depuis B5a : un effet peut n'avoir aucune durée (le pacte, `last_turn() == None`) ; il ne compte alors pas comme « programmé » pour la partie figée. Prévu ensuite : le **jeu de carte** qui l'a créé (tous les effets d'un même jeu forment l'« effet entier » qu'Attila Rare annule, B6), un effet porté par un joueur (jetons du Massacre divin), et d'autres sortes de fin : un nombre de jetons, une condition (l'enfant de Familia reste encadré), un déclencheur (bouclier, retour). Un statut est un effet continu : un pion est immobilisé tant qu'au moins un effet l'immobilise, donc pas de règle de cumul.
+  - **Un effet continu** (`ActiveEffect`) retient qui l'a créé, la carte qui l'a créé, ce sur quoi il porte, et sa fin. Depuis B3 : il porte sur un pion (par son identité), et sa fin est une durée (`last_turn`, le numéro du dernier tour où il agit). Depuis B5a : un effet peut n'avoir aucune durée (le pacte, `last_turn() == None`) ; il ne compte alors pas comme « programmé » pour la partie figée. Prévu ensuite : le **jeu de carte** qui l'a créé (tous les effets d'un même jeu forment l'« effet entier » qu'Attila Rare annule, B6), un effet porté par un joueur (jetons du Massacre divin), et d'autres sortes de fin : un nombre de jetons, un déclencheur (bouclier, retour). Depuis B5d : une condition, la protection d'un enfant de la Familia, qui retient les deux pions qui l'encadrent (`framed_by`) ; la partie la retire à la fin de chaque action où ils ne l'encadrent plus (`end_unframed_children`, appelé par `after_action`). À la deuxième sorte de fin non temporelle (les jetons, B6), ces fins deviendront un seul type. Un statut est un effet continu : un pion est immobilisé tant qu'au moins un effet l'immobilise, donc pas de règle de cumul.
   - **Tuer et ses conséquences** (`game/kill.rs`) : un kill arrête les effets du pion, l'envoie à l'infirmerie ou dans la réserve, et note son pacte ; à la fin de l'attaque, `avenge` joue les vengeances, en chaîne. La tombe est posée au départ pour l'infirmerie (`clock.rs`, `send_to_infirmary`). Une conséquence de plus (Queue du lézard, Massacre divin) se branchera ici.
   - **Une seule horloge** (`game/clock.rs`) : une durée se compte en tours d'un joueur (l'adversaire de celui qui a joué l'effet ; pour l'infirmerie, le propriétaire du pion), sans le tour en cours, et s'éteint à la fin du dernier (carnet, 2026-10-30). Le dernier tour est calculé une fois, à la création : rien ne décompte à chaque tour, et la fin d'un tour arrête simplement ce dont c'était le dernier tour.
   - **Déclencheurs** auxquels réagissent les effets continus et les réactions : pion tué, pion posé, pion déplacé, pion visé (avant la résolution), attaque terminée, début de tour, fin de tour.
@@ -145,7 +145,7 @@ Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(p
 - **Règle d'or** (`golden_rule`, en option) : une ligne ne gagne qu'au début du tour de son propriétaire. Le contrôle « une ligne au début de ton tour gagne » existe dans tous les cas : il couvre les lignes faites par une carte, sans avoir à suivre l'origine d'une ligne. Quand la partie s'arrête (figée, limite de tours), les lignes en attente sont vérifiées comme si les tours continuaient (`stop_game`).
 - **Fin garantie** : toute partie se termine (`GameEnd`), soit par alignement, soit **figée** (plus personne ne pourra jamais agir), soit par la **limite de tours** `max_turns`, filet de sécurité pour les bots.
 - Trois choses sont séparées pour rester modifiables : le **déclencheur** (`EndReason`, utile aux statistiques), le **résultat** (`Outcome`, calculé à un seul endroit : nul pour l'instant, départage possible plus tard) et la **limite** (réglage).
-- « Figée » veut dire *plus personne ne peut agir et rien de programmé ne peut changer la situation*. Depuis B3, un effet continu en jeu ou un pion à l'infirmerie compte comme « programmé » ; la vérification se fait aussi à la fin d'un tour où quelque chose a expiré. Un effet sans fin dans le temps (l'enfant de Familia, B5) devra être traité à part. Une future mécanique anti-stagnation (Effondrement) devra être prise en compte dans ce test.
+- « Figée » veut dire *plus personne ne peut agir et rien de programmé ne peut changer la situation*. Depuis B3, un effet continu en jeu ou un pion à l'infirmerie compte comme « programmé » ; la vérification se fait aussi à la fin d'un tour où quelque chose a expiré. Un effet sans fin dans le temps (pacte, couronne, gardes, enfant) ne compte pas : seule une action peut le défaire. Une future mécanique anti-stagnation (Effondrement) devra être prise en compte dans ce test.
 
 ## 5. Bots et machine learning
 

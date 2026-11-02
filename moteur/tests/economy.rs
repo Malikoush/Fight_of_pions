@@ -3,24 +3,21 @@
 
 mod common;
 
-use common::{choose, config_with_attacks, game_with, ours, place, play};
+use common::{choose, game_with, ours, place, play};
 use fight_of_pions::{Action, Event, Game, GameConfig, GameError, Player, Position, Rarity};
 
 const RARE: usize = 0;
 
-/// Les règles cibles : 1 pose gratuite par tour, 1 action par tour gardée jusqu'à 3, la Pièce
-/// et le mal du débarquement ; chaque joueur a l'Ours Rare (2 actions) et l'Épique (3).
-fn target_rules() -> GameConfig {
+/// L'économie des règles actuelles, sans règle d'or ni infirmerie : 1 pose gratuite par
+/// tour, 1 action par tour gardée jusqu'à 3, la Pièce et le mal du débarquement ; chaque
+/// joueur a l'Ours Rare (2 actions) et l'Épique (3).
+fn current_economy() -> GameConfig {
     let arsenal = vec![ours(Rarity::Rare), ours(Rarity::Epic)];
     GameConfig {
-        first_turn_actions: 1,
-        actions_per_turn: 1,
-        max_banked_actions: 3,
-        starting_banked_actions: [0, 1],
-        place_cost: 0,
-        max_placements_per_turn: Some(1),
-        summoning_sickness: true,
-        ..config_with_attacks(arsenal.clone(), arsenal)
+        golden_rule: false,
+        infirmary_turns: 0,
+        starting_attacks: [arsenal.clone(), arsenal],
+        ..GameConfig::default()
     }
 }
 
@@ -30,7 +27,7 @@ fn at(row: usize, col: usize) -> Position {
 
 #[test]
 fn a_free_placement_leaves_the_actions_and_the_turn_alone() {
-    let mut game = game_with(target_rules());
+    let mut game = game_with(current_economy());
     assert_eq!(game.placements_left(), 1);
 
     let events = play(&mut game, &[place(4, 4)]);
@@ -48,7 +45,7 @@ fn a_free_placement_leaves_the_actions_and_the_turn_alone() {
 
 #[test]
 fn only_the_allowed_placements_can_be_made_in_a_turn() {
-    let mut game = game_with(target_rules());
+    let mut game = game_with(current_economy());
     play(&mut game, &[place(4, 4)]);
 
     assert_eq!(game.apply(place(0, 0)), Err(GameError::NoPlacementLeft));
@@ -66,7 +63,7 @@ fn only_the_allowed_placements_can_be_made_in_a_turn() {
 
 #[test]
 fn placements_not_made_are_not_kept() {
-    let mut game = game_with(target_rules());
+    let mut game = game_with(current_economy());
     play(&mut game, &[Action::EndTurn, Action::EndTurn]);
     assert_eq!(game.current_player(), Player::One);
     assert_eq!(game.placements_left(), 1);
@@ -74,7 +71,7 @@ fn placements_not_made_are_not_kept() {
 
 #[test]
 fn the_second_player_starts_with_the_coin() {
-    let mut game = game_with(target_rules());
+    let mut game = game_with(current_economy());
     assert_eq!(game.banked_actions(Player::Two), 1);
     assert_eq!(game.actions_left(), 1);
 
@@ -84,7 +81,7 @@ fn the_second_player_starts_with_the_coin() {
 
 #[test]
 fn the_turn_ends_by_itself_once_actions_and_placements_are_spent() {
-    let mut game = game_with(target_rules());
+    let mut game = game_with(current_economy());
     play(&mut game, &[place(4, 4), Action::EndTurn]); // J1 garde 1 action
     play(&mut game, &[place(4, 5), Action::EndTurn]); // J2, au contact de E5
     assert_eq!(game.actions_left(), 2);
@@ -106,7 +103,7 @@ fn the_turn_ends_by_itself_once_actions_and_placements_are_spent() {
 fn with_a_pion_just_placed_next_to_an_enemy(summoning_sickness: bool) -> Game {
     let mut game = game_with(GameConfig {
         summoning_sickness,
-        ..target_rules()
+        ..current_economy()
     });
     play(&mut game, &[place(4, 4), Action::EndTurn]);
     play(&mut game, &[place(4, 5)]);
@@ -137,7 +134,7 @@ fn a_pion_placed_this_turn_cannot_launch_an_attack() {
 
 #[test]
 fn a_new_pion_cannot_be_chosen_as_launcher_but_an_old_one_can() {
-    let mut game = game_with(target_rules());
+    let mut game = game_with(current_economy());
     play(&mut game, &[place(4, 4), Action::EndTurn]); // J1 : E5
     play(&mut game, &[place(4, 5), Action::EndTurn]); // J2 : F5, contre E5, garde 2 actions
     play(&mut game, &[place(0, 0), Action::EndTurn]); // J1 : loin
@@ -161,7 +158,7 @@ fn a_new_pion_cannot_be_chosen_as_launcher_but_an_old_one_can() {
 fn the_first_player_receives_its_starting_bank_with_its_first_turn() {
     let game = game_with(GameConfig {
         starting_banked_actions: [2, 0],
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     });
     // 1 action du premier tour + 2 en banque de départ, reçues tout de suite.
     assert_eq!(game.actions_left(), 3);
@@ -189,7 +186,7 @@ fn a_new_pion_that_will_be_able_to_attack_does_not_freeze_the_game() {
         align_to_win: 3,
         pions_per_player: 1,
         starting_attacks: [Vec::new(), vec![ours(Rarity::Rare)]],
-        ..target_rules()
+        ..current_economy()
     });
     play(&mut game, &[place(0, 0), Action::EndTurn]);
     play(&mut game, &[place(0, 1)]);
@@ -212,7 +209,7 @@ fn no_placement_is_left_on_a_full_board() {
         align_to_win: 3,
         max_placements_per_turn: Some(2),
         summoning_sickness: false,
-        ..target_rules()
+        ..current_economy()
     });
     play(&mut game, &[place(0, 0), place(0, 2), Action::EndTurn]);
     play(&mut game, &[place(0, 1), place(1, 1), Action::EndTurn]);
@@ -227,7 +224,7 @@ fn no_placement_is_left_on_a_full_board() {
 
 #[test]
 fn placements_left_follow_the_actions_when_placing_costs_actions() {
-    let game = game_with(GameConfig::default());
-    // Règles actuelles : 1 action au premier tour, et une pose coûte 1 action.
+    let game = game_with(GameConfig::first_rules());
+    // Premières règles : 1 action au premier tour, et une pose coûte 1 action.
     assert_eq!(game.placements_left(), 1);
 }

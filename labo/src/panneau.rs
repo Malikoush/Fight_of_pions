@@ -544,8 +544,12 @@ fn decrire(event: &Event) -> Option<String> {
     }
 }
 
-/// « jusqu'à la fin du tour 6 », ou rien pour un effet sans durée (un pacte).
+/// « jusqu'à la fin du tour 6 », « tant que sa famille l'encadre » (un enfant de la
+/// Familia), ou rien pour un autre effet sans durée (un pacte).
 fn jusqu_a(effet: ActiveEffect) -> String {
+    if effet.framed_by().is_some() {
+        return " tant que sa famille l'encadre".to_string();
+    }
     effet.last_turn().map_or(String::new(), |tour| {
         format!(" jusqu'à la fin du tour {tour}")
     })

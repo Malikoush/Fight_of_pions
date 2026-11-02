@@ -8,7 +8,9 @@ use fight_of_pions::{Attack, AttackKind, EndReason, Game, GameConfig, Rarity, Rn
 use std::time::Instant;
 
 fn main() {
-    measure("sans attaque", GameConfig::default(), 20_000);
+    // Les premières règles, celles de toutes les mesures avant le 2026-11-02 : les chiffres
+    // restent comparables d'une tâche à l'autre.
+    measure("sans attaque", GameConfig::first_rules(), 20_000);
 
     // L'arsenal de B1 (Ours Rare et Épique) : la même partie qu'aux mesures précédentes,
     // pour comparer le coût du moteur d'une tâche à l'autre.
@@ -21,7 +23,7 @@ fn main() {
         "Ours Rare et Épique",
         GameConfig {
             starting_attacks: [b1_arsenal.clone(), b1_arsenal],
-            ..GameConfig::default()
+            ..GameConfig::first_rules()
         },
         2_000,
     );
@@ -30,6 +32,13 @@ fn main() {
     // plus longues : moins de parties, même durée.
     measure(
         "avec attaques",
+        GameConfig::first_rules().with_full_arsenals(),
+        2_000,
+    );
+
+    // Les règles actuelles, avec toutes les attaques : la partie que l'on joue vraiment.
+    measure(
+        "règles actuelles, avec attaques",
         GameConfig::default().with_full_arsenals(),
         2_000,
     );

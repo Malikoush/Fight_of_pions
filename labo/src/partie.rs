@@ -252,7 +252,7 @@ impl Partie {
     }
 }
 
-/// La configuration avec laquelle le labo démarre : la règle actuelle, première des
+/// La configuration avec laquelle le labo démarre : les règles actuelles, première des
 /// variantes proposées.
 pub fn config_initiale() -> GameConfig {
     current_rules()
@@ -288,8 +288,10 @@ mod tests {
     /// Deux humains : annuler retire un seul coup.
     const DEUX_HUMAINS: [bool; 2] = [true, true];
 
+    /// Une partie avec les premières règles : les scénarios comptent leurs actions (2 par
+    /// tour, une pose coûte 1).
     fn partie() -> Partie {
-        Partie::avec_graine(config_initiale(), GRAINE).unwrap()
+        Partie::avec_graine(bots::first_rules(), GRAINE).unwrap()
     }
 
     /// Fait jouer ces bots (joueur 1, joueur 2) jusqu'à la fin de la partie.
@@ -423,7 +425,7 @@ mod tests {
             kind: AttackKind::Ours,
             rarity: Rarity::Rare,
         };
-        config_initiale().starting_attacks[Player::One.index()]
+        bots::first_rules().starting_attacks[Player::One.index()]
             .iter()
             .position(|&attaque| attaque == ours)
             .unwrap()
@@ -529,7 +531,7 @@ mod tests {
 
     #[test]
     fn une_partie_avec_une_action_refusee_ne_change_rien() {
-        let mut record = GameRecord::new(GameConfig::default(), GRAINE);
+        let mut record = GameRecord::new(bots::first_rules(), GRAINE);
         // Le joueur 2 rejoue sur la case que le joueur 1 vient de prendre.
         record.actions = vec![place(0, 0), place(0, 0)];
         assert_chargement_refuse_sans_effet(exporter(&record).unwrap());

@@ -6,6 +6,7 @@ mod attila;
 mod beaute_fatale;
 mod card;
 mod effect;
+mod familia;
 mod interchange;
 mod lievre;
 mod medecin;
@@ -18,7 +19,7 @@ mod saut_du_loup;
 
 pub use card::{Attack, AttackKind, AttackStats, CatalogEntry, Rarity};
 pub(crate) use effect::Effect;
-pub(crate) use reach::{around, first_in_lines};
+pub(crate) use reach::{around, both_sides, first_in_lines};
 pub(crate) use rules::{
     AttackContext, AttackRules, Launch, can_act, can_choose_more, can_complete, is_complete, is_new,
 };
@@ -36,6 +37,7 @@ impl AttackKind {
             AttackKind::Ours => &ours::Ours,
             AttackKind::Lievre => &lievre::Lievre,
             AttackKind::MeilleursAmis => &meilleurs_amis::MeilleursAmis,
+            AttackKind::Familia => &familia::Familia,
         }
     }
 }

@@ -4,8 +4,8 @@ mod common;
 
 use common::{game_with, new_game, place, play, random_config};
 use fight_of_pions::{
-    Action, Attack, AttackKind, Decision, Direction, EndReason, Event, Game, GameConfig, GameEnd,
-    Outcome, Player, Position, Rarity, Rng,
+    Action, Attack, AttackKind, Decision, Direction, EffectKind, EndReason, Event, Game,
+    GameConfig, GameEnd, Outcome, Player, Position, Rarity, Rng,
 };
 
 fn draw(reason: EndReason) -> Event {
@@ -35,10 +35,10 @@ fn assert_placed_then(events: &[Event], end: Event) {
 
 /// La définition du carnet, écrite indépendamment du moteur : une partie est figée quand
 /// rien n'est programmé (aucun effet continu qui s'arrêtera à un tour donné, personne à
-/// l'infirmerie ; un pacte, sans durée, ne programme rien) et qu'aucun des deux joueurs ne
-/// peut plus ni poser (plateau plein ou réserve vide), ni lancer une attaque qui a une
-/// cible, ni faire agir sa reine (un pas vers une case libre collée, ou un tir s'il lui
-/// reste un garde et un ennemi au bout d'une ligne droite).
+/// l'infirmerie ; un pacte, une couronne ou un enfant, sans durée, ne programment rien) et
+/// qu'aucun des deux joueurs ne peut plus ni poser (plateau plein ou réserve vide), ni
+/// lancer une attaque qui a une cible, ni faire agir sa reine (un pas vers une case libre
+/// collée, ou un tir s'il lui reste un garde et un ennemi au bout d'une ligne droite).
 fn frozen_by_the_rules(game: &Game) -> bool {
     let timed_effect = game
         .active_effects()
@@ -63,8 +63,26 @@ fn frozen_by_the_rules(game: &Game) -> bool {
     !can_act(Player::One) && !can_act(Player::Two)
 }
 
-/// Vrai si la reine de ce joueur peut encore agir, sans statut sur le plateau : une case
-/// libre collée à elle, ou un garde et un ennemi comme premier pion d'une ligne droite.
+/// Vrai si ce pion est protégé : sans effet à durée, seul un enfant (Familia) peut l'être.
+fn protected(game: &Game, pos: Position) -> bool {
+    game.has_effect(pos, EffectKind::Protected)
+}
+
+/// Vrai si le pion de cette case est un enfant (Familia).
+fn child(game: &Game, pos: Position) -> bool {
+    game.board()
+        .get(pos)
+        .and_then(|cell| cell.pion())
+        .is_some_and(|pion| {
+            game.active_effects()
+                .iter()
+                .any(|effect| effect.pion() == pion.id() && effect.framed_by().is_some())
+        })
+}
+
+/// Vrai si la reine de ce joueur peut encore agir, sans statut à durée sur le plateau : une
+/// case libre collée à elle, ou un garde et un ennemi non protégé comme premier pion d'une
+/// ligne droite.
 fn queen_can_act(game: &Game, player: Player) -> bool {
     let board = game.board();
     let Some(queen) = game.queen_of(player) else {
@@ -82,7 +100,7 @@ fn queen_can_act(game: &Game, player: Player) -> bool {
         let mut pos = queen;
         while let Some(next) = board.neighbor(pos, dir) {
             match board.owner(next) {
-                Some(owner) => return owner == player.opponent(),
+                Some(owner) => return owner == player.opponent() && !protected(game, next),
                 None => pos = next,
             }
         }
@@ -92,11 +110,17 @@ fn queen_can_act(game: &Game, player: Player) -> bool {
 }
 
 /// Vrai si l'attaque a une cible depuis un des pions du joueur, sur un plateau où aucun
-/// pion n'a de statut. Écrit sans réutiliser le moteur, d'après les fiches :
-/// - l'Ours (toutes raretés) vise un ennemi collé au lanceur ;
+/// pion n'a de statut à durée (seuls les enfants peuvent être protégés, et personne n'est
+/// immobilisé). Écrit sans réutiliser le moteur, d'après les fiches :
+/// - l'Ours vise un ennemi collé au lanceur, non protégé pour la Rare et l'Épique (elles
+///   tuent) ;
 /// - la Beauté fatale vise par le regard (2 cases en ligne droite, sans pion entre) :
 ///   1 ennemi pour la Commune, 2 pour la Rare ; l'Épique séduit dans le regard et la
-///   Légendaire n'importe où, s'il reste un pion en réserve ;
+///   Légendaire n'importe où, un ennemi non protégé, s'il reste un pion en réserve ;
+/// - la Familia part d'un lanceur qui n'est pas déjà enfant ; dans une ligne droite, de
+///   part et d'autre de lui : deux de tes pions (Commune), une case libre et un de tes pions
+///   (Rare, 1 pion en réserve), deux cases libres (Épique, 2 pions) ; la Légendaire (2 pions)
+///   demande un de tes pions collé, pas enfant, et une case libre à chaque bout ;
 /// - Meilleurs amis pose 2 pions de la réserve sur 2 cases libres ;
 /// - le Garde royal (Reine Commune) protège le lanceur : toujours possible ; les autres
 ///   Reines posent une reine, s'il reste un pion en réserve, une case libre, et pas de reine ;
@@ -109,7 +133,7 @@ fn queen_can_act(game: &Game, player: Player) -> bool {
 fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> bool {
     let board = game.board();
     let enemy = |pos: Position| board.owner(pos) == Some(player.opponent());
-    let in_sight = |launcher: Position| -> usize {
+    let in_sight = |launcher: Position, target: &dyn Fn(Position) -> bool| -> usize {
         Direction::ALL
             .iter()
             .filter_map(|&dir| {
@@ -119,16 +143,17 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
                 }
                 board.neighbor(first, dir)
             })
-            .filter(|&pos| enemy(pos))
+            .filter(|&pos| target(pos))
             .count()
     };
-    let adjacent = |launcher: Position| {
+    let killable = |pos: Position| enemy(pos) && !protected(game, pos);
+    let adjacent = |launcher: Position, target: &dyn Fn(Position) -> bool| {
         Direction::ALL
             .iter()
             .filter_map(|&dir| board.neighbor(launcher, dir))
-            .filter(|&pos| enemy(pos))
-            .count()
+            .any(target)
     };
+    let mine = |pos: Position| board.owner(pos) == Some(player);
     let free = |pos: Position| board.owner(pos).is_none();
     let free_two_away = |launcher: Position| {
         Direction::ALL.iter().any(|&dir| {
@@ -152,17 +177,48 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             .any(free)
     };
     let any_enemy = board.positions().any(enemy);
+    let any_killable = board.positions().any(killable);
     let reserve = game.reserve_pions(player);
     let free_cells = board.positions().filter(|&pos| free(pos)).count();
+    let familia = |launcher: Position, rarity: Rarity| {
+        let parents = match rarity {
+            Rarity::Common => 0,
+            Rarity::Rare => 1,
+            Rarity::Epic | Rarity::Legendary => 2,
+        };
+        !child(game, launcher)
+            && reserve >= parents
+            && Direction::ALL.iter().any(|&dir| {
+                let ahead = board.neighbor(launcher, dir);
+                let behind = board.neighbor(launcher, dir.opposite());
+                let (Some(ahead), Some(behind)) = (ahead, behind) else {
+                    return false;
+                };
+                match rarity {
+                    Rarity::Common => mine(ahead) && mine(behind),
+                    Rarity::Rare => free(ahead) && mine(behind),
+                    Rarity::Epic => free(ahead) && free(behind),
+                    Rarity::Legendary => {
+                        mine(ahead)
+                            && !child(game, ahead)
+                            && free(behind)
+                            && board.neighbor(ahead, dir).is_some_and(free)
+                    }
+                }
+            })
+    };
     board
         .positions()
         .filter(|&pos| board.owner(pos) == Some(player))
         .any(|launcher| match (attack.kind, attack.rarity) {
-            (AttackKind::Ours, _) => adjacent(launcher) >= 1,
-            (AttackKind::BeauteFatale, Rarity::Rare) => in_sight(launcher) >= 2,
-            (AttackKind::BeauteFatale, Rarity::Epic) => reserve > 0 && in_sight(launcher) >= 1,
-            (AttackKind::BeauteFatale, Rarity::Legendary) => reserve > 0 && any_enemy,
-            (AttackKind::BeauteFatale, _) => in_sight(launcher) >= 1,
+            (AttackKind::Ours, Rarity::Rare | Rarity::Epic) => adjacent(launcher, &killable),
+            (AttackKind::Ours, _) => adjacent(launcher, &enemy),
+            (AttackKind::BeauteFatale, Rarity::Rare) => in_sight(launcher, &enemy) >= 2,
+            (AttackKind::BeauteFatale, Rarity::Epic) => {
+                reserve > 0 && in_sight(launcher, &killable) >= 1
+            }
+            (AttackKind::BeauteFatale, Rarity::Legendary) => reserve > 0 && any_killable,
+            (AttackKind::BeauteFatale, _) => in_sight(launcher, &enemy) >= 1,
             (AttackKind::MeilleursAmis, _) => reserve >= 2 && free_cells >= 2,
             (AttackKind::Reine, Rarity::Common) => true,
             (AttackKind::Reine, _) => {
@@ -174,6 +230,7 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             (AttackKind::Interchange, Rarity::Rare) => enemy_in_line(launcher),
             (AttackKind::Interchange, _) => any_enemy,
             (AttackKind::Lievre, _) => free_neighbor(launcher),
+            (AttackKind::Familia, rarity) => familia(launcher, rarity),
         })
 }
 
@@ -181,7 +238,7 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
 fn both_reserves_empty_freezes_the_game_into_a_draw() {
     let config = GameConfig {
         pions_per_player: 1,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     let mut game = game_with(config);
 
@@ -202,7 +259,7 @@ fn full_board_freezes_the_game_into_a_draw() {
         board_size: 3,
         align_to_win: 3,
         pions_per_player: 5,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     let mut game = game_with(config);
 
@@ -225,7 +282,7 @@ fn full_board_freezes_the_game_into_a_draw() {
 fn turn_limit_reached_by_placing_ends_without_starting_a_new_turn() {
     let config = GameConfig {
         max_turns: 1,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     let mut game = game_with(config);
     // Le premier tour n'a qu'une action : la pose finit le tour, qui était le dernier.
@@ -270,7 +327,7 @@ fn alignment_wins_even_when_the_game_freezes_at_the_same_time() {
         board_size: 3,
         align_to_win: 2,
         pions_per_player: 2,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]);
@@ -291,7 +348,7 @@ fn alignment_wins_even_when_the_game_freezes_at_the_same_time() {
 fn turn_limit_ends_the_game_in_a_draw() {
     let config = GameConfig {
         max_turns: 3,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]); // fin du tour 1

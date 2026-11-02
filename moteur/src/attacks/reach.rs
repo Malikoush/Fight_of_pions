@@ -61,6 +61,20 @@ pub(crate) fn in_sight(
     })
 }
 
+/// Les deux cases collées à `at` de part et d'autre : dans cette direction, puis dans
+/// l'opposée. `None` si l'une sort du plateau. Partagé par la Familia et par la partie (un
+/// enfant encadré par sa famille).
+pub(crate) fn both_sides(
+    board: &Board,
+    at: Position,
+    dir: Direction,
+) -> Option<(Position, Position)> {
+    Some((
+        board.neighbor(at, dir)?,
+        board.neighbor(at, dir.opposite())?,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

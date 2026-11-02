@@ -1,6 +1,6 @@
 //! Le Médecin et les tombes (B5b, règles précisées le 2026-10-30 dans le carnet).
 //!
-//! Configuration par défaut, avec l'infirmerie et le mal du débarquement : J1 a 1 action à
+//! Premières règles, avec l'infirmerie et le mal du débarquement : J1 a 1 action à
 //! son premier tour, puis 2 par tour ; chacun garde jusqu'à 2 actions.
 
 mod common;

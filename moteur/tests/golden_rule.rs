@@ -14,7 +14,7 @@ fn golden(align_to_win: usize) -> GameConfig {
         board_size: 5,
         align_to_win,
         golden_rule: true,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     }
 }
 

@@ -50,7 +50,7 @@ fn at_start_every_cell_and_ending_the_turn_are_legal() {
 fn without_pions_only_ending_the_turn_is_legal() {
     let config = GameConfig {
         pions_per_player: 1,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]);
@@ -65,7 +65,7 @@ fn without_pions_only_ending_the_turn_is_legal() {
 fn without_enough_actions_only_ending_the_turn_is_legal() {
     let config = GameConfig {
         place_cost: 2,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     let game = game_with(config);
     // Premier tour : 1 action, la pose en coûte 2.

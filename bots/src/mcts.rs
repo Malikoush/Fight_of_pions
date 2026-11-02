@@ -348,11 +348,11 @@ fn shuffle<T>(items: &mut [T], rng: &mut Rng) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::target_rules;
+    use crate::current_rules;
 
     #[test]
     fn each_position_is_judged_by_the_player_who_chose_it() {
-        let mut game = Game::new(target_rules(), 0).unwrap();
+        let mut game = Game::new(current_rules(), 0).unwrap();
         game.apply(Action::EndTurn).unwrap(); // à J2 de choisir
         let windows = Windows::new(game.board(), game.config().align_to_win);
         let weights = Weights::DEFAULT;
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn every_card_gets_its_best_attack_into_the_tree_even_a_weak_one() {
-        let game = Game::new(target_rules(), 0).unwrap();
+        let game = Game::new(current_rules(), 0).unwrap();
         let attack = |slot: usize, value: f64| Move {
             first: Action::UseAttack(slot),
             mover: Player::One,

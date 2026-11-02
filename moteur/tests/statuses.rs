@@ -2,7 +2,7 @@
 //! immobilisé, protégé, la fin d'une durée, et les cartes de B3 qui les donnent ou les
 //! retirent (Ours Commune et Légendaire, Beauté fatale, Garde royal, Attila Commune).
 //!
-//! Configuration par défaut : J1 a 1 action à son premier tour, puis 2 par tour ; chacun
+//! Premières règles : J1 a 1 action à son premier tour, puis 2 par tour ; chacun
 //! garde jusqu'à 2 actions.
 
 mod common;

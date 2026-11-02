@@ -440,9 +440,11 @@ impl Game {
         true
     }
 
-    /// Ce qui suit toute action qui a modifié le plateau sans faire gagner : la partie peut
-    /// se figer, ou le tour se terminer quand il ne reste ni action, ni pose, ni pas de reine.
+    /// Ce qui suit toute action qui a modifié le plateau sans faire gagner : les enfants que
+    /// leur famille n'encadre plus perdent leur protection, puis la partie peut se figer, ou
+    /// le tour se terminer quand il ne reste ni action, ni pose, ni pas de reine.
     pub(super) fn after_action(&mut self, events: &mut Vec<Event>) {
+        self.end_unframed_children(events);
         if self.is_frozen() {
             self.stop_game(EndReason::Frozen, events);
         } else if self.actions_left == 0

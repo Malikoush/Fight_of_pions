@@ -65,8 +65,13 @@ impl Game {
     /// survivant prend fin, même si l'assassin est protégé ou déjà mort. Une vengeance est
     /// un kill comme un autre : elle peut déclencher la vengeance d'un autre pacte. La
     /// chaîne s'arrête, puisque chaque vengeance met fin à un pacte.
+    ///
+    /// Avant chaque vague de vengeances, les enfants que leur famille n'encadre plus perdent
+    /// leur protection (carnet, 2026-11-02) : un enfant sorti de sa famille par l'attaque
+    /// n'échappe pas à la vengeance.
     pub(super) fn avenge(&mut self, mut deaths: Vec<Death>, events: &mut Vec<Event>) {
         while !deaths.is_empty() {
+            self.end_unframed_children(events);
             let mut next = Vec::new();
             for death in &deaths {
                 // Un ami mort lui aussi (dans la même attaque) n'est plus sur le plateau :

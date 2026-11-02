@@ -137,7 +137,7 @@ fn refused_action_changes_nothing() {
 fn empty_reserve_forbids_placing() {
     let config = GameConfig {
         pions_per_player: 1,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]);
@@ -265,7 +265,7 @@ fn placing_costs_the_configured_number_of_actions() {
     let config = GameConfig {
         first_turn_actions: 3,
         place_cost: 2,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     let mut game = game_with(config);
     play(&mut game, &[place(0, 0)]);
@@ -283,7 +283,7 @@ fn placing_costs_the_configured_number_of_actions() {
 fn invalid_config_refuses_to_start() {
     let config = GameConfig {
         board_size: 27,
-        ..GameConfig::default()
+        ..GameConfig::first_rules()
     };
     assert!(matches!(
         Game::new(config, SEED),

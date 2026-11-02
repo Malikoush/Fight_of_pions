@@ -4,9 +4,10 @@
 //! effet, le propriétaire du pion pour l'infirmerie), le tour en cours ne compte jamais,
 //! et elle s'éteint à la fin de son dernier tour (carnet, 2026-10-30).
 
-use super::lasting::{ActiveEffect, EffectKind, Patient, pion_has};
+use super::lasting::{ActiveEffect, EffectId, EffectKind, Patient, pion_has};
 use super::state::Game;
-use crate::{Attack, Cell, Event, Pion, PionId, Player, Position};
+use crate::attacks::both_sides;
+use crate::{Attack, Cell, Direction, Event, Pion, PionId, Player, Position};
 
 impl Game {
     /// Les effets continus en jeu, dans l'ordre de leur création. Chaque changement est
@@ -62,7 +63,7 @@ impl Game {
             return;
         };
         let last_turn = self.last_turn_of(self.current_player.opponent(), turns);
-        self.add_effect(pion.id(), kind, source, Some(last_turn), events);
+        self.add_effect(pion.id(), kind, source, Some(last_turn), None, events);
     }
 
     /// Lie les pions de ces deux cases par un pacte (Meilleurs amis) : chacun porte le sien,
@@ -84,8 +85,8 @@ impl Game {
         let pact = |friend: Pion| EffectKind::Pact {
             friend: friend.id(),
         };
-        self.add_effect(first.id(), pact(second), source, None, events);
-        self.add_effect(second.id(), pact(first), source, None, events);
+        self.add_effect(first.id(), pact(second), source, None, None, events);
+        self.add_effect(second.id(), pact(first), source, None, None, events);
     }
 
     /// Couronne le pion de cette case (il devient une reine) et lui donne ces gardes, sans
@@ -100,10 +101,75 @@ impl Game {
         let Some(queen) = self.board.get(at).and_then(Cell::pion) else {
             return;
         };
-        self.add_effect(queen.id(), EffectKind::Crown, source, None, events);
+        self.add_effect(queen.id(), EffectKind::Crown, source, None, None, events);
         for _ in 0..guards {
-            self.add_effect(queen.id(), EffectKind::Guard, source, None, events);
+            self.add_effect(queen.id(), EffectKind::Guard, source, None, None, events);
         }
+    }
+
+    /// Le pion de `at` devient un enfant (Familia), encadré par les pions de `framed_by` :
+    /// il est protégé, sans durée, tant qu'ils l'encadrent (voir
+    /// [`Game::end_unframed_children`]).
+    pub(super) fn make_child(
+        &mut self,
+        at: Position,
+        framed_by: [Position; 2],
+        source: Attack,
+        events: &mut Vec<Event>,
+    ) {
+        let pion_at = |pos: Position| self.board.get(pos).and_then(Cell::pion).map(Pion::id);
+        let (Some(child), Some(first), Some(second)) =
+            (pion_at(at), pion_at(framed_by[0]), pion_at(framed_by[1]))
+        else {
+            return;
+        };
+        let framed_by = Some([first, second]);
+        self.add_effect(
+            child,
+            EffectKind::Protected,
+            source,
+            None,
+            framed_by,
+            events,
+        );
+    }
+
+    /// La protection d'un enfant tombe pour de bon dès que les deux membres de sa famille ne
+    /// l'encadrent plus de part et d'autre, en ligne droite : l'un d'eux est tué, déplacé,
+    /// échangé, ou l'enfant lui-même a bougé (carnet, 2026-11-02). Vérifié après chaque
+    /// action.
+    pub(super) fn end_unframed_children(&mut self, events: &mut Vec<Event>) {
+        let broken: Vec<EffectId> = self
+            .effects
+            .iter()
+            .filter(|effect| {
+                effect.framed_by().is_some_and(|framed_by| {
+                    !self.is_framed(effect.pion(), framed_by, effect.creator())
+                })
+            })
+            .map(|effect| effect.id())
+            .collect();
+        if !broken.is_empty() {
+            self.end_effects(|effect| broken.contains(&effect.id()), events);
+        }
+    }
+
+    /// Vrai si les pions de `framed_by`, à ce joueur comme `child`, l'encadrent de part et
+    /// d'autre en ligne droite.
+    fn is_framed(&self, child: PionId, framed_by: [PionId; 2], owner: Player) -> bool {
+        let ours = |pion: PionId| {
+            self.board
+                .position_of(pion)
+                .filter(|&pos| self.board.owner(pos) == Some(owner))
+        };
+        let (Some(at), Some(first), Some(second)) =
+            (ours(child), ours(framed_by[0]), ours(framed_by[1]))
+        else {
+            return false;
+        };
+        Direction::ALL
+            .iter()
+            .any(|&dir| both_sides(&self.board, at, dir) == Some((first, second)))
     }
 
     /// Le nombre de gardes de ce pion.
@@ -135,6 +201,7 @@ impl Game {
         kind: EffectKind,
         source: Attack,
         last_turn: Option<u32>,
+        framed_by: Option<[PionId; 2]>,
         events: &mut Vec<Event>,
     ) {
         let effect = ActiveEffect::new(
@@ -144,6 +211,7 @@ impl Game {
             self.current_player,
             source,
             last_turn,
+            framed_by,
         );
         self.next_effect_id = self.next_effect_id.next();
         self.effects.push(effect);

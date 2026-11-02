@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
-use crate::game::{has_effect_of, pion_has};
-use crate::{ActiveEffect, Board, EffectKind, Pion, PionId, Player, Position, Rarity};
+use crate::game::{has_effect_of, is_child, pion_has};
+use crate::{ActiveEffect, Board, Cell, EffectKind, Pion, PionId, Player, Position, Rarity};
 
 use super::Effect;
 
@@ -71,6 +71,14 @@ impl AttackContext<'_> {
     /// (carnet, 2026-10-30 : un kill ne vise jamais un pion qu'il ne tuerait pas).
     pub fn can_kill(&self, pos: Position) -> bool {
         self.is_enemy(pos) && !self.has(pos, EffectKind::Protected)
+    }
+
+    /// Vrai si le pion de cette case est un enfant (Familia).
+    pub fn is_child(&self, pos: Position) -> bool {
+        self.board
+            .get(pos)
+            .and_then(Cell::pion)
+            .is_some_and(|pion| is_child(self.effects, pion.id()))
     }
 
     /// Vrai si ce pion peut agir comme lanceur : à toi, et prêt au moment voulu.

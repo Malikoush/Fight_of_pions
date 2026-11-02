@@ -1,7 +1,7 @@
 //! Invoquer (B5a, règles précisées le 2026-10-30 dans le carnet) : la séduction (Beauté
 //! fatale Épique et Légendaire), Meilleurs amis, le pacte et la vengeance.
 //!
-//! Configuration par défaut : J1 a 1 action à son premier tour, puis 2 par tour ; chacun
+//! Premières règles : J1 a 1 action à son premier tour, puis 2 par tour ; chacun
 //! garde jusqu'à 2 actions.
 
 mod common;

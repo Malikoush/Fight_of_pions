@@ -26,16 +26,29 @@ Une partie refuse de démarrer si ses réglages sont incohérents :
 
 Une configuration où la victoire semble impossible (moins de pions que l'alignement demandé) est **acceptée** : elle sert aux tests, et les invocations ne la rendent pas jouable (2026-10-30 : un pion invoqué vient de la réserve).
 
-### Tour de jeu (2026-10-26)
+### Tour de jeu (2026-11-02)
 
-- Le joueur 1 commence avec `first_turn_actions` action (1 par défaut). Tous les autres tours, y compris le premier du joueur 2, donnent `actions_per_turn` actions (2 par défaut).
-- Poser un pion coûte `place_cost` actions (1 par défaut). Finir son tour est gratuit.
+Depuis le 2026-11-02, les règles cibles (décidées le 2026-10-28, voir plus bas) sont les **règles actuelles** : c'est la configuration par défaut du moteur (`GameConfig::default()`), du labo et du terminal.
+
+- **Pose** : au plus 1 par tour (`max_placements_per_turn`), facultative et gratuite (`place_cost` = 0) ; elle ne s'accumule pas.
+- **Points d'action** : 1 par tour (`actions_per_turn`), y compris le tout premier (`first_turn_actions`) ; jusqu'à 3 gardés d'un tour à l'autre (`max_banked_actions`), donc jusqu'à 4 dans un tour. Ils servent aux cartes. Finir son tour est gratuit.
+- **La Pièce** : J2 commence avec 1 point en banque (`starting_banked_actions`).
+- **Mal du débarquement** (`summoning_sickness`), **règle d'or** (`golden_rule`) et **infirmerie de 2 tours** (`infirmary_turns`) : activés.
+- Le tour se termine automatiquement quand il ne reste ni action, ni pose, ni pas de reine.
+
+### Premières règles (2026-10-26, remplacées le 2026-11-02)
+
+Gardées au cas où, sous le nom `GameConfig::first_rules()` (variante « premières règles » du labo). Les tests de règles du moteur et du labo partent de cette configuration, car leurs scénarios comptent ses actions.
+
+- Le joueur 1 commence avec `first_turn_actions` action (1). Tous les autres tours, y compris le premier du joueur 2, donnent `actions_per_turn` actions (2).
+- Poser un pion coûte `place_cost` actions (1), sans limite de poses par tour : les actions sont partagées entre poser et attaquer.
 - Le tour se termine automatiquement quand il ne reste plus d'action, ni de pose possible (2026-10-28, voir « Économie réglable »).
-- En finissant son tour, on garde jusqu'à `max_banked_actions` actions non utilisées (2 par défaut). Elles s'ajoutent au tour suivant, soit jusqu'à 4 actions.
+- En finissant son tour, on garde jusqu'à `max_banked_actions` actions non utilisées (2). Elles s'ajoutent au tour suivant, soit jusqu'à 4 actions.
+- Ni banque de départ, ni mal du débarquement, ni règle d'or, ni infirmerie.
 
 ### Économie réglable (2026-10-28)
 
-Quatre réglages permettent de jouer les règles cibles (voir plus bas). Par défaut, ils ne changent rien aux règles ci-dessus.
+Ces réglages ont permis de coder les règles cibles à côté des premières règles. Les valeurs entre parenthèses sont celles des premières règles ; les règles actuelles sont données plus haut.
 
 - **Poses par tour** (`max_placements_per_turn`, sans limite par défaut) : on pose au plus ce nombre de pions dans un tour ; les poses non faites ne s'accumulent pas. Une pose de trop est refusée (« plus aucune pose permise ce tour »).
 - **Pose gratuite** : `place_cost` peut valoir 0, seulement si les poses sont limitées par tour (sinon toute la réserve partirait en un tour). Une pose gratuite ne change pas les compteurs d'actions.
@@ -87,7 +100,7 @@ Les règles communes des attaques décidées le 2026-10-30 (voir « Règles comm
 
 ### Infirmerie (2026-10-30)
 
-- Un pion tué passe `infirmary_turns` tours à l'infirmerie (2 dans les règles cibles, 0 par défaut : retour immédiat dans la réserve, comme avant). La durée suit la même horloge que les effets, mais se compte toujours en tours du **propriétaire** du pion (décidé le 2026-10-30), même tué pendant son propre tour (une vengeance, codé en B5a) : le tour en cours ne compte pas. Il revient dans la réserve de son propriétaire à la fin du dernier de ces tours, et peut être reposé au tour suivant.
+- Un pion tué passe `infirmary_turns` tours à l'infirmerie (2 dans les règles actuelles ; 0 dans les premières règles : retour immédiat dans la réserve). La durée suit la même horloge que les effets, mais se compte toujours en tours du **propriétaire** du pion (décidé le 2026-10-30), même tué pendant son propre tour (une vengeance, codé en B5a) : le tour en cours ne compte pas. Il revient dans la réserve de son propriétaire à la fin du dernier de ces tours, et peut être reposé au tour suivant.
 - L'infirmerie n'est pas un effet continu : aucune carte ne l'annule.
 
 ### Ours (2026-10-27, complété le 2026-10-30)
@@ -180,7 +193,7 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
   - **Épique** : 1 pion, même sur une tombe occupée par un pion adverse, qui est tué (un kill, dont l'assassin est le lanceur du Médecin) ; le pion revenu est protégé 2 tours.
   - **Légendaire** : tous tes pions qui peuvent revenir, même sur des tombes occupées par un pion adverse ; il en faut au moins un. Pas de choix.
   - Une tombe occupée par ton propre pion, ou par un pion adverse protégé, ne permet pas de revenir : l'Épique ne peut pas la viser, la Légendaire saute ce pion.
-- Le Médecin ne sert qu'avec l'infirmerie (règles cibles).
+- Le Médecin ne sert qu'avec l'infirmerie (règles actuelles).
 
 ### Meilleurs amis (2026-10-30)
 
@@ -190,12 +203,25 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
 - Une vengeance est un kill : si l'assassin était lui-même lié par un pacte, son ami le venge à son tour. La chaîne s'arrête, puisque chaque vengeance met fin à un pacte.
 - Le pacte est un effet continu sans durée : il ne compte pas comme « programmé » pour la partie figée. Attila Commune ne le retire pas (ce n'est pas un statut).
 
+### Familia (2026-11-02)
+
+- **Enfant** : un de tes pions, encadré de part et d'autre, en ligne droite (8 directions), par deux membres de sa famille. Il est **protégé** comme avec le Garde royal (jamais choisi pour un kill, il survit au survol ; il peut encore être immobilisé, déplacé ou échangé), sans durée, tant que les **deux mêmes membres** l'encadrent. Attila Commune lui retire cette protection (c'est un statut).
+- La protection tombe **pour de bon** dès que ces deux pions ne l'encadrent plus : l'un d'eux est tué, déplacé ou échangé, ou l'enfant lui-même a bougé. Si les pions se remettent en place, l'enfant n'est pas protégé à nouveau. La vérification se fait à la fin des effets d'une attaque, **avant les vengeances** (puis avant chaque vague de vengeances), et à la fin de chaque action (attaque, pas ou tir de la reine). Pendant l'attaque elle-même, la protection est lue au début : un loup qui survole un parent puis l'enfant ne tue pas l'enfant (questions B5d).
+- **Le lanceur est l'enfant** : posé avant ce tour, non immobilisé. Un enfant ne le redevient pas tant qu'il l'est, même dans une autre ligne ; il peut servir de parent à une autre famille. Une fois sa protection tombée (ou retirée par Attila), il peut redevenir enfant.
+- **Commune** : le lanceur, déjà encadré par deux de tes pions (n'importe lesquels, même posés ce tour ou immobilisés), devient enfant. Le joueur choisit la ligne en cliquant un des deux pions qui encadrent.
+- **Rare** : le joueur choisit une case libre collée au lanceur, dont la case opposée porte un de tes pions. Un parent y est posé ; le lanceur devient enfant de ces deux pions.
+- **Épique** : le joueur choisit une case libre collée au lanceur, dont la case opposée est libre aussi. Deux parents y sont posés ; le lanceur devient enfant.
+- **Légendaire** : le joueur choisit le second enfant, un de tes pions collé au lanceur, qui doit pouvoir agir aussi (posé avant ce tour, non immobilisé) et ne pas être déjà enfant. Les deux parents se posent tout seuls aux deux bouts, qui doivent être libres. Chaque enfant est encadré par un parent et par son frère : tuer un parent ne fait tomber que la protection de l'enfant voisin.
+- Les parents viennent de la réserve et comptent comme posés ce tour, sans utiliser la pose normale. La carte pose ses parents ou rien : la Rare demande 1 pion en réserve, l'Épique et la Légendaire 2.
+- Une famille ne programme rien : la protection d'un enfant ne compte pas pour la partie figée.
+- Attila Rare et Épique (annuler tous les enfants d'une Familia, qui forment un seul effet) viendront avec B6.
+
 ### Fin de partie (2026-10-26)
 
 Une partie se termine dans l'un de ces trois cas, vérifiés dans cet ordre :
 
 1. **Alignement** : une ligne d'au moins `align_to_win` pions fait gagner son propriétaire :
-   - sans la règle d'or (par défaut), dès qu'elle est faite en posant ;
+   - sans la règle d'or (premières règles), dès qu'elle est faite en posant ;
    - **au début de son tour**, si elle y est encore, dans tous les cas (2026-10-29). C'est ce qui fait gagner avec la règle d'or (`golden_rule`), et ce qui couvre les lignes faites par une carte, y compris une carte de l'adversaire. Ce contrôle passe avant le gain des actions et les recharges : le joueur qui gagne ainsi ne reçoit pas ses actions.
 2. **Partie figée** : plus aucun joueur ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation : aucun effet continu à durée (un pacte, sans durée, ne compte pas), personne à l'infirmerie (2026-10-30). Elle est vérifiée après chaque action, et à la fin d'un tour où un effet s'est arrêté ou un pion est sorti de l'infirmerie. Un joueur peut encore agir s'il peut poser (un pion en réserve et une case libre) ou lancer une attaque qui a une cible, même si elle est en recharge ou qu'il doit économiser pour la payer (2026-10-27). Résultat : **match nul**.
    Une réserve vide ne fige donc plus la partie tant qu'un contact entre ennemis permet d'attaquer. Le risque principal devient la partie sans fin, traité par la limite de tours et l'anti-stagnation.
@@ -212,17 +238,17 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 - Le draft et la cache secrète.
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
 
-### Règles cibles (décidées le 2026-10-28, codées en option sauf le départage)
+### Règles cibles (décidées le 2026-10-28, par défaut depuis le 2026-11-02)
 
-Codées avec les réglages ci-dessus (variante « règles cibles », `bots::target_rules()`) : 1 pose gratuite par tour, 1 action par tour, 3 actions gardées au plus, la Pièce, le mal du débarquement, la règle d'or (`golden_rule`, 2026-10-29) et l'infirmerie de 2 tours (`infirmary_turns`, 2026-10-30). Reste à coder : la défaite par manque de pions (B6, avec le cimetière) et le départage, en attente.
+Codées avec les réglages ci-dessus : 1 pose gratuite par tour, 1 action par tour, 3 actions gardées au plus, la Pièce, le mal du débarquement, la règle d'or (`golden_rule`, 2026-10-29) et l'infirmerie de 2 tours (`infirmary_turns`, 2026-10-30). Ce sont les règles actuelles depuis le 2026-11-02 (voir « Tour de jeu »). Reste à coder : la défaite par manque de pions (B6, avec le cimetière) et le départage, en attente.
 
-Elles remplaceront le tour de jeu actuel (actions partagées entre poser et attaquer). Comparée à une économie « à la pioche » (pions sacrifiés en points d'action, pions tués recrutés, fatigue), écartée : le jeu n'est pas un Connect6, ce sont les cartes (attaque, mouvement, invocation, pose…) qui font avancer le plateau.
+Elles remplacent les premières règles (actions partagées entre poser et attaquer). Comparée à une économie « à la pioche » (pions sacrifiés en points d'action, pions tués recrutés, fatigue), écartée : le jeu n'est pas un Connect6, ce sont les cartes (attaque, mouvement, invocation, pose…) qui font avancer le plateau.
 
 - **Pose** : au plus 1 par tour, facultative ; elle ne s'accumule pas et ne coûte aucun point d'action.
 - **Points d'action** : 1 par tour, gardés en banque jusqu'à 3 ; le surplus est perdu. Ils servent aux cartes. La banque est visible.
 - **Attaques** : ~~le lanceur doit être au contact de sa cible (les 8 cases autour)~~ ; depuis le 2026-10-30, chaque carte dit sa portée, sans portée par défaut. Les cartes gardent leur recharge. L'Ours Rare reste à 2 points au moins : à 1, chaque joueur pourrait annuler la pose adverse à chaque tour (le pion tué revient à son propriétaire, qui le repose).
 - **Mal du débarquement** : un pion **posé ou invoqué** ce tour ne peut pas lancer d'attaque. Un pion déplacé garde son ancienneté. ~~Les futures cartes avec le mot-clé « Charge » ignoreront cette règle.~~ Le mot-clé « Charge » n'existe plus dans les fiches du 2026-10-29 (question ouverte plus bas).
-- **Pion tué** : ~~il retourne dans la réserve de son propriétaire~~. Depuis les fiches du 2026-10-29 : il passe **2 tours à l'infirmerie**, puis retourne dans la réserve de son propriétaire (pas de vol de pion). L'infirmerie suit l'horloge des durées (voir « Règles communes des attaques »). Codé en B3 (`infirmary_turns` = 2 dans la variante « règles cibles »).
+- **Pion tué** : ~~il retourne dans la réserve de son propriétaire~~. Depuis les fiches du 2026-10-29 : il passe **2 tours à l'infirmerie**, puis retourne dans la réserve de son propriétaire (pas de vol de pion). L'infirmerie suit l'horloge des durées (voir « Règles communes des attaques »). Codé en B3 (`infirmary_turns` = 2 dans les règles actuelles).
 - **Défaite par manque de pions** (fiches du 2026-10-29) : un joueur qui a moins de `align_to_win` pions au total (plateau, réserve et infirmerie) ne peut plus aligner, donc il a perdu. Seul le cimetière (Massacre divin) fait baisser ce total.
 - **Règle d'or** : une ligne de 6 ou plus, faite par une pose ou par une carte, ne gagne pas tout de suite. **Si, au début de ton tour, tu as une ligne de 6 ou plus, tu gagnes** : l'adversaire a eu un tour complet pour la casser. N'importe quelle ligne compte, pas seulement celle d'origine.
 - **Début de tour**, dans cet ordre : 1) la règle d'or, 2) le gain du point d'action, 3) les recharges.
@@ -305,6 +331,15 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B5c | Combien de tirs de garde par tour ? | Un au plus | **2026-10-31** : un tir par tour au plus, comme une carte. Il coûte 1 point (réglable), demande un garde, et tue le premier pion rencontré en ligne droite (8 directions, portée illimitée), seulement s'il est adverse et non protégé. Impossible si la reine a été posée ce tour ou est immobilisée (le tir est une attaque). C'est un kill, dont l'assassin est la reine. |
 | B5c | Saut du loup sur une reine gardée : le garde la sauve, elle reste sur sa case. Le loup peut-il la survoler une seconde fois pendant ses sauts enchaînés ? (Aujourd'hui, le chemin rejoué la traite comme morte ; sans conséquence, car un loup ne peut jamais repasser au-dessus d'une case qu'il a survolée.) | Non, comme tout pion : jamais deux fois le même pion | |
 | B5c | Plusieurs reines en même temps ? | Une seule à la fois | **2026-10-31** : une seule reine à la fois par joueur ; la Reine Rare, Épique ou Légendaire n'est pas jouable tant que ta reine est en vie. |
+| B5d | Familia : « en ligne droite », quelles directions ? | Les 8 directions (4 lignes), comme l'alignement | **2026-11-02** : oui. |
+| B5d | Familia Commune : qui choisit la ligne, quand le lanceur est encadré dans plusieurs ? Les pions qui encadrent doivent-ils pouvoir agir ? | Le joueur, par un des deux pions qui encadrent ; n'importe lesquels de tes pions | **2026-11-02** : oui. |
+| B5d | Un enfant peut-il le redevenir dans une autre ligne ? | Non : une seule famille à la fois ; il peut servir de parent | **2026-11-02** : oui. |
+| B5d | La protection tombée revient-elle si la famille se reforme ? | Non : elle tombe pour de bon | **2026-11-02** : oui. |
+| B5d | Familia Épique (ou Légendaire) avec un seul pion en réserve ? | Impossible : la carte pose ses parents ou rien | **2026-11-02** : oui. La Rare demande 1 pion. |
+| B5d | Familia Légendaire : comment se joue-t-elle ? | Lanceur, puis second enfant collé ; parents posés tout seuls aux deux bouts libres ; les deux enfants sont des lanceurs | **2026-11-02** : oui. |
+| B5d | Familia Rare : comment se choisit le parent ? | Sa case libre, collée au lanceur, en face d'un de tes pions, qui entre dans la famille | **2026-11-02** : oui. |
+| B5d | Pendant une même attaque, un enfant dont un parent vient d'être tué (par exemple, un Saut du loup Épique qui survole le parent puis l'enfant) est-il encore protégé ? | Oui : une attaque est calculée sur la situation du début ; la famille se défait à la fin des effets de l'attaque. Codé ainsi, en attendant la réponse. | |
+| B5d | Un enfant qui sort de sa famille pendant son attaque (un saut du loup) et tue un ami d'un pacte : est-il encore protégé quand l'autre ami le venge ? | Non : les familles se défont à la fin des effets de l'attaque, avant les vengeances. Codé ainsi, en attendant la réponse. | |
 | B6 | Le retour d'Interchange Commune est-il un effet continu (Attila peut l'annuler) ? La fiche dit « elle ne peut pas faire gagner », or le retour peut compléter une ligne de 5 avant la vérification. | Oui, c'est un effet continu ; le retour qui complète une ligne gagne (l'adversaire a eu un tour pour casser les 5 autres pions) : corriger la phrase de la fiche | |
 | B6 | Terre brûlée : « les cartes adverses s'appliquent sans leur partie continue » rend Interchange Commune plus forte (téléportation sans retour) | « Pendant Terre brûlée, l'adversaire ne peut jouer aucune carte qui crée un effet continu » | |
 | B6 | Garder le mot-clé Inébranlable, qui ne sert qu'à une carte ? | Le retirer (principe de simplicité) | |
