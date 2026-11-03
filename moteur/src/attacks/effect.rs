@@ -149,6 +149,28 @@ impl Effect {
         }
     }
 
+    /// La case où cet effet fait arriver un pion, s'il en fait arriver un : déplacer,
+    /// poser, ressusciter. Sans joker : chaque nouvelle primitive doit trancher.
+    pub(crate) fn arrival(self) -> Option<Position> {
+        match self {
+            Effect::Move { to, .. } => Some(to),
+            Effect::Place { at } | Effect::Resurrect { at, .. } => Some(at),
+            Effect::Kill { .. }
+            | Effect::Apply { .. }
+            | Effect::Attach { .. }
+            | Effect::RemoveEnemyStatuses { .. }
+            | Effect::CancelEnemyEffects { .. }
+            | Effect::ScorchEarth
+            | Effect::CancelEnemyTokens
+            | Effect::AddTokens { .. }
+            | Effect::Crown { .. }
+            | Effect::MakeChild { .. }
+            | Effect::Bind { .. }
+            | Effect::Dig { .. }
+            | Effect::Swap { .. } => None,
+        }
+    }
+
     /// La case du seul pion que vise cet effet, s'il n'en vise qu'un : si une attaque y a
     /// été annulée par un garde, elle ne lui fait plus rien d'autre. `None` pour les effets
     /// qui touchent plusieurs cases (déplacer, échanger, lier), aucun pion (creuser) ou

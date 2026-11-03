@@ -1,4 +1,4 @@
-//! La vue joueur (`Game::view`, `Event::is_visible_to`) : tout ce qu'un client affiche, et
+//! La vue joueur (`Game::view`, `Event::seen_by`) : tout ce qu'un client affiche, et
 //! jamais la cache adverse pas encore jouée.
 
 mod common;
@@ -43,6 +43,7 @@ fn assert_faithful(game: &Game, view: &PlayerView) {
         Vec::new()
     };
     assert_eq!(view.legal_actions, expected_legal);
+    assert_eq!(view.draft_pool, game.visible_draft_pool());
     let board = game.board();
     for row in 0..board.size() {
         for col in 0..board.size() {
@@ -92,7 +93,7 @@ fn only_the_player_who_decides_gets_the_legal_actions() {
 }
 
 #[test]
-fn the_opponent_cache_choice_is_not_shown_in_the_events() {
+fn the_opponent_cache_choice_is_masked_in_the_events() {
     let config = GameConfig {
         draft: Some(DraftRules::new(1, 0, 0, 0)),
         ..GameConfig::default()
@@ -104,13 +105,19 @@ fn the_opponent_cache_choice_is_not_shown_in_the_events() {
         attack: hare(),
     };
     assert_eq!(events, [cached]);
-    assert!(cached.is_visible_to(Player::One));
-    assert!(!cached.is_visible_to(Player::Two));
+    assert_eq!(cached.seen_by(Player::One), cached);
+    // J2 apprend qu'une carte est en cache, pas laquelle : ses emplacements restent justes.
+    assert_eq!(
+        cached.seen_by(Player::Two),
+        Event::CardCached {
+            player: Player::One
+        }
+    );
     let picked = Event::Drafted {
         step: DraftStep::Pick(Player::One),
         attack: hare(),
     };
-    assert!(picked.is_visible_to(Player::Two));
+    assert_eq!(picked.seen_by(Player::Two), picked);
 }
 
 #[test]

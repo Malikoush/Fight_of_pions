@@ -3,7 +3,7 @@ use crate::{Attack, DraftStep, Player, Position};
 /// La décision que le moteur attend, et de quel joueur.
 ///
 /// Les actions acceptées pour cette décision sont données par
-/// [`crate::Game::legal_actions`]. D'autres décisions s'ajouteront avec le draft.
+/// [`crate::Game::legal_actions`].
 ///
 /// Pendant le tour adverse, juste après un déclencheur, c'est l'autre joueur qui décide :
 /// il réagit ([`Decision::React`]), puis choisit le lanceur et les cibles de sa réaction.

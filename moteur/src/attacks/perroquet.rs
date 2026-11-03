@@ -17,6 +17,11 @@ use super::Effect;
 use super::rules::{AttackContext, AttackRules, Trigger};
 use crate::{Position, Rarity};
 
+/// Le coût le plus haut d'une attaque que la Commune rejoue.
+const COMMON_COST_LIMIT: u32 = 1;
+/// Le coût le plus haut d'une attaque que la Rare rejoue.
+const RARE_COST_LIMIT: u32 = 2;
+
 pub(crate) struct Perroquet;
 
 impl AttackRules for Perroquet {
@@ -29,7 +34,11 @@ impl AttackRules for Perroquet {
     }
 
     fn attack_cost_limit(&self, rarity: Rarity) -> Option<u32> {
-        Some(if rarity == Rarity::Rare { 2 } else { 1 })
+        Some(if rarity == Rarity::Rare {
+            RARE_COST_LIMIT
+        } else {
+            COMMON_COST_LIMIT
+        })
     }
 
     // Jamais appelées : c'est l'attaque copiée qui se joue.

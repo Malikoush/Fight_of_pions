@@ -24,6 +24,7 @@ mod rules;
 mod saut_du_loup;
 mod sentinelle;
 
+pub(crate) use attila::SCORCHED_TURNS;
 pub use card::{Attack, AttackKind, AttackStats, CatalogEntry, Rarity};
 pub(crate) use effect::Effect;
 pub(crate) use lievre::HARE_TOKEN_STEPS;

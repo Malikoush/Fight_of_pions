@@ -18,10 +18,24 @@ use crate::{Position, Rarity};
 
 pub(crate) struct Hibou;
 
+/// Les pions qui avancent avec la Commune.
+const COMMON_PIONS: usize = 1;
+/// Les pions qui avancent avec la Rare.
+const RARE_PIONS: usize = 2;
+/// Les pas de chaque pion.
+const STEPS: usize = 1;
+
 /// Combien de pions avancent, d'un pas chacun.
 fn limits(rarity: Rarity) -> Steps {
-    let pions = if rarity == Rarity::Rare { 2 } else { 1 };
-    Steps { pions, steps: 1 }
+    let pions = if rarity == Rarity::Rare {
+        RARE_PIONS
+    } else {
+        COMMON_PIONS
+    };
+    Steps {
+        pions,
+        steps: STEPS,
+    }
 }
 
 impl AttackRules for Hibou {

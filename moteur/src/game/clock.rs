@@ -41,7 +41,7 @@ impl Game {
 
     /// Le dernier tour d'une durée de `turns` tours (au moins 1) comptée en tours de
     /// `counted_on`, à partir de son prochain tour : le tour en cours ne compte jamais.
-    fn last_turn_of(&self, counted_on: Player, turns: u32) -> u32 {
+    pub(super) fn last_turn_of(&self, counted_on: Player, turns: u32) -> u32 {
         let first = if counted_on == self.current_player {
             2
         } else {

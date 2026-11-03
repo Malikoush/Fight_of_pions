@@ -1,10 +1,12 @@
 //! La vue joueur : ce qu'un joueur voit de la partie. C'est tout ce qu'un client (Godot,
 //! le serveur pour chaque joueur) doit afficher, sans connaître aucune règle — la décision
 //! attendue et les coups permis sont donnés —, et rien de ce que ce joueur ne doit pas
-//! savoir : la cache adverse pas encore jouée.
+//! savoir : la cache adverse pas encore lancée, les cartes tirées pendant le choix des
+//! caches.
 //!
-//! Ce qui est secret n'est décidé qu'à deux endroits, qui se suivent :
-//! [`Game::arsenal_seen_by`] pour l'état, [`Event::is_visible_to`] pour les événements.
+//! Ce qui est secret n'est décidé qu'à trois endroits :
+//! [`Game::arsenal_seen_by`] et [`Game::visible_draft_pool`] pour l'état, [`Event::seen_by`] pour
+//! les événements.
 //! Ajouter une information visible, c'est ajouter un champ ici, lu sur la partie.
 
 use super::state::Game;
@@ -42,7 +44,8 @@ pub struct PlayerView {
     pub infirmary: Vec<Patient>,
     /// Les pions au cimetière, dans l'ordre d'arrivée.
     pub graveyard: Vec<Pion>,
-    /// Les cartes tirées du draft qui restent ; vide hors du draft.
+    /// Les cartes tirées du draft qui restent, quand on peut les voir (voir
+    /// [`Game::visible_draft_pool`]) ; vide hors du draft.
     pub draft_pool: Vec<Attack>,
     /// La fin de la partie, si elle est finie.
     pub end: Option<GameEnd>,
@@ -115,7 +118,7 @@ impl Game {
             token_piles: self.token_piles().to_vec(),
             infirmary: self.infirmary().to_vec(),
             graveyard: self.graveyard().to_vec(),
-            draft_pool: self.draft_pool().to_vec(),
+            draft_pool: self.visible_draft_pool().to_vec(),
             end: self.end,
         }
     }
@@ -148,9 +151,17 @@ impl Game {
 }
 
 impl Event {
-    /// Vrai si `viewer` peut voir cet événement : tous, sauf la carte que l'adversaire met
-    /// dans sa cache (elle se révèle par [`Event::CardRevealed`] quand il la joue).
-    pub fn is_visible_to(&self, viewer: Player) -> bool {
-        !matches!(self, Event::Drafted { step: DraftStep::Cache(owner), .. } if *owner != viewer)
+    /// Cet événement tel que `viewer` le voit : tel quel, sauf la carte que l'adversaire met
+    /// dans sa cache, masquée en [`Event::CardCached`] (elle se révèle par
+    /// [`Event::CardRevealed`] quand il la lance). Rien n'est retiré : un client qui suit
+    /// ses seuls événements reste à jour, emplacements compris.
+    pub fn seen_by(self, viewer: Player) -> Event {
+        match self {
+            Event::Drafted {
+                step: DraftStep::Cache(owner),
+                ..
+            } if owner != viewer => Event::CardCached { player: owner },
+            event => event,
+        }
     }
 }

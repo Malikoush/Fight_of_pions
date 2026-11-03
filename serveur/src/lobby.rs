@@ -92,11 +92,7 @@ impl Table {
         let Some(outbox) = &self.outboxes[player.index()] else {
             return;
         };
-        let events = events
-            .iter()
-            .filter(|event| event.is_visible_to(player))
-            .copied()
-            .collect();
+        let events = events.iter().map(|event| event.seen_by(player)).collect();
         // Un client parti entre-temps : rien à faire, sa connexion se ferme.
         let _ = outbox.send(ServerMessage::State {
             view: Box::new(self.room.view(player)),

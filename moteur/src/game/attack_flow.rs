@@ -34,6 +34,13 @@ pub(super) struct Resolution {
     effects: Vec<Effect>,
 }
 
+impl Resolution {
+    /// Les cases où ses effets font arriver un pion.
+    pub(super) fn arrivals(&self) -> impl Iterator<Item = Position> + '_ {
+        self.effects.iter().filter_map(|effect| effect.arrival())
+    }
+}
+
 /// Ce qu'a donné un effet, pour la suite de l'attaque.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Applied {
@@ -208,9 +215,12 @@ impl Game {
             .is_some_and(|pion| can_act(pion, player, when, &self.effects, self.sick_from()))
     }
 
-    pub(super) fn start_attack(&mut self, slot: usize) {
+    /// Commence l'attaque de cet emplacement. Une carte de la cache est révélée dès qu'elle
+    /// est lancée : une attaque commencée va au bout (carnet, 2026-11-03).
+    pub(super) fn start_attack(&mut self, slot: usize, events: &mut Vec<Event>) {
+        let player = self.acting_player();
         // L'emplacement a été validé ; à défaut, rien ne commence.
-        let Some(slot_state) = self.arsenal(self.acting_player()).get(slot) else {
+        let Some(slot_state) = self.arsenal(player).get(slot) else {
             return;
         };
         let card = slot_state.attack();
@@ -218,6 +228,16 @@ impl Game {
         let Ok(attack) = self.played_attack(card) else {
             return;
         };
+        if let Some(arsenal_slot) = self.arsenals[player.index()].get_mut(slot)
+            && arsenal_slot.is_secret()
+        {
+            arsenal_slot.reveal();
+            events.push(Event::CardRevealed {
+                player,
+                slot,
+                attack: card,
+            });
+        }
         self.pending_attack = Some(PendingAttack {
             slot,
             card,
@@ -289,10 +309,13 @@ impl Game {
                 &pending.targets,
             ),
         };
+        let aimed: &[Position] = if attack.kind.rules().aims_at_targets() {
+            &pending.targets.cells
+        } else {
+            &[]
+        };
         // On ne réagit pas à une réaction.
-        if self.reaction_window.is_none()
-            && self.open_targeted_window(&resolution, &pending.targets.cells)
-        {
+        if self.reaction_window.is_none() && self.open_targeted_window(&resolution, aimed) {
             self.paused_attack = Some(resolution);
             return;
         }
@@ -330,11 +353,6 @@ impl Game {
         self.pay(player, stats.cost);
         if let Some(arsenal_slot) = self.arsenals[player.index()].get_mut(slot) {
             arsenal_slot.set_cooldown(stats.cooldown);
-            // Une carte de la cache est révélée quand elle est jouée pour la première fois.
-            if arsenal_slot.is_secret() {
-                arsenal_slot.reveal();
-                events.push(Event::CardRevealed { player, slot });
-            }
         }
         events.push(Event::AttackUsed {
             player,
@@ -484,6 +502,10 @@ impl Game {
             reserve: self.reserve_pions[player.index()],
             // Terre brûlée s'arrêtera : « un jour », tout redevient permis.
             may_create_effects: launch == Launch::Someday || self.scorched_until(player).is_none(),
+            reserved: self
+                .reaction_window
+                .as_ref()
+                .map_or(&[], |window| window.reserved()),
         }
     }
 

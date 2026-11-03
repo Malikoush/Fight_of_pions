@@ -22,7 +22,8 @@ Une partie refuse de démarrer si ses réglages sont incohérents :
 - poser un pion doit être possible en économisant : `place_cost` ≤ `actions_per_turn` + `max_banked_actions` ;
 - la limite de tours `max_turns` doit valoir au moins 1 ;
 - (2026-10-27) chaque attaque du catalogue doit être jouable par le moteur, n'y figurer qu'une fois, coûter au moins une action et au plus ce qu'on peut avoir en économisant, et avoir une recharge d'au moins 1 tour ;
-- (2026-10-27) chaque attaque de départ d'un joueur doit être dans le catalogue.
+- (2026-10-27) chaque attaque de départ d'un joueur doit être dans le catalogue ;
+- (2026-11-03) le draft ne tire pas plus de cartes que le catalogue n'en a (`DraftPoolTooLarge`), ni moins qu'il n'y a de bans et de picks (`DraftPoolTooSmall`).
 
 Une configuration où la victoire semble impossible (moins de pions que l'alignement demandé) est **acceptée** : elle sert aux tests, et les invocations ne la rendent pas jouable (2026-10-30 : un pion invoqué vient de la réserve).
 
@@ -72,11 +73,13 @@ Une action est refusée, sans rien modifier, si :
 - (2026-10-28, complété le 2026-10-30) ses seuls lanceurs possibles ont été posés ce tour (avec le mal du débarquement) ou sont immobilisés ;
 - le lanceur ou la cible choisie n'est pas permis ;
 - (2026-10-30) on veut jouer l'attaque en cours (`FinishAttack`) avant d'avoir choisi son lanceur, ou sans avoir assez de cibles ;
-- (2026-10-31) la reine ne peut pas faire ce pas (`QueenCannotStep`) ou ce tir (`QueenCannotShoot`) : pas de reine ou de garde, déjà fait ce tour, posée ce tour, immobilisée, case ou cible non permise.
+- (2026-10-31) la reine ne peut pas faire ce pas (`QueenCannotStep`) ou ce tir (`QueenCannotShoot`) : pas de reine ou de garde, déjà fait ce tour, posée ce tour, immobilisée, case ou cible non permise ;
+- (2026-11-03) une réaction pendant son propre tour, ou une attaque pendant le tour adverse (`NotAReaction`) ; une réaction sans son déclencheur, ou face à une attaque au-dessus de sa limite de coût (`NotTriggered`) ;
+- (2026-11-03) pendant le draft, une carte que l'étape ne permet pas de choisir (`NotInDraft`).
 
 ### Attaques (2026-10-27)
 
-- Chaque joueur commence avec des attaques (son **arsenal**). En attendant le draft, elles sont fixées par la configuration (`starting_attacks`).
+- Chaque joueur commence avec des attaques (son **arsenal**) : celles de la configuration (`starting_attacks`), puis, s'il y a un draft, sa cache et ses picks (voir « Draft et cache secrète »).
 - Le **coût** et la **recharge** de chaque attaque viennent du catalogue de la configuration. Par défaut (2026-10-30), les coûts des fiches : Commune 1 action, Rare 2, Épique 3, Légendaire 4 ; recharge d'un tour pour toutes, c'est-à-dire une fois par tour.
 - Lancer une attaque se fait en plusieurs choix : la carte, puis le **pion lanceur** (un de ses pions sur le plateau), puis les **cibles**. Une attaque n'est proposée que si au moins une attaque complète est possible, et chaque choix proposé mène à une attaque complète.
 - (2026-10-30) Une carte dit **combien de cibles** choisir : un nombre exact, ou « jusqu'à N ». Une attaque sans cible (Grognement, Garde royal) est jouée dès le choix du lanceur. Une attaque est jouée dès qu'il n'y a plus rien à choisir : nombre maximal de cibles atteint, ou plus aucune cible possible. Avant le maximum, le joueur peut la jouer avec les cibles déjà choisies (`Action::FinishAttack`), si elle en a assez.
@@ -282,10 +285,11 @@ Les cartes de B8b :
 - **Perroquet** (déclencheur : l'adversaire joue une **carte** d'attaque ; ni le tir d'un garde, ni une réaction). Une fois son attaque terminée, tu la rejoues dans la même rareté, comme si c'était ta carte : ton lanceur (posé avant ce tour, non immobilisé), tes cibles, ta réserve, tes effets. Tu paies le Perroquet, et c'est lui qui part en recharge ; l'annonce dit « Perroquet », les effets créés viennent de l'attaque copiée (pour Attila).
   - Commune (1) : une attaque de 1 point.
   - Rare (2) : une attaque de 2 points ou moins. La limite se lit sur le coût de l'attaque.
+  - Terre brûlée rejouée (si un catalogue la rend assez bon marché) frappe l'attaquant, depuis le joueur qui réagit : il ne crée aucun effet continu pendant la fin de son tour et pendant son tour suivant (2026-11-03).
 
 La carte de B8c :
 
-- **Feintaille** (déclencheur : une carte d'attaque adverse vise un de tes pions, c'est-à-dire le **choisit comme cible** ; un pion survolé, chargé ou pris dans une zone n'est pas visé, et le tir d'un garde ne compte pas). C'est la seule fenêtre qui s'ouvre **avant** le coup : les choix de l'attaque faits, elle attend ta réponse pour s'appliquer. Ton pion visé esquive d'1 case vers une case libre collée ; il doit pouvoir agir (non immobilisé, posé avant ce tour). L'attaque s'applique ensuite sur les cases choisies : le pion n'y est plus, elle ne le touche pas, les autres pions visés sont touchés normalement. L'adversaire la paie quand même.
+- **Feintaille** (déclencheur : une carte d'attaque adverse vise un de tes pions, c'est-à-dire le **choisit comme cible** ; un pion survolé, chargé ou pris dans une zone n'est pas visé, et le tir d'un garde ne compte pas). C'est la seule fenêtre qui s'ouvre **avant** le coup : les choix de l'attaque faits, elle attend ta réponse pour s'appliquer. Ton pion visé esquive d'1 case vers une case libre collée, mais pas vers une case où l'attaque va arriver (une case qu'elle a choisie, l'arrivée d'un pion qu'elle déplace ou pose : 2026-11-03) ; il doit pouvoir agir (non immobilisé, posé avant ce tour). L'attaque s'applique ensuite sur les cases choisies : le pion n'y est plus, elle ne le touche pas, les autres pions visés sont touchés normalement. L'adversaire la paie quand même.
   - Commune (1) : contre une attaque de 2 points ou moins.
   - Rare (2) : contre n'importe quelle attaque.
 
@@ -300,7 +304,9 @@ Avant la partie, si la configuration a un draft (`draft`, absent par défaut ; v
   4. **3 picks** chacun **en serpent**, J2 d'abord puisque J1 joue en premier : J2, J1, J1, J2, J2, J1.
 - Les cartes mises en cache et prises s'ajoutent à l'arsenal de départ, dans l'ordre (la cache d'abord). Les cartes tirées ni bannies ni prises sont écartées.
 - Pendant le draft, seul le choix d'une carte est permis ; la partie commence ensuite normalement (J1, tour 1).
-- **La cache est secrète** (B9b) : l'adversaire ne la voit pas, ni au labo, ni au terminal, ni dans le journal (« met une carte en cache »). Elle est **révélée quand elle est jouée pour la première fois** (attaque ou réaction), et reste visible ensuite. Les picks sont publics. La fenêtre de réaction reste un indice pour l'adversaire : c'est voulu.
+- **La cache est secrète** (B9b) : l'adversaire ne la voit pas, ni au labo, ni au terminal, ni dans le journal (« met une carte en cache »). Elle est **révélée dès qu'elle est lancée pour la première fois** (attaque ou réaction : `UseAttack`, avant ses choix, puisqu'une attaque commencée va au bout ; 2026-11-03), et reste visible ensuite. Le joueur visé par une Feintaille connaît donc l'attaque qui le menace. Les picks sont publics. La fenêtre de réaction reste un indice pour l'adversaire : c'est voulu.
+- **Les cartes tirées** ne se voient qu'à partir du premier ban ou pick : la cache se choisit sans les connaître (2026-11-03).
+- Une même carte peut être deux fois dans un arsenal (la cache identique à un pick ou à une carte de départ) : deux emplacements, deux recharges séparées (2026-11-03).
 
 ### Fin de partie (2026-10-26)
 
@@ -319,7 +325,7 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 
 ## Pas encore implémenté
 
-- Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, la Reine, Attila, le Médecin, le Massacre divin, l'Interchange, le Coup du taureau, le Lièvre, la Familia et Meilleurs amis ; et les réactions sont toutes codées (B8).
+- Toutes les cartes des fiches sont codées : les attaques et les cinq réactions (B8).
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
 
 ### Règles cibles (décidées le 2026-10-28, par défaut depuis le 2026-11-02)
@@ -465,6 +471,13 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B9 | Comment se déclenche la révélation d'une carte de la cache adverse ? | À définir | **2026-11-03** : quand elle est jouée pour la première fois. |
 | B9 | Le format : combien en cache, combien au draft ? | 1 en cache, 3 au draft | **2026-11-03** : oui, réglable ; 10 cartes tirées, 1 ban chacun, picks en serpent (J2 d'abord). |
 | B9 | La fenêtre de réaction révèle qu'on a une réaction : ouvrir une fenêtre même sans réaction ? | Oui, pour un humain | **2026-11-03** : non, l'indice donné à l'adversaire fait partie du jeu. |
+| B9 | Quand une carte de la cache est-elle révélée : quand on la lance, ou à sa résolution ? Le joueur visé par une Feintaille connaît-il l'attaque qui le menace ? | Quand on la lance (une attaque commencée va au bout) ; oui | **2026-11-03** : oui (réponse par défaut). |
+| B9 | Les cartes tirées sont-elles visibles pendant le choix de la cache ? | Non : la cache d'abord, le tirage ensuite | **2026-11-03** : non (réponse par défaut). |
+| B8c | La Feintaille peut-elle esquiver vers une case que l'attaque va utiliser (une case choisie, l'arrivée d'un pion déplacé ou posé) ? | Non | **2026-11-03** : non (réponse par défaut). |
+| B8 | Après une Feintaille à laquelle on a passé, une seconde fenêtre (Perroquet, Queue du lézard) peut-elle s'ouvrir pour la même attaque ? | Oui | **2026-11-03** : oui (réponse par défaut). |
+| B8c | Séduction esquivée (Beauté fatale Épique et Légendaire : tuer le pion visé, puis poser le tien sur sa case) : si le pion visé esquive, le kill rate ; le pion de l'attaquant est-il quand même posé sur la case libérée ? Aujourd'hui oui : l'attaquant gagne une pose. | Non : la séduction remplace le pion visé, rien n'est posé | |
+| B8c | Médecin Épique sur une tombe occupée par un pion adverse : ce pion est-il « visé » (fenêtre de Feintaille) ? S'il esquive, la résurrection a lieu sur la case libérée. Aujourd'hui oui aux deux. | Oui, il est visé, et la résurrection a lieu | |
+| B9 | Une même carte peut-elle être deux fois dans un arsenal (la cache identique à un pick ou à une carte de départ) ? | Oui, deux emplacements et deux recharges | **2026-11-03** : oui (réponse par défaut). |
 
 ## Historique
 
@@ -500,3 +513,4 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-11-03 | B8c : Feintaille (Commune contre 2 points au plus, Rare contre tout) : seule fenêtre ouverte avant le coup ; le pion choisi comme cible esquive d'une case, l'attaque s'applique sur les cases choisies. |
 | 2026-11-03 | B9a : le draft, réglable (`DraftRules`) : 1 carte en cache dans tout le catalogue, 10 cartes tirées avec la graine, 1 ban chacun, 3 picks chacun en serpent (J2 d'abord) ; les cartes choisies remplissent l'arsenal. |
 | 2026-11-03 | B9b : la cache est secrète pour l'adversaire et révélée à sa première utilisation (`ArsenalSlot::is_secret`, `Event::CardRevealed`). |
+| 2026-11-03 | Correctif du secret (relecture du gardien) : la cache est révélée dès qu'on la lance ; les cartes tirées se cachent jusqu'au premier ban ou pick ; l'adversaire reçoit « carte mise en cache » sans la carte (`Event::CardCached`) au lieu de rien ; la Feintaille n'esquive pas vers une case où l'attaque arrive ; un pion chargé par le Coup du taureau n'est pas visé ; Terre brûlée rejouée par un Perroquet frappe l'attaquant. |

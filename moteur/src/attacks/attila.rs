@@ -31,6 +31,9 @@ use super::rules::{AttackContext, AttackRules, Targets};
 use crate::game::cancellable_plays_on;
 use crate::{Cell, PlayId, Position, Rarity};
 
+/// La durée de Terre brûlée, en tours de l'adversaire : son prochain tour.
+pub(crate) const SCORCHED_TURNS: u32 = 1;
+
 pub(crate) struct Attila;
 
 impl AttackRules for Attila {

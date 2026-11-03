@@ -50,6 +50,11 @@ impl AttackRules for CoupDuTaureau {
         1..=1
     }
 
+    /// La case choisie donne la direction : un pion chargé n'est pas visé (carnet, B8c).
+    fn aims_at_targets(&self) -> bool {
+        false
+    }
+
     /// Les cases collées au lanceur dans les directions où la charge avance.
     fn candidate_targets(&self, context: &AttackContext, chosen: &[Position]) -> Vec<Position> {
         if !chosen.is_empty() {

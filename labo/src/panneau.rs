@@ -9,8 +9,8 @@ use crate::theme;
 use bots::BotKind;
 use eframe::egui;
 use fight_of_pions::{
-    Action, ActiveEffect, ArsenalSlot, Decision, DraftStep, EffectEnd, Event, Game, GameConfig,
-    GameEnd, GameRecord, Outcome, Player, Position, TokenPile, TokenReward,
+    Action, ActiveEffect, ArsenalSlot, Attack, Decision, DraftStep, EffectEnd, Event, Game,
+    GameConfig, GameEnd, GameRecord, Outcome, Player, Position, TokenPile, TokenReward,
 };
 use std::time::Duration;
 
@@ -342,17 +342,32 @@ impl Panneau {
     }
 }
 
-/// L'arsenal du joueur courant : chaque attaque, son coût, sa recharge, et un bouton
-/// « Lancer » activé seulement si le moteur l'autorise et que c'est à un humain de jouer.
-/// Pendant le choix d'une attaque (sur la copie `apercu`, ou dans la vraie partie si elle
-/// a été chargée en plein choix), « Jouer l'attaque » est activé si le moteur permet de la
-/// jouer avec les cibles déjà choisies.
 /// L'arsenal de `player` tel que le voit `spectateur` (`None` : tout), `None` pour une
 /// carte secrète.
 fn arsenal_vu(game: &Game, player: Player, spectateur: Option<Player>) -> Vec<Option<ArsenalSlot>> {
     game.arsenal_seen_by(player, spectateur.unwrap_or(player))
 }
 
+/// « Sentinelle (Rare), réaction, coût 2 » : le nom d'une carte, si c'est une réaction, et son
+/// coût lu dans le catalogue.
+fn libelle_carte(game: &Game, attaque: Attack) -> String {
+    let cout = game
+        .config()
+        .attack_stats(attaque)
+        .map_or(String::new(), |stats| format!(", coût {}", stats.cost));
+    let reaction = if attaque.kind.is_reaction() {
+        ", réaction"
+    } else {
+        ""
+    };
+    format!("{attaque}{reaction}{cout}")
+}
+
+/// L'arsenal du joueur courant : chaque attaque, son coût, sa recharge, et un bouton
+/// « Lancer » activé seulement si le moteur l'autorise et que c'est à un humain de jouer.
+/// Pendant le choix d'une attaque (sur la copie `apercu`, ou dans la vraie partie si elle
+/// a été chargée en plein choix), « Jouer l'attaque » est activé si le moteur permet de la
+/// jouer avec les cibles déjà choisies.
 fn attaques(
     ui: &mut egui::Ui,
     game: &Game,
@@ -377,16 +392,7 @@ fn attaques(
             ui.label(theme::CARTE_SECRETE);
             continue;
         };
-        let attaque = emplacement.attack();
-        let cout = game
-            .config()
-            .attack_stats(attaque)
-            .map_or(String::new(), |stats| format!(", coût {}", stats.cost));
-        let reaction = if attaque.kind.is_reaction() {
-            ", réaction"
-        } else {
-            ""
-        };
+        let libelle = libelle_carte(game, emplacement.attack());
         let etat = match emplacement.cooldown_left() {
             0 => String::new(),
             1 => ", recharge 1 tour".to_string(),
@@ -401,7 +407,7 @@ fn attaques(
             {
                 intentions.push(Intention::CommencerAttaque(slot));
             }
-            ui.label(format!("{attaque}{reaction}{cout}{etat}"));
+            ui.label(format!("{libelle}{etat}"));
         });
     }
     if legales.contains(&Action::Pass) {
@@ -494,16 +500,7 @@ fn draft(
                 let Action::Draft(attaque) = action else {
                     continue;
                 };
-                let cout = game
-                    .config()
-                    .attack_stats(attaque)
-                    .map_or(String::new(), |stats| format!(", coût {}", stats.cost));
-                let reaction = if attaque.kind.is_reaction() {
-                    ", réaction"
-                } else {
-                    ""
-                };
-                let texte = format!("{attaque}{reaction}{cout}");
+                let texte = libelle_carte(game, attaque);
                 if ui
                     .add_enabled(tour_humain, egui::Button::new(texte))
                     .clicked()
@@ -628,8 +625,12 @@ fn decrire(event: &Event) -> Option<String> {
                 DraftStep::Pick(_) => format!("{nom} prend {attack}"),
             })
         }
-        Event::CardRevealed { player, .. } => Some(format!(
-            "{} joue la carte de sa cache",
+        Event::CardCached { player } => Some(format!(
+            "{} met une carte en cache",
+            theme::nom_joueur(*player)
+        )),
+        Event::CardRevealed { player, attack, .. } => Some(format!(
+            "{} révèle la carte de sa cache : {attack}",
             theme::nom_joueur(*player)
         )),
         Event::PionPlaced { pion, at } => Some(format!(

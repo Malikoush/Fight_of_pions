@@ -11,15 +11,24 @@
 use std::ops::RangeInclusive;
 
 use super::Effect;
-use super::reach::around;
+use super::reach::free_around;
 use super::rules::{AttackContext, AttackRules, Trigger};
 use crate::{Position, Rarity};
 
 pub(crate) struct QueueDuLezard;
 
+/// Le plus de pions posés par la Commune.
+const COMMON_PIONS: usize = 1;
+/// Le plus de pions posés par la Rare.
+const RARE_PIONS: usize = 2;
+
 /// Le plus de pions posés dans cette rareté.
 fn most(rarity: Rarity) -> usize {
-    if rarity == Rarity::Rare { 2 } else { 1 }
+    if rarity == Rarity::Rare {
+        RARE_PIONS
+    } else {
+        COMMON_PIONS
+    }
 }
 
 impl AttackRules for QueueDuLezard {
@@ -41,8 +50,8 @@ impl AttackRules for QueueDuLezard {
         if usize::try_from(context.reserve).unwrap_or(usize::MAX) <= chosen.len() {
             return Vec::new();
         }
-        around(context.board, context.launcher)
-            .filter(|&pos| context.board.is_free(pos) && !chosen.contains(&pos))
+        free_around(context.board, context.launcher)
+            .filter(|pos| !chosen.contains(pos))
             .collect()
     }
 

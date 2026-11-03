@@ -1,5 +1,5 @@
-//! Les réactions (B8a, carnet « Réactions », 2026-11-03) : la fenêtre de réaction, la
-//! Sentinelle et le Hibou.
+//! Les réactions (B8, carnet « Réactions », 2026-11-03) : la fenêtre de réaction et les
+//! cinq réactions.
 //!
 //! Sauf mention contraire, les règles actuelles sans mur : 1 pose gratuite par tour, 1
 //! point d'action par tour, J2 commence avec 1 point en banque (la Pièce).
@@ -82,9 +82,7 @@ fn the_sentinel_only_places_next_to_the_pion_just_placed() {
         &mut game,
         &[place(0, 0), Action::UseAttack(0), choose(0, 0)],
     );
-    let mut targets = game.legal_actions();
-    targets.sort_by_key(|action| format!("{action:?}"));
-    assert_eq!(targets, [choose(0, 1), choose(1, 0), choose(1, 1)]);
+    assert_eq!(launchers(&game), [choose(0, 1), choose(1, 0), choose(1, 1)]);
     assert_eq!(
         game.apply(choose(5, 5)),
         Err(GameError::InvalidChoice(at(5, 5)))
@@ -653,4 +651,226 @@ fn an_immobilized_pion_cannot_dodge() {
     play(&mut game, &KILL_F5);
     assert_eq!(game.board().owner(at(4, 5)), None);
     assert!(!two_may_react(&game));
+}
+
+/// Les règles actuelles sans mur, J1 et J2 avec ces cartes et 3 points en banque au départ :
+/// J1 a 4 points à son premier tour, et au moins 4 ensuite s'il économise.
+fn rich(player_one: Vec<Attack>, player_two: Vec<Attack>) -> GameConfig {
+    GameConfig {
+        starting_banked_actions: [3, 3],
+        ..rules(player_one, player_two)
+    }
+}
+
+/// Les choix que la décision en cours propose, triés.
+fn launchers(game: &Game) -> Vec<Action> {
+    let mut actions = game.legal_actions();
+    actions.sort_by_key(|action| format!("{action:?}"));
+    actions
+}
+
+#[test]
+fn the_sentinel_answers_one_of_the_pions_a_card_places() {
+    let friends = card(AttackKind::MeilleursAmis, Rarity::Epic);
+    let mut game = game_with(rich(vec![friends], vec![sentinel(Rarity::Common)]));
+    play(&mut game, &[place(4, 4), Action::Pass, Action::EndTurn]);
+    play(&mut game, &[place(0, 0), Action::EndTurn]);
+    // Tour 3 : Meilleurs amis pose G7 et I7 ; une seule fenêtre, pour l'un ou l'autre.
+    play(
+        &mut game,
+        &[
+            Action::UseAttack(0),
+            choose(4, 4),
+            choose(6, 6),
+            choose(6, 8),
+        ],
+    );
+    assert!(two_may_react(&game));
+    play(&mut game, &[Action::UseAttack(0)]);
+    assert_eq!(launchers(&game), [choose(6, 6), choose(6, 8)]);
+}
+
+#[test]
+fn the_lizard_chooses_around_which_dead_pion_it_answers() {
+    let ours = card(AttackKind::Ours, Rarity::Epic);
+    let mut game = game_with(rich(vec![ours], vec![lizard(Rarity::Common)]));
+    play(&mut game, &[place(4, 4), Action::EndTurn]);
+    play(&mut game, &[place(4, 5), Action::EndTurn]);
+    play(&mut game, &[Action::EndTurn]);
+    play(&mut game, &[place(5, 5), Action::EndTurn]);
+    // Tour 5 : l'Ours Épique tue F5 et F6 d'un coup.
+    play(
+        &mut game,
+        &[
+            Action::UseAttack(0),
+            choose(4, 4),
+            choose(4, 5),
+            choose(5, 5),
+        ],
+    );
+    assert!(two_may_react(&game));
+    play(&mut game, &[Action::UseAttack(0)]);
+    assert_eq!(launchers(&game), [choose(4, 5), choose(5, 5)]);
+}
+
+#[test]
+fn the_lizard_answers_a_guard_shot_but_the_parrot_does_not() {
+    let queen = card(AttackKind::Reine, Rarity::Epic);
+    let mut game = game_with(rich(
+        vec![queen],
+        vec![parrot(Rarity::Rare), lizard(Rarity::Common)],
+    ));
+    play(&mut game, &[place(4, 4), Action::EndTurn]);
+    play(&mut game, &[place(2, 6), Action::EndTurn]);
+    // Tour 3 : J1 couronne une reine gardée en C3 (3 points : le Perroquet ne la rejoue pas).
+    play(
+        &mut game,
+        &[Action::UseAttack(0), choose(4, 4), choose(2, 2)],
+    );
+    assert!(!two_may_react(&game));
+    play(&mut game, &[Action::EndTurn, Action::EndTurn]);
+    // Tour 5 : le garde tire sur G3 ; seule la Queue du lézard répond.
+    play(&mut game, &[Action::Shoot(at(2, 6))]);
+    assert_eq!(game.board().owner(at(2, 6)), None);
+    assert!(two_may_react(&game));
+    assert_eq!(game.legal_actions(), [Action::UseAttack(1), Action::Pass]);
+}
+
+#[test]
+fn the_rare_sentinel_is_not_playable_under_scorched_earth() {
+    let scorched_earth = card(AttackKind::Attila, Rarity::Legendary);
+    let mut game = game_with(rich(vec![scorched_earth], vec![sentinel(Rarity::Rare)]));
+    play(&mut game, &[place(4, 4), Action::Pass, Action::EndTurn]);
+    play(&mut game, &[place(0, 0), Action::EndTurn]);
+    // Tour 3 : Terre brûlée sur J2, puis J1 pose : la Sentinelle Rare immobiliserait.
+    play(&mut game, &[Action::UseAttack(0), choose(4, 4)]);
+    assert_eq!(game.scorched_until(Player::Two), Some(4));
+    play(&mut game, &[place(6, 6)]);
+    // Pas de fenêtre : J1, sans plus rien à jouer, a fini son tour.
+    assert!(!two_may_react(&game));
+    assert_eq!(game.current_player(), Player::Two);
+    assert_eq!(game.reserve_pions(Player::Two), 14);
+}
+
+#[test]
+fn a_charged_pion_is_not_targeted() {
+    let bull = card(AttackKind::CoupDuTaureau, Rarity::Common);
+    let mut game = game_with(rules(vec![bull], vec![feint(Rarity::Common)]));
+    play(&mut game, &[place(4, 4), Action::EndTurn]);
+    play(&mut game, &[place(4, 5), Action::EndTurn]);
+    play(
+        &mut game,
+        &[Action::UseAttack(0), choose(4, 4), choose(4, 5)],
+    );
+    assert!(!two_may_react(&game));
+    assert_eq!(game.board().owner(at(4, 6)), Some(Player::Two));
+    assert_eq!(game.board().owner(at(4, 5)), Some(Player::One));
+}
+
+#[test]
+fn the_owl_answers_a_swap() {
+    let swap = card(AttackKind::Interchange, Rarity::Epic);
+    let mut game = game_with(rich(vec![swap], vec![owl(Rarity::Common)]));
+    play(&mut game, &[place(4, 4), Action::EndTurn]);
+    play(&mut game, &[place(0, 0), Action::EndTurn]);
+    let events = play(
+        &mut game,
+        &[Action::UseAttack(0), choose(4, 4), choose(0, 0)],
+    );
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, Event::PionsSwapped { .. }))
+    );
+    assert!(two_may_react(&game));
+}
+
+#[test]
+fn a_parrot_that_replays_scorched_earth_scorches_the_attacker() {
+    let scorched_earth = card(AttackKind::Attila, Rarity::Legendary);
+    let mut config = rules(vec![scorched_earth], vec![parrot(Rarity::Rare)]);
+    // Terre brûlée à 2 points, pour que le Perroquet Rare puisse la rejouer.
+    for entry in &mut config.attack_catalog {
+        if entry.attack == scorched_earth {
+            entry.stats.cost = 2;
+        }
+    }
+    let mut game = game_with(config);
+    play(&mut game, &[place(4, 4), Action::EndTurn]);
+    play(&mut game, &[place(0, 0), Action::EndTurn]);
+    play(&mut game, &[Action::UseAttack(0), choose(4, 4)]);
+    assert_eq!(game.scorched_until(Player::Two), Some(4));
+    assert!(two_may_react(&game));
+    play(&mut game, &[Action::UseAttack(0), choose(0, 0)]);
+    // J1 est sous Terre brûlée pendant son prochain tour, le tour 5.
+    assert_eq!(game.scorched_until(Player::One), Some(5));
+    assert_eq!(game.scorched_until(Player::Two), Some(4));
+}
+
+#[test]
+fn after_a_feint_passed_another_reaction_may_answer_the_same_attack() {
+    let ours = card(AttackKind::Ours, Rarity::Rare);
+    let mut game = face_to_face(ours, vec![feint(Rarity::Common), lizard(Rarity::Common)]);
+    play(&mut game, &KILL_F5);
+    assert!(two_may_react(&game));
+    // J2 passe la Feintaille : F5 meurt, puis la Queue du lézard peut répondre à sa mort.
+    play(&mut game, &[Action::Pass]);
+    assert_eq!(game.board().owner(at(4, 5)), None);
+    assert!(two_may_react(&game));
+    assert_eq!(game.legal_actions(), [Action::UseAttack(1), Action::Pass]);
+}
+
+#[test]
+fn after_a_feint_played_no_other_reaction_this_turn() {
+    let ours = card(AttackKind::Ours, Rarity::Epic);
+    let mut game = game_with(rich(
+        vec![ours],
+        vec![feint(Rarity::Rare), lizard(Rarity::Common)],
+    ));
+    play(&mut game, &[place(4, 4), Action::EndTurn]);
+    play(&mut game, &[place(4, 5), Action::EndTurn]);
+    play(&mut game, &[Action::EndTurn]);
+    play(&mut game, &[place(5, 5), Action::EndTurn]);
+    // F5 esquive, F6 meurt : la Queue du lézard pourrait répondre, mais J2 a déjà réagi.
+    play(
+        &mut game,
+        &[
+            Action::UseAttack(0),
+            choose(4, 4),
+            choose(4, 5),
+            choose(5, 5),
+        ],
+    );
+    play(
+        &mut game,
+        &[Action::UseAttack(0), choose(4, 5), choose(3, 6)],
+    );
+    assert_eq!(game.board().owner(at(5, 5)), None);
+    assert!(!two_may_react(&game));
+}
+
+#[test]
+fn the_other_targeted_pions_are_hit_normally() {
+    let ours = card(AttackKind::Ours, Rarity::Epic);
+    let mut game = game_with(rich(vec![ours], vec![feint(Rarity::Rare)]));
+    play(&mut game, &[place(4, 4), Action::EndTurn]);
+    play(&mut game, &[place(4, 5), Action::EndTurn]);
+    play(&mut game, &[Action::EndTurn]);
+    play(&mut game, &[place(5, 5), Action::EndTurn]);
+    // Tour 5 : l'Ours Épique vise F5 et F6 ; F5 esquive en G4, F6 meurt.
+    play(
+        &mut game,
+        &[
+            Action::UseAttack(0),
+            choose(4, 4),
+            choose(4, 5),
+            choose(5, 5),
+        ],
+    );
+    assert!(two_may_react(&game));
+    play(&mut game, &[Action::UseAttack(0)]);
+    assert_eq!(launchers(&game), [choose(4, 5), choose(5, 5)]);
+    play(&mut game, &[choose(4, 5), choose(3, 6)]);
+    assert_eq!(game.board().owner(at(3, 6)), Some(Player::Two));
+    assert_eq!(game.board().owner(at(5, 5)), None);
 }

@@ -58,16 +58,16 @@ Tout ce qu'il faut afficher. Le client redessine tout à partir d'elle.
 | `decision` | Ce qui est attendu et de qui, par exemple `{"MainAction":{"player":"One"}}`, `{"React":{"player":"Two"}}`, `{"ChooseTarget":{"player":"One","attack":…,"launcher":…}}`, `{"Draft":{"step":{"Pick":"Two"}}}` ; `null` si la partie est finie |
 | `legal_actions` | Les coups permis **à ce client**, vide si ce n'est pas à lui |
 | `board` | `size` (côté de la grille, mur compris) et `cells`, rangée par rangée (indice `row * size + col`) : `null` pour le mur, sinon `{"pion":{"id":0,"owner":"One"} ou null,"tomb":… ou null}` |
-| `sides` | Pour J1 puis J2 : `reserve`, `banked_actions`, `actions_left`, `placements_left`, `queen`, `scorched_until`, `arsenal` (une entrée par carte : `{"attack":{"kind":…,"rarity":…},"cooldown_left":0,"secret":false}`, ou `null` pour la carte en cache de l'adversaire, pas encore jouée) |
+| `sides` | Pour J1 puis J2 : `reserve`, `banked_actions`, `actions_left`, `placements_left`, `queen`, `scorched_until`, `arsenal` (une entrée par carte : `{"attack":{"kind":…,"rarity":…},"cooldown_left":0,"secret":false}`, ou `null` pour la carte en cache de l'adversaire, pas encore lancée) |
 | `effects` | Les statuts et effets en jeu (immobilisé, protégé, gardes de la reine…), avec le pion visé |
 | `token_piles`, `infirmary`, `graveyard` | Jetons du Massacre divin, pions à l'infirmerie, pions au cimetière |
-| `draft_pool` | Pendant le draft : les cartes tirées qui restent |
+| `draft_pool` | Pendant le draft : les cartes tirées qui restent, à partir du premier ban ou pick (vide pendant le choix des caches) |
 | `turn`, `current_player`, `end` | Le tour, à qui c'est le tour, la fin (gagnant et raison) |
 | `config` | Les réglages : taille, mur, catalogue et coûts des cartes |
 
 ### Les événements (`events`)
 
-Ce qui s'est passé depuis la vue précédente, pour animer et tenir un journal : `{"PionPlaced":{…}}`, `{"PionKilled":{…}}`, `{"PionMoved":{…}}`, `{"AttackUsed":{…}}`, `{"CardRevealed":{…}}`… La carte que l'adversaire met en cache n'y apparaît jamais. L'état à afficher est toujours celui de la vue : les événements ne servent qu'à l'animation.
+Ce qui s'est passé depuis la vue précédente, pour animer et tenir un journal : `{"PionPlaced":{…}}`, `{"PionKilled":{…}}`, `{"PionMoved":{…}}`, `{"AttackUsed":{…}}`, `{"CardRevealed":{…}}`… La carte que l'adversaire met en cache n'y est jamais nommée : elle arrive comme `{"CardCached":{"player":…}}`, puis `CardRevealed` (avec la carte) quand il la lance. L'état à afficher est toujours celui de la vue : les événements ne servent qu'à l'animation.
 
 ## Le déroulé d'une partie
 

@@ -8,12 +8,14 @@
 //! « Visé » : choisi comme cible de l'attaque (carnet, « Réactions »). Le lanceur est le
 //! pion visé, qui doit pouvoir agir (non immobilisé, posé avant ce tour). L'attaque
 //! s'applique ensuite sur les cases choisies : le pion n'y est plus, elle ne le touche pas ;
-//! les autres pions visés sont touchés normalement.
+//! les autres pions visés sont touchés normalement. Le pion n'esquive pas vers une case
+//! où l'attaque va arriver (l'arrivée d'un saut, la case où elle pose) : carnet,
+//! 2026-11-03.
 
 use std::ops::RangeInclusive;
 
 use super::Effect;
-use super::reach::around;
+use super::reach::free_around;
 use super::rules::{AttackContext, AttackRules, Trigger};
 use crate::{Position, Rarity};
 
@@ -39,10 +41,10 @@ impl AttackRules for Feintaille {
         1..=1
     }
 
-    /// Les cases libres collées au pion visé.
+    /// Les cases libres collées au pion visé, hors de celles où l'attaque va arriver.
     fn candidate_targets(&self, context: &AttackContext, _chosen: &[Position]) -> Vec<Position> {
-        around(context.board, context.launcher)
-            .filter(|&pos| context.board.is_free(pos))
+        free_around(context.board, context.launcher)
+            .filter(|pos| !context.reserved.contains(pos))
             .collect()
     }
 
@@ -54,5 +56,38 @@ impl AttackRules for Feintaille {
             from: context.launcher,
             to: *to,
         }]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::attacks::Launch;
+    use crate::{Board, Pion, PionId, Player};
+
+    #[test]
+    fn the_dodge_avoids_the_cells_where_the_attack_arrives() {
+        let mut board = Board::new(3);
+        let launcher = Position { row: 1, col: 1 };
+        board
+            .place_pion(launcher, Pion::new(PionId::FIRST, Player::Two))
+            .unwrap();
+        let reserved = [Position { row: 0, col: 0 }, Position { row: 2, col: 2 }];
+        let context = AttackContext {
+            board: &board,
+            effects: &[],
+            token_piles: &[],
+            player: Player::Two,
+            launcher,
+            rarity: Rarity::Rare,
+            launch: Launch::Now,
+            sick_from: None,
+            reserve: 0,
+            may_create_effects: true,
+            reserved: &reserved,
+        };
+        let cells = Feintaille.candidate_targets(&context, &[]);
+        assert_eq!(cells.len(), 6);
+        assert!(reserved.iter().all(|pos| !cells.contains(pos)));
     }
 }

@@ -19,7 +19,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Joueur | `Player` | Les deux camps : `One` (commence) et `Two` |
 | Tour | `turn` | Le tour **d'un** joueur. Le compteur avance à chaque fin de tour. |
 | Manche | `round` (cible) | Un tour de chaque joueur (le « Tour 1 » du tableau du GDD) |
-| Action | `Action` | Une décision envoyée au moteur : `Place`, `UseAttack`, `Choose`, `FinishAttack`, `Pass` (ne pas réagir), `EndTurn`… |
+| Action | `Action` | Une décision envoyée au moteur : `Place`, `UseAttack`, `Choose`, `FinishAttack`, `Pass` (ne pas réagir), `Draft` (un choix du draft), `EndTurn`… |
 | Coût de la pose | `place_cost` | Actions que coûte la pose d'un pion (0 dans les règles actuelles, 1 dans les premières). 0 (pose gratuite) seulement si les poses sont limitées par tour. |
 | Poses par tour | `max_placements_per_turn`, `GameError::NoPlacementLeft` | Le plus de pions qu'un joueur peut poser dans un tour ; elles ne s'accumulent pas. 1 dans les règles actuelles ; `None` (premières règles) : seules les actions limitent les poses. Une pose de trop est refusée (`NoPlacementLeft`) ; une limite de 0 est refusée à la configuration (`ConfigError::NoPlacementPerTurn`), comme une pose gratuite sans limite (`ConfigError::FreePlacement`). |
 | Poses restantes | `Game::placements_left()` | Combien de pions le joueur courant peut encore poser ce tour : selon ses actions, ses poses permises, sa réserve et les cases libres |
@@ -50,7 +50,6 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Générateur | `Rng` | Hasard déterministe (SplitMix64) : même graine, même suite. Tout le hasard passe par lui. |
 | Enregistrement | `GameRecord` | Configuration + graine + actions acceptées : `replay()` reconstruit la partie |
 | Échec de relecture | `ReplayError` | `Start` (configuration invalide) ou `RefusedAction { index, error }` (action refusée) |
-| Vue joueur | `PlayerView` (cible) | Ce qu'un joueur a le droit de voir |
 
 ## Plateau et pions
 
@@ -65,7 +64,9 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Identité d'un pion | `PionId` | Numéro stable d'un pion (affiché « #3 »), pour qu'un effet le suive quand il bouge |
 | Case d'un pion | `Board::position_of(pion)` | Où se trouve un pion, retrouvé par son identité (un effet vise une identité, pas une case) |
 | Réserve de pions | `reserve_pions` | Les pions qu'un joueur peut encore poser (15 au départ) |
-| Pion lanceur | `launcher` | Le pion du joueur depuis lequel une attaque est lancée, choisi par `Action::Choose`. C'est aussi le pion qui agit : une carte qui déplace, protège ou échange « un de tes pions » s'applique au lanceur (décidé le 2026-10-30) |
+| Pion lanceur | `launcher` | Le pion du joueur depuis lequel une attaque est lancée, choisi par `Action::Choose`. C'est aussi le pion qui agit : une carte qui déplace, protège ou échange « un de tes pions » s'applique au lanceur (décidé le 2026-10-30) Pour une réaction qui part de son déclencheur, le lanceur peut être un pion adverse (Sentinelle : le pion qu'il vient de poser) ou une case vide (Queue du lézard : la case du mort). |
+| Joueur qui agit | `acting_player` (interne) | Celui qui joue la carte en cours, la paie et crée ses effets : celui qui réagit pendant une fenêtre de réaction, sinon le joueur courant. Une règle qui parle de « l'adversaire » se lit depuis lui, pas depuis `current_player`. |
+| Visé | `AttackRules::aims_at_targets`, `AttackContext::reserved`, `Effect::arrival` (internes) | Un pion **choisi comme cible** d'une carte d'attaque (carnet, Feintaille) : ce qui ouvre la fenêtre de la Feintaille. Un pion survolé, chargé (le Coup du taureau ne choisit qu'une direction) ou pris dans une zone n'est pas visé. Le pion visé n'esquive pas vers une case où l'attaque arrive (`reserved`). |
 | Mal du débarquement | `summoning_sickness`, `Game::is_summoning_sick(pos)`, `GameError::NoReadyLauncher` | Avec ce réglage, un pion posé ce tour ne peut pas lancer d'attaque (`NoReadyLauncher` vaut aussi pour un pion immobilisé). Un pion posé par une carte ou ressuscité non plus (nouvelle identité) ; un pion déplacé ou échangé garde son ancienneté. |
 | Tombe | `Cell::tomb`, `Board::tomb(pos)`, `Board::tomb_of(pion)`, `Event::TombAdded`, `Event::TombRemoved` | Ce que laisse un pion tué qui part à l'infirmerie, sur la case où il est mort, jusqu'à ce qu'il en sorte. Elle ne bloque pas la case ; une case en porte au plus une. |
 | Opérations sur les pions | `Board::place_pion`, `remove_pion`, `move_pion`, `swap` (internes) | Le plateau ne s'écrit que pion par pion : une tombe reste sur sa case quand un pion y arrive, en part, bouge ou est échangé |
@@ -170,8 +171,8 @@ Le labo est entièrement en français, noms du code compris.
 
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
-| Cache secrète | `DraftStep::Cache` | Les cartes (1 par défaut) que chaque joueur choisit dans tout le catalogue avant le draft ; cachées à l'adversaire jusqu'à leur premier usage (`ArsenalSlot::is_secret`, `Event::CardRevealed`, `Game::arsenal_seen_by`, `Game::with_secrets_guessed`) |
-| Vue joueur | `PlayerView`, `BoardView`, `SideView`, `Game::view`, `Event::is_visible_to` | Ce qu'un joueur voit de la partie, prêt à envoyer en JSON : tout l'affichage, la décision attendue et ses coups permis, jamais la cache adverse pas encore jouée |
+| Cache secrète | `DraftStep::Cache` | Les cartes (1 par défaut) que chaque joueur choisit dans tout le catalogue avant le draft ; cachées à l'adversaire jusqu'à ce qu'elles soient lancées pour la première fois (`ArsenalSlot::is_secret`, `Event::CardRevealed`, `Game::arsenal_seen_by`, `Game::with_secrets_guessed`) |
+| Vue joueur | `PlayerView`, `BoardView`, `SideView`, `Game::view`, `Event::seen_by`, `Event::CardCached`, `Game::visible_draft_pool` | Ce qu'un joueur voit de la partie, prêt à envoyer en JSON : tout l'affichage, la décision attendue et ses coups permis, jamais la cache adverse pas encore lancée ni les cartes tirées pendant le choix des caches |
 | Draft | `GameConfig::draft`, `DraftRules`, `DraftStep`, `Decision::Draft`, `Action::Draft`, `Event::Drafted`, `Game::draft_pool` | Avant la partie : la cache, puis des cartes tirées avec la graine (10 par défaut), bannies et prises dans l'ordre des étapes (1 ban chacun, 3 picks en serpent) |
 | Gacha, collection | hors moteur | Le moteur reçoit les cartes déjà choisies |
 

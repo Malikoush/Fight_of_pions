@@ -174,7 +174,11 @@ impl EventMirror {
                     self.secrets[step.player().index()].push(secret);
                 }
             }
-            Event::CardRevealed { player, slot } => {
+            Event::CardCached { player } => {
+                self.cooldowns[player.index()].push(0);
+                self.secrets[player.index()].push(true);
+            }
+            Event::CardRevealed { player, slot, .. } => {
                 let secret = &mut self.secrets[player.index()][slot];
                 assert!(*secret, "révélée deux fois : {event:?}");
                 *secret = false;
@@ -425,6 +429,9 @@ impl PlayedGame {
 fn play_random_game(config: GameConfig, seed: u64, rng: &mut Rng) -> PlayedGame {
     let mut game = Game::new(config.clone(), seed).unwrap();
     let mut mirror = EventMirror::new(&config, &game);
+    // Chaque joueur ne reçoit que ses événements, tels qu'il les voit (`Event::seen_by`) :
+    // il doit rester à jour lui aussi.
+    let mut seen = [Player::One, Player::Two].map(|_| EventMirror::new(&config, &game));
     let mut record = GameRecord::new(config, seed);
     let mut steps = Vec::new();
     // L'état de départ, déduit de la configuration (et des poses restantes lues une fois
@@ -436,8 +443,14 @@ fn play_random_game(config: GameConfig, seed: u64, rng: &mut Rng) -> PlayedGame 
         let events = game.apply(action).unwrap();
         for event in &events {
             mirror.follow(event);
+            for player in [Player::One, Player::Two] {
+                seen[player.index()].follow(&event.seen_by(player));
+            }
         }
         mirror.assert_matches(&game);
+        for one_side in &seen {
+            one_side.assert_matches(&game);
+        }
         record.actions.push(action);
         steps.push((events, game.clone()));
     }

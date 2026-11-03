@@ -83,16 +83,21 @@ fn main() {
                                     "{} met une carte en cache.",
                                     terminal::player_name(player)
                                 ),
-                                _ => println!(
-                                    "{} choisit {} ({:?}).",
-                                    terminal::player_name(step.player()),
-                                    attack,
-                                    step
-                                ),
+                                DraftStep::Ban(player) => {
+                                    println!("{} bannit {}.", terminal::player_name(player), attack)
+                                }
+                                DraftStep::Pick(player) => {
+                                    println!("{} prend {}.", terminal::player_name(player), attack)
+                                }
                             },
-                            Event::CardRevealed { player, .. } => println!(
-                                "{} joue la carte de sa cache.",
+                            Event::CardCached { player } => println!(
+                                "{} met une carte en cache.",
                                 terminal::player_name(player)
+                            ),
+                            Event::CardRevealed { player, attack, .. } => println!(
+                                "{} révèle la carte de sa cache : {}.",
+                                terminal::player_name(player),
+                                attack
                             ),
                             Event::WallDug { at } => {
                                 println!("Le mur est creusé en {}.", at)

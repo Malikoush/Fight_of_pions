@@ -79,6 +79,11 @@ pub(crate) struct AttackContext<'a> {
     /// Faux si le joueur qui attaque est sous Terre brûlée : un coup qui créerait un effet
     /// continu n'est alors pas jouable (carnet, 2026-11-02). Toujours vrai pour « un jour ».
     pub may_create_effects: bool,
+    /// Pendant une fenêtre avant un coup : les cases où l'attaque qui menace va arriver
+    /// (une Feintaille n'y esquive pas). Vide sinon. Aucune carte actuelle n'y fait arriver
+    /// un pion à côté d'un pion visé : c'est une garde pour les cartes à venir (carnet,
+    /// 2026-11-03).
+    pub reserved: &'a [Position],
 }
 
 impl AttackContext<'_> {
@@ -163,6 +168,13 @@ pub(crate) trait AttackRules {
     /// Vrai si l'attaque peut s'arrêter après ces cibles, quand leur nombre le permet. Par
     /// défaut, toujours ; le Lièvre, par exemple, attend qu'un pion choisi ait bougé.
     fn can_stop(&self, _context: &AttackContext, _chosen: &Targets) -> bool {
+        true
+    }
+
+    /// Vrai si les cases choisies désignent des pions **visés** (ce qui ouvre la fenêtre
+    /// d'une Feintaille). Par défaut, vrai ; faux quand elles ne donnent qu'une direction
+    /// (le Coup du taureau : un pion chargé n'est pas visé).
+    fn aims_at_targets(&self) -> bool {
         true
     }
 

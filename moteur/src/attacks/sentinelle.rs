@@ -11,7 +11,7 @@
 use std::ops::RangeInclusive;
 
 use super::Effect;
-use super::reach::around;
+use super::reach::free_around;
 use super::rules::{AttackContext, AttackRules, Trigger};
 use crate::{EffectKind, Position, Rarity};
 
@@ -38,9 +38,7 @@ impl AttackRules for Sentinelle {
         if context.reserve == 0 {
             return Vec::new();
         }
-        around(context.board, context.launcher)
-            .filter(|&pos| context.board.is_free(pos))
-            .collect()
+        free_around(context.board, context.launcher).collect()
     }
 
     fn effects(&self, context: &AttackContext, targets: &[Position]) -> Vec<Effect> {

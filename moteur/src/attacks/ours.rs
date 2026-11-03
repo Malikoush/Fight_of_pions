@@ -99,6 +99,7 @@ mod tests {
             sick_from: None,
             reserve: 0,
             may_create_effects: true,
+            reserved: &[],
         };
         let mut targets = Ours.candidate_targets(&context, &[]);
         targets.sort_by_key(|pos| (pos.row, pos.col));

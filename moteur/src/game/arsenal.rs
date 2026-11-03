@@ -1,7 +1,7 @@
 use crate::Attack;
 
 /// Un emplacement de l'arsenal d'un joueur : une attaque, sa recharge en cours, et si elle
-/// est encore secrète (sa cache, pas encore jouée).
+/// est encore secrète (sa cache, pas encore lancée).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ArsenalSlot {
@@ -20,7 +20,7 @@ impl ArsenalSlot {
     }
 
     /// Une carte de la cache secrète : l'adversaire ne la voit pas avant qu'elle soit
-    /// jouée.
+    /// lancée.
     pub(crate) fn secret(attack: Attack) -> ArsenalSlot {
         ArsenalSlot {
             secret: true,
@@ -29,7 +29,7 @@ impl ArsenalSlot {
     }
 
     /// Vrai si l'adversaire de son propriétaire ne la connaît pas encore : une carte de sa
-    /// cache, jamais jouée. Un client ne la montre qu'à son propriétaire
+    /// cache, jamais lancée. Un client ne la montre qu'à son propriétaire
     /// ([`crate::Game::arsenal_seen_by`]).
     pub fn is_secret(self) -> bool {
         self.secret

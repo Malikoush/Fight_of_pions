@@ -60,9 +60,25 @@ impl Game {
     }
 
     /// Les cartes tirées qui restent à bannir ou à prendre, dans l'ordre du catalogue ;
-    /// vide hors du draft.
+    /// vide hors du draft. Toutes, même avant qu'un joueur puisse les voir : ce que voient
+    /// les joueurs, c'est [`Game::visible_draft_pool`].
     pub fn draft_pool(&self) -> &[Attack] {
         self.draft.as_ref().map_or(&[], |draft| &draft.pool)
+    }
+
+    /// Les cartes tirées telles que les joueurs les voient : aucune tant qu'aucune étape ne
+    /// les a utilisées, puisque la cache se choisit sans les connaître (carnet,
+    /// 2026-11-03).
+    pub fn visible_draft_pool(&self) -> &[Attack] {
+        let shown = match (&self.draft, &self.config.draft) {
+            (Some(draft), Some(rules)) => rules
+                .steps
+                .iter()
+                .take(draft.next_step.saturating_add(1))
+                .any(|step| step.uses_the_pool()),
+            _ => false,
+        };
+        if shown { self.draft_pool() } else { &[] }
     }
 
     /// Les cartes que l'étape en cours permet de choisir : tout le catalogue pour la cache,

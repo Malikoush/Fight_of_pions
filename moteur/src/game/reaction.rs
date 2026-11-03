@@ -35,9 +35,27 @@ pub(super) struct ReactionWindow {
     targeted: Vec<Position>,
     /// L'attaque sur le point de s'appliquer, qui les vise.
     threat: Option<Attack>,
+    /// Les cases que cette attaque a choisies ou où elle fait arriver un pion : une
+    /// Feintaille n'y esquive pas.
+    reserved: Vec<Position>,
 }
 
 impl ReactionWindow {
+    /// Les cases où l'attaque qui menace va arriver.
+    pub(super) fn reserved(&self) -> &[Position] {
+        &self.reserved
+    }
+
+    /// Vrai si le coup a déclenché au moins une sorte de réaction. Lit chaque champ : un
+    /// déclencheur ajouté ici ne peut pas être oublié.
+    fn triggers_anything(&self) -> bool {
+        !self.placed.is_empty()
+            || !self.deaths.is_empty()
+            || self.moved
+            || self.attack.is_some()
+            || !self.targeted.is_empty()
+    }
+
     /// Vrai si le coup a eu lieu de ce qui déclenche cette réaction.
     fn has(&self, trigger: Trigger) -> bool {
         match trigger {
@@ -127,9 +145,12 @@ impl Game {
             .filter(|&pos| self.board.owner(pos) == Some(reactor))
             .collect();
         targeted.dedup();
+        let mut reserved: Vec<Position> = targets.to_vec();
+        reserved.extend(resolution.arrivals());
         self.open_if_playable(ReactionWindow {
             targeted,
             threat: Some(resolution.card),
+            reserved,
             ..ReactionWindow::default()
         })
     }
@@ -138,14 +159,7 @@ impl Game {
     /// vraiment jouable : la même validation que celle de l'action. Vrai si elle est
     /// ouverte.
     fn open_if_playable(&mut self, window: ReactionWindow) -> bool {
-        let triggers = [
-            Trigger::Placement,
-            Trigger::Death,
-            Trigger::Move,
-            Trigger::Attack,
-            Trigger::Targeted,
-        ];
-        if self.reacted_this_turn || !triggers.into_iter().any(|trigger| window.has(trigger)) {
+        if self.reacted_this_turn || !window.triggers_anything() {
             return false;
         }
         self.reaction_window = Some(window);

@@ -180,10 +180,11 @@ impl Game {
         self.scorched_until[player.index()]
     }
 
-    /// Terre brûlée sur l'adversaire du joueur courant, pendant son prochain tour.
+    /// Terre brûlée sur l'adversaire du joueur qui agit, pendant son prochain tour (un
+    /// Perroquet qui la rejoue la retourne contre le joueur courant).
     pub(super) fn scorch_earth(&mut self, events: &mut Vec<Event>) {
-        let enemy = self.current_player.opponent();
-        let last_turn = self.turn.saturating_add(1);
+        let enemy = self.acting_player().opponent();
+        let last_turn = self.last_turn_of(enemy, crate::attacks::SCORCHED_TURNS);
         let scorched = &mut self.scorched_until[enemy.index()];
         // Une seconde Terre brûlée dans le même tour ne change rien.
         if *scorched == Some(last_turn) {
@@ -225,7 +226,7 @@ impl Game {
     }
 
     /// L'arsenal de `player` tel que `viewer` le voit : `None` pour une carte secrète de
-    /// l'adversaire (sa cache, pas encore jouée). C'est la vue joueur des arsenaux.
+    /// l'adversaire (sa cache, pas encore lancée). C'est la vue joueur des arsenaux.
     pub fn arsenal_seen_by(&self, player: Player, viewer: Player) -> Vec<Option<ArsenalSlot>> {
         self.arsenal(player)
             .iter()
@@ -431,13 +432,18 @@ impl Game {
         self.ensure_points(self.current_player, needed)
     }
 
-    /// Les points que ce joueur peut dépenser maintenant : ses actions du tour pendant son
-    /// tour, sa banque pendant le tour adverse (une réaction).
+    /// Vrai si ce joueur dépense et reçoit ses points dans sa banque : pendant le tour
+    /// adverse (une réaction, une vengeance). Pendant son tour, ce sont ses actions du tour.
+    pub(super) fn uses_bank(&self, player: Player) -> bool {
+        player != self.current_player
+    }
+
+    /// Les points que ce joueur peut dépenser maintenant (voir [`Game::uses_bank`]).
     fn points_of(&self, player: Player) -> u32 {
-        if player == self.current_player {
-            self.actions_left
-        } else {
+        if self.uses_bank(player) {
             self.banked_actions[player.index()]
+        } else {
+            self.actions_left
         }
     }
 
@@ -453,10 +459,10 @@ impl Game {
     /// Fait payer ce coût, déjà vérifié, à ce joueur : avec ses actions du tour, ou avec sa
     /// banque pendant le tour adverse.
     pub(super) fn pay(&mut self, player: Player, cost: u32) {
-        let points = if player == self.current_player {
-            &mut self.actions_left
-        } else {
+        let points = if self.uses_bank(player) {
             &mut self.banked_actions[player.index()]
+        } else {
+            &mut self.actions_left
         };
         *points = points.saturating_sub(cost);
     }
@@ -487,7 +493,7 @@ impl Game {
         let mut events = Vec::new();
         match action {
             Action::Place(pos) => self.execute_place(pos, &mut events),
-            Action::UseAttack(slot) => self.start_attack(slot),
+            Action::UseAttack(slot) => self.start_attack(slot, &mut events),
             Action::Choose(pos) => self.execute_choice(pos, &mut events),
             Action::ChooseEnemyTokens => self.execute_enemy_tokens(&mut events),
             Action::FinishAttack => self.resolve_attack(&mut events),

@@ -123,9 +123,12 @@ async fn two_humans_play_and_each_sees_only_its_own_cache() {
     assert_eq!(seen_by_one.sides[0].arsenal[0].unwrap().attack(), cache);
     assert_eq!(seen_by_two.sides[0].arsenal, [None]);
     assert_eq!(events_one.len(), 1);
-    assert!(
-        events_two.is_empty(),
-        "la cache de J1 n'est pas annoncée à J2"
+    // J2 apprend qu'une carte est en cache, sans la carte.
+    assert_eq!(
+        events_two,
+        [Event::CardCached {
+            player: Player::One
+        }]
     );
 }
 

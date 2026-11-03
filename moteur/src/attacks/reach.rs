@@ -10,6 +10,12 @@ pub(crate) fn around(board: &Board, from: Position) -> impl Iterator<Item = Posi
         .filter_map(move |&dir| board.neighbor(from, dir))
 }
 
+/// Les cases libres collées à `from` : d'où partent la Sentinelle, la Queue du lézard et
+/// la Feintaille.
+pub(crate) fn free_around(board: &Board, from: Position) -> impl Iterator<Item = Position> + '_ {
+    around(board, from).filter(move |&pos| board.is_free(pos))
+}
+
 /// Les cases de `from` vers le bord, dans une direction, sans `from`, jusqu'à `distance`.
 fn ray(
     board: &Board,

@@ -12,13 +12,23 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Event {
-    /// Une carte de la cache de ce joueur, à cet emplacement de son arsenal, est jouée pour
-    /// la première fois : elle n'est plus secrète. Suit l'annonce de l'attaque.
+    /// Une carte de la cache de ce joueur, à cet emplacement de son arsenal, est lancée pour
+    /// la première fois ([`crate::Action::UseAttack`]) : elle n'est plus secrète. Ses choix
+    /// suivent, puis l'annonce de l'attaque ([`Event::AttackUsed`]).
     CardRevealed {
         /// Son propriétaire.
         player: Player,
         /// Son emplacement dans son arsenal.
         slot: usize,
+        /// La carte.
+        attack: Attack,
+    },
+    /// L'adversaire de celui qui regarde a mis une carte dans sa cache, à l'emplacement
+    /// suivant de son arsenal, sans dire laquelle. Le moteur ne l'émet jamais : c'est
+    /// [`Event::Drafted`] tel que l'adversaire le voit ([`Event::seen_by`]).
+    CardCached {
+        /// Le joueur qui a mis la carte en cache.
+        player: Player,
     },
     /// Un choix du draft : la carte mise en cache ou prise s'ajoute à l'arsenal du joueur
     /// (emplacement suivant), la carte bannie disparaît des cartes tirées.

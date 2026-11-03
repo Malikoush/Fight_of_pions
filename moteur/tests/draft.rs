@@ -71,6 +71,19 @@ fn the_cache_is_chosen_in_the_whole_catalog_legendaries_included() {
 }
 
 #[test]
+fn the_drawn_cards_are_hidden_until_the_caches_are_chosen() {
+    let mut game = game_with(drafted());
+    assert_eq!(game.draft_pool().len(), 10);
+    assert!(game.visible_draft_pool().is_empty());
+    assert!(game.view(Player::One).draft_pool.is_empty());
+    let first = first_choice(&game);
+    play(&mut game, &[Action::Draft(first), Action::Draft(first)]);
+    // Premier ban : les cartes tirées se montrent.
+    assert_eq!(game.visible_draft_pool(), game.draft_pool());
+    assert_eq!(game.view(Player::Two).draft_pool.len(), 10);
+}
+
+#[test]
 fn ten_different_cards_are_drawn_with_the_seed() {
     let pool_of = |seed| Game::new(drafted(), seed).unwrap().draft_pool().to_vec();
     let pool = pool_of(7);
@@ -215,23 +228,29 @@ fn a_cached_card_is_revealed_when_first_played() {
     let mut game = hares_in_cache();
     play(&mut game, &[place(4, 4), Action::EndTurn]);
     play(&mut game, &[place(0, 0), Action::EndTurn]);
-    let events = play(
-        &mut game,
-        &[
-            Action::UseAttack(0),
-            choose(4, 4),
-            choose(4, 5),
-            Action::FinishAttack,
-        ],
+    // Révélée dès qu'elle est lancée : une attaque commencée va au bout.
+    let events = play(&mut game, &[Action::UseAttack(0)]);
+    assert_eq!(
+        events,
+        [Event::CardRevealed {
+            player: Player::One,
+            slot: 0,
+            attack: hare(),
+        }]
     );
-    assert!(events.contains(&Event::CardRevealed {
-        player: Player::One,
-        slot: 0
-    }));
     assert!(!game.arsenal(Player::One)[0].is_secret());
     assert_eq!(
         game.arsenal_seen_by(Player::One, Player::Two),
         [Some(game.arsenal(Player::One)[0])]
+    );
+    let events = play(
+        &mut game,
+        &[choose(4, 4), choose(4, 5), Action::FinishAttack],
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, Event::CardRevealed { .. }))
     );
     // Celle de J2, jamais jouée, reste secrète.
     assert!(game.arsenal(Player::Two)[0].is_secret());

@@ -156,7 +156,7 @@ impl Game {
     /// (sa banque redescend à son maximum à la fin du tour) ; pendant le tour adverse, à sa
     /// banque, dans la limite de son maximum (carnet, 2026-11-02).
     fn give_points(&mut self, player: Player, points: u32, events: &mut Vec<Event>) {
-        if player == self.current_player {
+        if !self.uses_bank(player) {
             self.actions_left = self.actions_left.saturating_add(points);
         } else {
             let bank = &mut self.banked_actions[player.index()];
