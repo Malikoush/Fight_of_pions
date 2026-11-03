@@ -12,7 +12,8 @@
 //! quelle carte), est tué ; s'il est protégé, il est seulement immobilisé à nouveau.
 //! **Séduction** : le pion visé est tué, et un pion de ta réserve est posé à sa place
 //! (carnet, 2026-10-30 : c'est un kill, pas un changement de camp). Impossible si ta
-//! réserve est vide ou si la cible est protégée.
+//! réserve est vide ou si la cible est protégée. Si le pion esquive (Feintaille), rien
+//! n'est posé (carnet, 2026-11-03).
 
 use std::ops::RangeInclusive;
 
@@ -83,10 +84,9 @@ impl AttackRules for BeauteFatale {
             .iter()
             .flat_map(|&at| match context.rarity {
                 Rarity::Common | Rarity::Rare => vec![charm(context, at)],
-                Rarity::Epic => vec![Effect::Kill { at }, Effect::Place { at }],
+                Rarity::Epic => vec![Effect::Seduce { at }],
                 Rarity::Legendary => vec![
-                    Effect::Kill { at },
-                    Effect::Place { at },
+                    Effect::Seduce { at },
                     Effect::Apply {
                         at,
                         kind: EffectKind::Protected,

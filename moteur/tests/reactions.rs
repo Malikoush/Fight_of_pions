@@ -874,3 +874,33 @@ fn the_other_targeted_pions_are_hit_normally() {
     assert_eq!(game.board().owner(at(3, 6)), Some(Player::Two));
     assert_eq!(game.board().owner(at(5, 5)), None);
 }
+
+#[test]
+fn a_dodged_seduction_places_nothing() {
+    let seduction = card(AttackKind::BeauteFatale, Rarity::Epic);
+    let mut game = game_with(rich(vec![seduction], vec![feint(Rarity::Rare)]));
+    play(&mut game, &[place(4, 4), Action::EndTurn]);
+    play(&mut game, &[place(4, 5), Action::EndTurn]);
+    // Tour 3 : la Beauté fatale Épique de J1 séduit F5 ; F5 esquive en G5.
+    play(
+        &mut game,
+        &[Action::UseAttack(0), choose(4, 4), choose(4, 5)],
+    );
+    assert!(two_may_react(&game));
+    let events = play(
+        &mut game,
+        &[Action::UseAttack(0), choose(4, 5), choose(4, 6)],
+    );
+    assert_eq!(game.board().owner(at(4, 6)), Some(Player::Two));
+    assert_eq!(
+        game.board().owner(at(4, 5)),
+        None,
+        "rien n'est posé à sa place"
+    );
+    assert_eq!(game.reserve_pions(Player::One), 14);
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, Event::PionPlaced { .. }))
+    );
+}

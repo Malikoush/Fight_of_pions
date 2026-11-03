@@ -124,7 +124,7 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
 - **Rare** : immobilise 2 pions adverses différents pendant 2 tours.
 - **Charme fatal** : un pion visé déjà immobilisé (par n'importe quelle carte) est tué ; s'il est protégé, il est seulement immobilisé à nouveau.
 - (2026-10-30) **Épique** : séduit 1 pion adverse dans le regard. **Légendaire** : séduit 1 pion adverse n'importe où ; le nouveau pion est protégé jusqu'au prochain tour du joueur (1 tour de l'adversaire).
-- **Séduction** : le pion visé est tué (c'est un kill), puis un pion de ta réserve est posé à sa place. Ce n'est pas un changement de camp (carnet, 2026-10-30). Impossible si ta réserve est vide ou si la cible est protégée. Le pion posé compte comme posé ce tour et n'utilise pas la pose normale.
+- **Séduction** : le pion visé est tué (c'est un kill), puis un pion de ta réserve est posé à sa place. Ce n'est pas un changement de camp (carnet, 2026-10-30). Impossible si ta réserve est vide ou si la cible est protégée. Le pion posé compte comme posé ce tour et n'utilise pas la pose normale. La séduction **remplace** le pion visé : s'il esquive (Feintaille) ou qu'un garde le sauve, rien n'est posé (2026-11-03).
 
 ### Reine : le Garde royal (2026-10-30)
 
@@ -475,8 +475,8 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B9 | Les cartes tirées sont-elles visibles pendant le choix de la cache ? | Non : la cache d'abord, le tirage ensuite | **2026-11-03** : non (réponse par défaut). |
 | B8c | La Feintaille peut-elle esquiver vers une case que l'attaque va utiliser (une case choisie, l'arrivée d'un pion déplacé ou posé) ? | Non | **2026-11-03** : non (réponse par défaut). |
 | B8 | Après une Feintaille à laquelle on a passé, une seconde fenêtre (Perroquet, Queue du lézard) peut-elle s'ouvrir pour la même attaque ? | Oui | **2026-11-03** : oui (réponse par défaut). |
-| B8c | Séduction esquivée (Beauté fatale Épique et Légendaire : tuer le pion visé, puis poser le tien sur sa case) : si le pion visé esquive, le kill rate ; le pion de l'attaquant est-il quand même posé sur la case libérée ? Aujourd'hui oui : l'attaquant gagne une pose. | Non : la séduction remplace le pion visé, rien n'est posé | |
-| B8c | Médecin Épique sur une tombe occupée par un pion adverse : ce pion est-il « visé » (fenêtre de Feintaille) ? S'il esquive, la résurrection a lieu sur la case libérée. Aujourd'hui oui aux deux. | Oui, il est visé, et la résurrection a lieu | |
+| B8c | Séduction esquivée (Beauté fatale Épique et Légendaire : tuer le pion visé, puis poser le tien sur sa case) : si le pion visé esquive, le kill rate ; le pion de l'attaquant est-il quand même posé sur la case libérée ? Aujourd'hui oui : l'attaquant gagne une pose. | Non : la séduction remplace le pion visé, rien n'est posé | **2026-11-03** : non, la séduction remplace le pion visé (Martin accepte aussi une séduction qu'on ne peut pas esquiver ; on garde la Feintaille utile). `Effect::Seduce`. |
+| B8c | Médecin Épique sur une tombe occupée par un pion adverse : ce pion est-il « visé » (fenêtre de Feintaille) ? S'il esquive, la résurrection a lieu sur la case libérée. Aujourd'hui oui aux deux. | Oui, il est visé, et la résurrection a lieu | **2026-11-03** : oui. |
 | B9 | Une même carte peut-elle être deux fois dans un arsenal (la cache identique à un pick ou à une carte de départ) ? | Oui, deux emplacements et deux recharges | **2026-11-03** : oui (réponse par défaut). |
 
 ## Historique
@@ -514,3 +514,4 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-11-03 | B9a : le draft, réglable (`DraftRules`) : 1 carte en cache dans tout le catalogue, 10 cartes tirées avec la graine, 1 ban chacun, 3 picks chacun en serpent (J2 d'abord) ; les cartes choisies remplissent l'arsenal. |
 | 2026-11-03 | B9b : la cache est secrète pour l'adversaire et révélée à sa première utilisation (`ArsenalSlot::is_secret`, `Event::CardRevealed`). |
 | 2026-11-03 | Correctif du secret (relecture du gardien) : la cache est révélée dès qu'on la lance ; les cartes tirées se cachent jusqu'au premier ban ou pick ; l'adversaire reçoit « carte mise en cache » sans la carte (`Event::CardCached`) au lieu de rien ; la Feintaille n'esquive pas vers une case où l'attaque arrive ; un pion chargé par le Coup du taureau n'est pas visé ; Terre brûlée rejouée par un Perroquet frappe l'attaquant. |
+| 2026-11-03 | Séduction esquivée : rien n'est posé (`Effect::Seduce`, qui ne pose que si le kill a lieu). Médecin Épique sur une tombe occupée : le pion est visé, la résurrection a lieu même s'il esquive. |

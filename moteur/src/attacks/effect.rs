@@ -71,6 +71,14 @@ pub(crate) enum Effect {
         /// La case d'arrivée.
         to: Position,
     },
+    /// Séduire le pion de cette case (Beauté fatale) : le tuer, puis poser à sa place un
+    /// pion de la réserve du joueur qui attaque, comme [`Effect::Place`]. Rien n'est posé
+    /// si le kill n'a pas lieu : la case est vide (le pion a esquivé) ou un garde l'a sauvé
+    /// (carnet, 2026-11-03).
+    Seduce {
+        /// La case du pion séduit.
+        at: Position,
+    },
     /// Poser un pion de la réserve du joueur qui attaque sur cette case libre. Comme une
     /// pose : il reçoit une nouvelle identité et compte comme posé ce tour, mais n'utilise
     /// pas la pose normale du tour et ne coûte rien de plus.
@@ -142,6 +150,7 @@ impl Effect {
             | Effect::CancelEnemyTokens
             | Effect::ScorchEarth
             | Effect::Move { .. }
+            | Effect::Seduce { .. }
             | Effect::Place { .. }
             | Effect::Resurrect { .. }
             | Effect::Dig { .. }
@@ -150,11 +159,11 @@ impl Effect {
     }
 
     /// La case où cet effet fait arriver un pion, s'il en fait arriver un : déplacer,
-    /// poser, ressusciter. Sans joker : chaque nouvelle primitive doit trancher.
+    /// poser, séduire, ressusciter. Sans joker : chaque nouvelle primitive doit trancher.
     pub(crate) fn arrival(self) -> Option<Position> {
         match self {
             Effect::Move { to, .. } => Some(to),
-            Effect::Place { at } | Effect::Resurrect { at, .. } => Some(at),
+            Effect::Place { at } | Effect::Seduce { at } | Effect::Resurrect { at, .. } => Some(at),
             Effect::Kill { .. }
             | Effect::Apply { .. }
             | Effect::Attach { .. }
@@ -183,6 +192,7 @@ impl Effect {
             | Effect::RemoveEnemyStatuses { at }
             | Effect::CancelEnemyEffects { at }
             | Effect::Place { at }
+            | Effect::Seduce { at }
             | Effect::Resurrect { at, .. }
             | Effect::Crown { at, .. }
             | Effect::MakeChild { at, .. } => Some(at),

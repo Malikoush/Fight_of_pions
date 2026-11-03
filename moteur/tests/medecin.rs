@@ -384,3 +384,49 @@ fn an_occupant_killed_by_the_epic_doctor_is_avenged_by_its_friend() {
     assert_eq!(game.board().owner(at(4, 3)), None);
     assert_eq!(game.board().owner(at(4, 4)), Some(Player::One));
 }
+
+#[test]
+fn the_epic_doctor_resurrects_even_if_the_enemy_on_the_tomb_dodges() {
+    let feint = Attack {
+        kind: AttackKind::Feintaille,
+        rarity: Rarity::Rare,
+    };
+    // J2 a 4 points en banque au départ : il lui en reste 2 pour la Feintaille Rare au
+    // tour 5.
+    let config = GameConfig {
+        max_banked_actions: 4,
+        starting_banked_actions: [0, 4],
+        ..config(
+            2,
+            vec![doctor(Rarity::Epic)],
+            vec![ours(Rarity::Rare), feint],
+        )
+    };
+    let mut game = game_with(config);
+    play(&mut game, &[place(4, 4)]); // tour 1, J1 : E5
+    play(&mut game, &[place(4, 5), Action::EndTurn]); // tour 2, J2 : F5
+    play(&mut game, &[place(4, 3), Action::EndTurn]); // tour 3, J1 : D5
+    play(
+        &mut game,
+        &[
+            Action::UseAttack(0),
+            choose(4, 5),
+            choose(4, 4),
+            place(4, 4),
+            Action::EndTurn,
+        ],
+    ); // tour 4, J2 : tue E5 et pose sur sa tombe
+    let occupant = pion_at(&game, at(4, 4));
+    // Tour 5 : l'occupant de la tombe est visé ; il esquive en E4, et E5 revient quand même.
+    play(
+        &mut game,
+        &[Action::UseAttack(0), choose(4, 3), choose(4, 4)],
+    );
+    play(
+        &mut game,
+        &[Action::UseAttack(1), choose(4, 4), choose(3, 4)],
+    );
+    assert_eq!(pion_at(&game, at(3, 4)), occupant);
+    assert_eq!(game.board().owner(at(4, 4)), Some(Player::One));
+    assert!(game.infirmary().is_empty());
+}

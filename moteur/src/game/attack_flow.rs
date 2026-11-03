@@ -404,11 +404,19 @@ impl Game {
         events: &mut Vec<Event>,
     ) -> Applied {
         match effect {
-            Effect::Kill { at } => match self.kill(at, by, self.acting_player(), events) {
-                Hit::Killed(death) => deaths.push(death),
-                Hit::Shielded => return Applied::Shielded(at),
-                Hit::Missed => {}
-            },
+            Effect::Kill { at } | Effect::Seduce { at } => {
+                match self.kill(at, by, self.acting_player(), events) {
+                    Hit::Killed(death) => {
+                        deaths.push(death);
+                        // La séduction remplace le pion tué : pas de pose sans kill.
+                        if matches!(effect, Effect::Seduce { .. }) {
+                            self.put_pion(at, events);
+                        }
+                    }
+                    Hit::Shielded => return Applied::Shielded(at),
+                    Hit::Missed => {}
+                }
+            }
             Effect::Apply { at, kind, turns } => {
                 self.start_effect(at, kind, turns, play, events);
             }
