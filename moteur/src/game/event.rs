@@ -1,4 +1,6 @@
-use crate::{ActiveEffect, Attack, GameEnd, Patient, Pion, PionId, Player, Position, TokenPile};
+use crate::{
+    ActiveEffect, Attack, DraftStep, GameEnd, Patient, Pion, PionId, Player, Position, TokenPile,
+};
 
 /// Ce que le moteur annonce après une action acceptée.
 ///
@@ -9,6 +11,14 @@ use crate::{ActiveEffect, Attack, GameEnd, Patient, Pion, PionId, Player, Positi
 /// (lanceur, cibles) n'en produisent aucun : l'attaque est annoncée quand elle est résolue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Event {
+    /// Un choix du draft : la carte mise en cache ou prise s'ajoute à l'arsenal du joueur
+    /// (emplacement suivant), la carte bannie disparaît des cartes tirées.
+    Drafted {
+        /// L'étape : qui a choisi, et quoi.
+        step: DraftStep,
+        /// La carte choisie.
+        attack: Attack,
+    },
     /// Un pion a été posé.
     PionPlaced {
         /// Le pion posé, avec son identité et son propriétaire.

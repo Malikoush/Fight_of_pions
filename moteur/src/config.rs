@@ -1,5 +1,5 @@
 use crate::error::GameError;
-use crate::{Attack, AttackKind, AttackStats, CatalogEntry, Position, Rarity};
+use crate::{Attack, AttackKind, AttackStats, CatalogEntry, Player, Position, Rarity};
 use std::fmt;
 
 /// Tous les réglages d'une partie, vérifiés par [`GameConfig::validate`].
@@ -66,9 +66,99 @@ pub struct GameConfig {
     /// Le catalogue des attaques : le coût et la recharge de chaque variante jouable.
     pub attack_catalog: Vec<CatalogEntry>,
     /// Les attaques de chaque joueur au début de la partie (indice : `Player::index`).
-    /// En attendant le draft (B9), c'est ici qu'on les choisit ; plus tard, ce sera la
-    /// cache secrète de chaque joueur.
+    /// Avec un draft, les cartes choisies s'y ajoutent.
     pub starting_attacks: [Vec<Attack>; 2],
+    /// Le draft joué avant la partie, s'il y en a un : la cache secrète, puis les bans et
+    /// les picks. Absent d'une partie enregistrée avant le draft : pas de draft.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub draft: Option<DraftRules>,
+}
+
+/// Le draft (carnet, « Draft et cache secrète ») : avant la partie, les joueurs font leurs
+/// choix dans l'ordre de `steps`. La cache se choisit dans tout le catalogue ; les bans et
+/// les picks, parmi `pool_size` cartes tirées avec la graine, toutes différentes. Les
+/// cartes mises en cache et prises s'ajoutent à l'arsenal de départ, dans l'ordre.
+///
+/// Tout le format est dans ces données : [`DraftRules::new`] en fabrique un à partir de
+/// quelques nombres, mais n'importe quelle suite de choix est permise.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+pub struct DraftRules {
+    /// Les cartes tirées pour les bans et les picks.
+    pub pool_size: usize,
+    /// Les choix, dans l'ordre.
+    pub steps: Vec<DraftStep>,
+}
+
+/// Un choix du draft : qui choisit, et quoi.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum DraftStep {
+    /// Ce joueur met une carte du catalogue dans sa cache secrète.
+    Cache(Player),
+    /// Ce joueur retire une des cartes tirées : personne ne la prendra.
+    Ban(Player),
+    /// Ce joueur prend une des cartes tirées.
+    Pick(Player),
+}
+
+impl DraftStep {
+    /// Le joueur qui choisit.
+    pub fn player(self) -> Player {
+        match self {
+            DraftStep::Cache(player) | DraftStep::Ban(player) | DraftStep::Pick(player) => player,
+        }
+    }
+
+    /// Vrai si le choix se fait parmi les cartes tirées (ban, pick), et non dans tout le
+    /// catalogue (cache).
+    pub fn uses_the_pool(self) -> bool {
+        !matches!(self, DraftStep::Cache(_))
+    }
+}
+
+impl DraftRules {
+    /// Le format décidé le 2026-11-03 : 1 carte en cache chacun, 10 cartes tirées, 1 ban
+    /// chacun, puis 3 picks chacun en serpent.
+    pub fn standard() -> DraftRules {
+        DraftRules::new(1, 10, 1, 3)
+    }
+
+    /// Un draft de `cache` cartes en cache chacun (J1, puis J2), `pool_size` cartes tirées,
+    /// `bans` bans chacun (J1 et J2 en alternance), puis `picks` picks chacun en serpent :
+    /// J2 prend en premier, puisque J1 joue en premier (J2, J1, J1, J2, J2, J1…).
+    pub fn new(cache: usize, pool_size: usize, bans: usize, picks: usize) -> DraftRules {
+        let both = [Player::One, Player::Two];
+        let caches = both
+            .into_iter()
+            .flat_map(|player| std::iter::repeat_n(DraftStep::Cache(player), cache));
+        let bans = (0..bans).flat_map(|_| both.map(DraftStep::Ban));
+        let picks = (0..picks * 2).map(|index| {
+            let first = if (index / 2) % 2 == 0 {
+                Player::Two
+            } else {
+                Player::One
+            };
+            DraftStep::Pick(if index % 2 == 0 {
+                first
+            } else {
+                first.opponent()
+            })
+        });
+        DraftRules {
+            pool_size,
+            steps: caches.chain(bans).chain(picks).collect(),
+        }
+    }
+
+    /// Les choix faits parmi les cartes tirées (bans et picks).
+    fn pool_steps(&self) -> usize {
+        self.steps
+            .iter()
+            .filter(|step| step.uses_the_pool())
+            .count()
+    }
 }
 
 /// Les règles actuelles (carnet, « Tour de jeu », 2026-11-02) : 1 pose gratuite par tour,
@@ -205,6 +295,11 @@ pub enum ConfigError {
     AttackNotInCatalog(Attack),
     /// Le tir d'un garde ne coûterait rien, ou plus que ce qu'un tour peut payer.
     GuardShotCostOutOfRange,
+    /// Le draft tirerait plus de cartes que le catalogue n'en a.
+    DraftPoolTooLarge,
+    /// Le draft tirerait moins de cartes qu'il n'y a de bans et de picks, ou la cache se
+    /// choisirait dans un catalogue vide.
+    DraftPoolTooSmall,
 }
 
 impl fmt::Display for ConfigError {
@@ -277,6 +372,14 @@ impl fmt::Display for ConfigError {
                 f,
                 "le tir d'un garde doit coûter au moins une action, et au plus le maximum d'un tour"
             ),
+            ConfigError::DraftPoolTooLarge => write!(
+                f,
+                "le draft ne peut pas tirer plus de cartes que le catalogue n'en a"
+            ),
+            ConfigError::DraftPoolTooSmall => write!(
+                f,
+                "le draft doit tirer au moins autant de cartes qu'il y a de bans et de picks"
+            ),
         }
     }
 }
@@ -312,6 +415,7 @@ impl GameConfig {
             max_turns: 200,
             attack_catalog: default_attack_catalog(),
             starting_attacks: [Vec::new(), Vec::new()],
+            draft: None,
         }
     }
 
@@ -406,6 +510,20 @@ impl GameConfig {
             return Some(ConfigError::GuardShotCostOutOfRange);
         }
         self.find_attack_problem()
+            .or_else(|| self.find_draft_problem())
+    }
+
+    fn find_draft_problem(&self) -> Option<ConfigError> {
+        let draft = self.draft.as_ref()?;
+        let catalog = self.attack_catalog.len();
+        if draft.pool_size > catalog {
+            return Some(ConfigError::DraftPoolTooLarge);
+        }
+        let caches = draft.steps.len() > draft.pool_steps();
+        if draft.pool_steps() > draft.pool_size || (caches && catalog == 0) {
+            return Some(ConfigError::DraftPoolTooSmall);
+        }
+        None
     }
 
     fn find_attack_problem(&self) -> Option<ConfigError> {

@@ -38,7 +38,7 @@ fn main() {
             Ok(_) => {}
         }
 
-        match terminal::parse_command(&line) {
+        match terminal::parse_command(&line, &game) {
             Ok(Command::Quit) => break,
             Ok(Command::Help) => println!("{}", terminal::help(game.config())),
             Ok(Command::Play(action)) => match game.apply(action) {
@@ -76,6 +76,12 @@ fn main() {
                                 terminal::player_name(pion.owner()),
                                 from,
                                 to
+                            ),
+                            Event::Drafted { step, attack } => println!(
+                                "{} choisit {} ({:?}).",
+                                terminal::player_name(step.player()),
+                                attack,
+                                step
                             ),
                             Event::WallDug { at } => {
                                 println!("Le mur est creusé en {}.", at)

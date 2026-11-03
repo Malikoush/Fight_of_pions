@@ -1,5 +1,6 @@
 use super::arsenal::ArsenalSlot;
 use super::attack_flow::Resolution;
+use super::draft::DraftState;
 use super::hare::HareWalk;
 use super::lasting::{ActiveEffect, EffectId, Patient, PlayId};
 use super::reaction::ReactionWindow;
@@ -56,6 +57,8 @@ pub struct Game {
     /// Pour chaque joueur sous Terre brûlée, le dernier tour où il ne peut créer aucun effet
     /// continu.
     pub(super) scorched_until: [Option<u32>; 2],
+    /// Le draft en cours, avant la partie, s'il y en a un.
+    pub(super) draft: Option<DraftState>,
     /// La fenêtre de réaction ouverte, s'il y en a une : l'autre joueur décide.
     pub(super) reaction_window: Option<ReactionWindow>,
     /// L'attaque du joueur courant qui attend, pour s'appliquer, la réponse de l'autre
@@ -240,6 +243,9 @@ impl Game {
         if self.end.is_some() {
             return None;
         }
+        if let Some(step) = self.draft_step() {
+            return Some(Decision::Draft { step });
+        }
         let player = self.acting_player();
         Some(match &self.pending_attack {
             None if self.reaction_window.is_some() => Decision::React { player },
@@ -281,6 +287,9 @@ impl Game {
     pub fn legal_actions(&self) -> Vec<Action> {
         if self.end.is_some() {
             return Vec::new();
+        }
+        if self.draft.is_some() {
+            return self.draft_actions();
         }
         let candidates: Vec<Action> = match self.pending_attack {
             None if self.reaction_window.is_some() => {
@@ -352,6 +361,7 @@ impl Game {
             queen_shot: false,
             hare_walks: Vec::new(),
             scorched_until: [None, None],
+            draft: DraftState::start(&config, seed),
             reaction_window: None,
             paused_attack: None,
             reacted_this_turn: false,
@@ -372,6 +382,9 @@ impl Game {
     fn validate(&self, action: Action) -> Result<(), GameError> {
         if self.end.is_some() {
             return Err(GameError::GameOver);
+        }
+        if self.draft.is_some() {
+            return self.validate_draft(action);
         }
         match (&self.pending_attack, action) {
             (None, Action::UseAttack(slot)) => self.validate_use_attack(slot),
@@ -459,6 +472,7 @@ impl Game {
             Action::Shoot(at) => self.execute_shot(at, &mut events),
             Action::HareStep { from, to } => self.execute_hare_step(from, to, &mut events),
             Action::Pass => self.execute_pass(&mut events),
+            Action::Draft(attack) => self.execute_draft(attack, &mut events),
             Action::EndTurn => self.finish_turn(&mut events),
         }
         self.announce_placements(placements_before, &mut events);

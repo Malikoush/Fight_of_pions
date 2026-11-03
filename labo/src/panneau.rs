@@ -9,8 +9,8 @@ use crate::theme;
 use bots::BotKind;
 use eframe::egui;
 use fight_of_pions::{
-    Action, ActiveEffect, Decision, EffectEnd, Event, Game, GameConfig, GameEnd, GameRecord,
-    Outcome, Player, Position, TokenPile, TokenReward,
+    Action, ActiveEffect, Decision, DraftStep, EffectEnd, Event, Game, GameConfig, GameEnd,
+    GameRecord, Outcome, Player, Position, TokenPile, TokenReward,
 };
 use std::time::Duration;
 
@@ -163,7 +163,11 @@ impl Panneau {
         ui.separator();
         self.joueurs(ui, game, intentions);
         ui.separator();
-        attaques(ui, game, apercu, tour_humain, intentions);
+        if let Some(Decision::Draft { step }) = game.pending_decision() {
+            draft(ui, game, step, tour_humain, intentions);
+        } else {
+            attaques(ui, game, apercu, tour_humain, intentions);
+        }
         ui.separator();
         self.outils(ui, record, intentions);
         ui.separator();
@@ -416,6 +420,64 @@ fn attaques(
     }
 }
 
+/// Le draft, avant la partie : un bouton par carte que l'étape permet de choisir.
+fn draft(
+    ui: &mut egui::Ui,
+    game: &Game,
+    step: DraftStep,
+    tour_humain: bool,
+    intentions: &mut Vec<Intention>,
+) {
+    let (verbe, ou) = match step {
+        DraftStep::Cache(_) => ("met en cache", "dans tout le catalogue"),
+        DraftStep::Ban(_) => ("bannit", "parmi les cartes tirées"),
+        DraftStep::Pick(_) => ("prend", "parmi les cartes tirées"),
+    };
+    ui.label("Draft");
+    ui.label(format!(
+        "{} {verbe} une carte, {ou}.",
+        theme::nom_joueur(step.player())
+    ));
+    for player in [Player::One, Player::Two] {
+        let main: Vec<String> = game
+            .arsenal(player)
+            .iter()
+            .map(|slot| slot.attack().to_string())
+            .collect();
+        ui.label(format!(
+            "{} : {}",
+            theme::nom_joueur(player),
+            main.join(", ")
+        ));
+    }
+    egui::ScrollArea::vertical()
+        .id_salt("draft")
+        .max_height(theme::HAUTEUR_JOURNAL)
+        .show(ui, |ui| {
+            for action in game.legal_actions() {
+                let Action::Draft(attaque) = action else {
+                    continue;
+                };
+                let cout = game
+                    .config()
+                    .attack_stats(attaque)
+                    .map_or(String::new(), |stats| format!(", coût {}", stats.cost));
+                let reaction = if attaque.kind.is_reaction() {
+                    ", réaction"
+                } else {
+                    ""
+                };
+                let texte = format!("{attaque}{reaction}{cout}");
+                if ui
+                    .add_enabled(tour_humain, egui::Button::new(texte))
+                    .clicked()
+                {
+                    intentions.push(Intention::Demande(Demande::Agir(action)));
+                }
+            }
+        });
+}
+
 /// Les gestes que le moteur permet maintenant hors attaque, un bouton chacun : le pas
 /// gratuit de la reine vers une case, le tir d'un garde sur un pion, un pas du Lièvre.
 /// Cliquer une case libre sert déjà à poser : un bouton évite toute confusion.
@@ -521,6 +583,17 @@ fn nom_controleur(controleur: Option<BotKind>) -> &'static str {
 /// le panneau).
 fn decrire(event: &Event) -> Option<String> {
     match event {
+        Event::Drafted { step, attack } => {
+            let choix = match step {
+                DraftStep::Cache(_) => "met en cache",
+                DraftStep::Ban(_) => "bannit",
+                DraftStep::Pick(_) => "prend",
+            };
+            Some(format!(
+                "{} {choix} {attack}",
+                theme::nom_joueur(step.player())
+            ))
+        }
         Event::PionPlaced { pion, at } => Some(format!(
             "{} pose le pion {} en {}",
             theme::nom_joueur(pion.owner()),

@@ -170,8 +170,8 @@ Le labo est entièrement en français, noms du code compris.
 
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
-| Cache secrète | `SecretCache` | Les 3 attaques choisies dans sa collection, cachées à l'adversaire |
-| Draft | `Draft` | Tirage de 14 cartes avec la graine, puis bans et picks en serpent |
+| Cache secrète | `DraftStep::Cache` | Les cartes (1 par défaut) que chaque joueur choisit dans tout le catalogue avant le draft ; cachées à l'adversaire jusqu'à leur premier usage (B9b) |
+| Draft | `GameConfig::draft`, `DraftRules`, `DraftStep`, `Decision::Draft`, `Action::Draft`, `Event::Drafted`, `Game::draft_pool` | Avant la partie : la cache, puis des cartes tirées avec la graine (10 par défaut), bannies et prises dans l'ordre des étapes (1 ban chacun, 3 picks en serpent) |
 | Gacha, collection | hors moteur | Le moteur reçoit les cartes déjà choisies |
 
 ## Conventions

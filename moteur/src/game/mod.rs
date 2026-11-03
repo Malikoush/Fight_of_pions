@@ -3,6 +3,7 @@ mod arsenal;
 mod attack_flow;
 mod clock;
 mod decision;
+mod draft;
 mod end;
 mod event;
 mod hare;

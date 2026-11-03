@@ -64,6 +64,9 @@ pub enum GameError {
     QueenCannotShoot(Position),
     /// Seule une réaction se joue pendant le tour adverse : cette carte est une attaque.
     NotAReaction(Attack),
+    /// Cette carte ne peut pas être choisie à cette étape du draft : hors du catalogue
+    /// pour la cache, ou pas parmi les cartes tirées qui restent.
+    NotInDraft(Attack),
     /// Rien ne déclenche cette réaction maintenant : elle ne se joue que pendant le tour
     /// adverse, juste après son déclencheur.
     NotTriggered(Attack),
@@ -118,6 +121,13 @@ impl fmt::Display for GameError {
             }
             GameError::QueenCannotShoot(pos) => {
                 write!(f, "aucun garde de la reine ne peut tirer sur {}", pos)
+            }
+            GameError::NotInDraft(attack) => {
+                write!(
+                    f,
+                    "{} ne peut pas être choisie à cette étape du draft",
+                    attack
+                )
             }
             GameError::NotAReaction(attack) => write!(
                 f,

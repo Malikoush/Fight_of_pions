@@ -289,6 +289,19 @@ La carte de B8c :
   - Commune (1) : contre une attaque de 2 points ou moins.
   - Rare (2) : contre n'importe quelle attaque.
 
+### Draft et cache secrète (2026-11-03, B9a : le draft ; B9b : la cache cachée)
+
+Avant la partie, si la configuration a un draft (`draft`, absent par défaut ; variante « règles actuelles avec draft » au labo) :
+
+- **Le format** est une suite de choix dans la configuration (`DraftRules::steps`) : rien n'est écrit en dur. Le format décidé (`DraftRules::standard`) :
+  1. chaque joueur met **1 carte en cache**, choisie dans **tout le catalogue**, Légendaires comprises (J1, puis J2) ; les deux peuvent choisir la même ;
+  2. **10 cartes** sont tirées avec la graine, toutes différentes, dans tout le catalogue, Légendaires et réactions comprises ;
+  3. **1 ban** chacun (J1, puis J2) : la carte bannie n'est plus prenable ;
+  4. **3 picks** chacun **en serpent**, J2 d'abord puisque J1 joue en premier : J2, J1, J1, J2, J2, J1.
+- Les cartes mises en cache et prises s'ajoutent à l'arsenal de départ, dans l'ordre (la cache d'abord). Les cartes tirées ni bannies ni prises sont écartées.
+- Pendant le draft, seul le choix d'une carte est permis ; la partie commence ensuite normalement (J1, tour 1).
+- **Pas encore codé (B9b)** : la cache est encore visible de l'adversaire. Elle sera cachée, puis révélée **quand elle est jouée pour la première fois**. La fenêtre de réaction reste un indice pour l'adversaire : c'est voulu.
+
 ### Fin de partie (2026-10-26)
 
 Une partie se termine dans l'un de ces cas, vérifiés dans cet ordre (le manque de pions, ajouté en B6b, se vérifie à la fin de chaque action, avant la partie figée) :
@@ -307,7 +320,7 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 ## Pas encore implémenté
 
 - Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, la Reine, Attila, le Médecin, le Massacre divin, l'Interchange, le Coup du taureau, le Lièvre, la Familia et Meilleurs amis ; et les réactions sont toutes codées (B8).
-- Le draft et la cache secrète.
+- La cache secrète cachée à l'adversaire, et sa révélation (B9b).
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
 
 ### Règles cibles (décidées le 2026-10-28, par défaut depuis le 2026-11-02)
@@ -449,8 +462,10 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B8 | Le Perroquet peut-il copier le tir d'un garde (« une attaque de 1 point ») ? | Non : il ne copie que des cartes | **2026-11-03** : non (réponse par défaut). |
 | B8b | Queue du lézard Rare : exactement 2 pions, ou jusqu'à 2 ? | Jusqu'à 2, comme le Hibou Rare ; réserve vide, elle pose ce qu'elle peut | **2026-11-03** : jusqu'à 2 (réponse par défaut). |
 | Règles cibles | Le mot-clé « Charge » (ignorer le mal du débarquement), prévu le 2026-10-28, a disparu des fiches : abandonné ? | Oui, abandonné | |
-| B9 | Les Légendaires peuvent-elles sortir au draft ? | Non (comme le GDD actuel) | |
-| B9 | Comment se déclenche la révélation d'une carte de la cache adverse ? | À définir | |
+| B9 | Les Légendaires peuvent-elles sortir au draft ? | Non (comme le GDD actuel) | **2026-11-03** : oui, le tirage et la cache se font dans tout le catalogue. |
+| B9 | Comment se déclenche la révélation d'une carte de la cache adverse ? | À définir | **2026-11-03** : quand elle est jouée pour la première fois. |
+| B9 | Le format : combien en cache, combien au draft ? | 1 en cache, 3 au draft | **2026-11-03** : oui, réglable ; 10 cartes tirées, 1 ban chacun, picks en serpent (J2 d'abord). |
+| B9 | La fenêtre de réaction révèle qu'on a une réaction : ouvrir une fenêtre même sans réaction ? | Oui, pour un humain | **2026-11-03** : non, l'indice donné à l'adversaire fait partie du jeu. |
 
 ## Historique
 
@@ -484,3 +499,4 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-11-03 | B8a : la fenêtre de réaction (`Action::Pass`), une réaction par tour adverse, payée avec la banque ; Sentinelle (Commune, Rare) et Hibou (Commune, Rare) ; une ligne faite par une réaction gagne un tour plus tard. |
 | 2026-11-03 | B8b : Queue du lézard (Commune, Rare : jusqu'à 2 pions collés à la case du mort, jamais dessus) et Perroquet (Commune, Rare : rejoue l'attaque adverse de 1 ou 2 points au plus, payé et rechargé comme une carte). |
 | 2026-11-03 | B8c : Feintaille (Commune contre 2 points au plus, Rare contre tout) : seule fenêtre ouverte avant le coup ; le pion choisi comme cible esquive d'une case, l'attaque s'applique sur les cases choisies. |
+| 2026-11-03 | B9a : le draft, réglable (`DraftRules`) : 1 carte en cache dans tout le catalogue, 10 cartes tirées avec la graine, 1 ban chacun, 3 picks chacun en serpent (J2 d'abord) ; les cartes choisies remplissent l'arsenal. |

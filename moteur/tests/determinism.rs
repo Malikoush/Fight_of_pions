@@ -4,8 +4,9 @@ mod common;
 
 use common::{SEED, game_with, new_game, place, random_config};
 use fight_of_pions::{
-    Action, ActiveEffect, AttackKind, EffectKind, Event, Game, GameConfig, GameEnd, GameError,
-    GameRecord, Patient, Pion, PionId, Player, Position, Rarity, ReplayError, Rng, TokenPile,
+    Action, ActiveEffect, AttackKind, DraftStep, EffectKind, Event, Game, GameConfig, GameEnd,
+    GameError, GameRecord, Patient, Pion, PionId, Player, Position, Rarity, ReplayError, Rng,
+    TokenPile,
 };
 
 /// Ce qu'un client sait de la partie s'il ne suit **que** les événements, en partant de
@@ -160,6 +161,12 @@ impl EventMirror {
                 let placements = &mut self.placements[player.index()];
                 assert_ne!(*placements, placements_left, "annonce inutile : {event:?}");
                 *placements = placements_left;
+            }
+            // Une carte mise en cache ou prise arrive prête, à l'emplacement suivant.
+            Event::Drafted { step, .. } => {
+                if !matches!(step, DraftStep::Ban(_)) {
+                    self.cooldowns[step.player().index()].push(0);
+                }
             }
             Event::CooldownChanged {
                 player,
