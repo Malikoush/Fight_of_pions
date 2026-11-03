@@ -7,7 +7,7 @@ use bots::{
     Banking, Bot, GreedyBot, MctsBot, RandomBot, Weights, Windows, current_rules, first_rules, run,
 };
 use common::{alternate, at, play_the_turn};
-use fight_of_pions::{Action, Game, GameConfig, Player, Rng};
+use fight_of_pions::{Action, Attack, AttackKind, Game, GameConfig, Player, Rarity, Rng};
 
 /// Assez pour trouver les bons coups des situations, et rester rapide.
 const ITERATIONS: u32 = 300;
@@ -16,12 +16,20 @@ fn mcts() -> MctsBot {
     MctsBot::new(ITERATIONS, Weights::DEFAULT)
 }
 
-/// Les règles actuelles sans la règle d'or : une ligne faite en posant gagne aussitôt, et la
-/// bonne réponse se lit en un tour.
+/// Les règles actuelles sans le mur, pour que A1 soit le coin du plateau.
+fn without_wall() -> GameConfig {
+    GameConfig {
+        wall_thickness: 0,
+        ..current_rules()
+    }
+}
+
+/// Les mêmes, sans la règle d'or : une ligne faite en posant gagne aussitôt, et la bonne
+/// réponse se lit en un tour.
 fn immediate_win_rules() -> Game {
     let config = GameConfig {
         golden_rule: false,
-        ..current_rules()
+        ..without_wall()
     };
     Game::new(config, 0).unwrap()
 }
@@ -117,7 +125,7 @@ fn it_plays_a_whole_attack_to_break_a_blocked_line_then_completes_it() {
 
 #[test]
 fn with_the_golden_rule_it_breaks_a_finished_line_before_it_wins() {
-    let mut game = Game::new(current_rules(), 0).unwrap();
+    let mut game = Game::new(without_wall(), 0).unwrap();
     // J2 aligne A10 à F10 : sa ligne gagnera au début de son prochain tour. J1 a un pion
     // en A9, à côté d'elle, posé depuis longtemps.
     alternate(
@@ -151,10 +159,26 @@ fn with_the_golden_rule_it_breaks_a_finished_line_before_it_wins() {
     assert_eq!(game.winner(), None);
 }
 
-/// Des configurations variées, et combien de parties y jouer : les règles actuelles (une
-/// seule partie, sur le grand plateau), et en petit pour en jouer plus, avec et sans la
-/// règle d'or ; un plateau minuscule où l'on n'attaque qu'en gardant ses actions ; les
-/// premières règles sur un petit plateau.
+/// Les règles actuelles, chaque joueur avec 4 cartes comme dans le jeu : de quoi tuer,
+/// échanger, déplacer et creuser le mur.
+fn four_cards() -> GameConfig {
+    let card = |kind, rarity| Attack { kind, rarity };
+    let hand = vec![
+        card(AttackKind::Ours, Rarity::Rare),
+        card(AttackKind::Interchange, Rarity::Common),
+        card(AttackKind::Lievre, Rarity::Epic),
+        card(AttackKind::CoupDuTaureau, Rarity::Rare),
+    ];
+    GameConfig {
+        starting_attacks: [hand.clone(), hand],
+        ..current_rules()
+    }
+}
+
+/// Des configurations variées, et combien de parties y jouer : les règles actuelles avec
+/// tout le catalogue (une seule partie : chaque carte doit pouvoir être jouée) ; avec 4
+/// cartes en petit pour en jouer plus, avec et sans la règle d'or ; un plateau minuscule
+/// où l'on n'attaque qu'en gardant ses actions ; les premières règles sur un petit plateau.
 fn configs() -> Vec<(GameConfig, u64)> {
     let small = |config: GameConfig| GameConfig {
         board_size: 5,
@@ -166,15 +190,15 @@ fn configs() -> Vec<(GameConfig, u64)> {
         board_size: 3,
         align_to_win: 3,
         pions_per_player: 4,
-        ..current_rules()
+        ..four_cards()
     };
     vec![
         (current_rules(), 1),
-        (small(current_rules()), 3),
+        (small(four_cards()), 3),
         (
             small(GameConfig {
                 golden_rule: false,
-                ..current_rules()
+                ..four_cards()
             }),
             3,
         ),
@@ -202,16 +226,16 @@ fn it_plays_only_legal_actions_until_the_end() {
 #[test]
 fn the_same_run_gives_the_same_report() {
     let greedy = GreedyBot::new(Banking::SpendAll);
-    let config = current_rules();
+    let config = four_cards();
     let first = run(&config, [&mcts(), &greedy], 2).unwrap();
     assert_eq!(run(&config, [&mcts(), &greedy], 2).unwrap(), first);
     assert_eq!(first.bots, ["MCTS", "glouton"]);
 }
 
-/// `bots[seat]` gagne plus de la moitié des parties, dans cette place.
+/// `bots[seat]` gagne plus de la moitié des parties, dans cette place, avec 4 cartes.
 fn wins_most_games(bots: [&dyn Bot; 2], seat: usize) -> bool {
     let games = 6;
-    let report = run(&current_rules(), bots, games).unwrap();
+    let report = run(&four_cards(), bots, games).unwrap();
     report.wins[seat] * 2 > games
 }
 

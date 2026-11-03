@@ -24,7 +24,8 @@
 //! change ni les fenêtres ni les actions disponibles, et ne paie qu'après cet horizon,
 //! est sous-estimé.
 
-use crate::reading::{attack_plans, placeable};
+use crate::evaluation::CellValues;
+use crate::reading::{PLANS_PER_FIRST_ACTION, attack_plans_in_order, placeable};
 use crate::{Bot, Weights, Windows};
 use fight_of_pions::{Action, Decision, Game, Player, Position, Rng};
 use std::cmp::Reverse;
@@ -34,6 +35,11 @@ const PLACEMENT_CANDIDATES: usize = 8;
 /// Les attaques entières qui entrent dans l'arbre à chaque position, au moins : la
 /// meilleure de chaque carte, puis les meilleures autres façons de jouer jusqu'à ce nombre.
 const ATTACK_CANDIDATES: usize = 4;
+/// Les façons de jouer chaque carte examinées dans une position imaginée de l'arbre, les
+/// plus chaudes d'abord. La décision réelle, à la racine, en examine
+/// `PLANS_PER_FIRST_ACTION` : elle se joue vraiment, les autres ne sont que des
+/// hypothèses, nombreuses.
+const PLANS_PER_CARD_INSIDE: usize = 8;
 /// Le poids de la curiosité face à ce qui a déjà marché : plus il est grand, plus la
 /// recherche s'étale sur des coups peu essayés au lieu de creuser les meilleurs.
 const EXPLORATION: f64 = 0.25;
@@ -127,7 +133,7 @@ impl<'a> Tree<'a> {
             windows,
             nodes: Vec::new(),
         };
-        let untried = tree.moves(&game, rng);
+        let untried = tree.moves(&game, PLANS_PER_FIRST_ACTION, rng);
         tree.nodes.push(Node {
             game,
             from: None,
@@ -194,7 +200,7 @@ impl<'a> Tree<'a> {
     /// Les coups pas encore essayés depuis cette position, préparés au premier passage.
     fn untried(&mut self, index: usize, rng: &mut Rng) -> &mut Vec<Move> {
         if self.nodes[index].untried.is_none() {
-            let moves = self.moves(&self.nodes[index].game, rng);
+            let moves = self.moves(&self.nodes[index].game, PLANS_PER_CARD_INSIDE, rng);
             self.nodes[index].untried = Some(moves);
         }
         self.nodes[index].untried.get_or_insert_default()
@@ -249,7 +255,7 @@ impl<'a> Tree<'a> {
 
     /// Les coups qui entrent dans l'arbre depuis cette partie, jugés, le plus prometteur
     /// à la fin. Si une attaque est en cours, ce sont les fins possibles de cette attaque.
-    fn moves(&self, game: &Game, rng: &mut Rng) -> Vec<Move> {
+    fn moves(&self, game: &Game, plans_per_card: usize, rng: &mut Rng) -> Vec<Move> {
         let Some(mover) = game.pending_decision().map(Decision::player) else {
             return Vec::new();
         };
@@ -281,10 +287,13 @@ impl<'a> Tree<'a> {
                 }
             }
         }
-        let mut attacks: Vec<Move> = attack_plans(game)
-            .into_iter()
-            .map(|plan| judge(plan.first, plan.after))
-            .collect();
+        let heat = self.weights.heat(game.board(), self.windows);
+        let mut attacks: Vec<Move> = attack_plans_in_order(game, plans_per_card, |choices| {
+            hottest_first(choices, &heat, rng)
+        })
+        .into_iter()
+        .map(|plan| judge(plan.first, plan.after))
+        .collect();
         // À valeur égale, l'ordre vient du hasard, comme pour les poses.
         shuffle(&mut attacks, rng);
         moves.append(&mut best_of_each_card(attacks));
@@ -330,6 +339,17 @@ fn best_of_each_card(mut attacks: Vec<Move>) -> Vec<Move> {
     let room = ATTACK_CANDIDATES.saturating_sub(kept.len());
     kept.extend(others.into_iter().take(room));
     kept
+}
+
+/// Range les choix d'une attaque pour essayer d'abord ceux qui comptent : les choix sans
+/// case (jouer l'attaque telle quelle, viser des jetons), puis les cases les plus chaudes.
+/// À chaleur égale, l'ordre vient du hasard : aucun coin du plateau n'est favorisé.
+fn hottest_first(choices: &mut [Action], heat: &CellValues, rng: &mut Rng) {
+    shuffle(choices, rng);
+    choices.sort_by_key(|&action| match action {
+        Action::Choose(pos) => Reverse(heat.at(pos)),
+        _ => Reverse(u64::MAX),
+    });
 }
 
 /// Mélange la liste (Fisher-Yates), avec le hasard du bot.
