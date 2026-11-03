@@ -23,6 +23,8 @@ struct EventMirror {
     actions_left: [u32; 2],
     banked: [u32; 2],
     cooldowns: [Vec<u32>; 2],
+    /// Pour chaque emplacement, vrai si la carte est encore secrète.
+    secrets: [Vec<bool>; 2],
     current_player: Player,
     end: Option<GameEnd>,
     /// Les poses restantes de chaque joueur, telles qu'annoncées.
@@ -65,6 +67,8 @@ impl EventMirror {
             actions_left: [config.first_turn_actions + first_bank, 0],
             banked: [0, second_bank],
             cooldowns: [ready(Player::One), ready(Player::Two)],
+            secrets: [Player::One, Player::Two]
+                .map(|p| vec![false; config.starting_attacks[p.index()].len()]),
             current_player: Player::One,
             end: None,
             placements: [game.placements_left(), 0],
@@ -166,7 +170,14 @@ impl EventMirror {
             Event::Drafted { step, .. } => {
                 if !matches!(step, DraftStep::Ban(_)) {
                     self.cooldowns[step.player().index()].push(0);
+                    let secret = matches!(step, DraftStep::Cache(_));
+                    self.secrets[step.player().index()].push(secret);
                 }
+            }
+            Event::CardRevealed { player, slot } => {
+                let secret = &mut self.secrets[player.index()][slot];
+                assert!(*secret, "révélée deux fois : {event:?}");
+                *secret = false;
             }
             Event::CooldownChanged {
                 player,
@@ -316,6 +327,12 @@ impl EventMirror {
                 .map(|slot| slot.cooldown_left())
                 .collect();
             assert_eq!(self.cooldowns[i], cooldowns, "recharges de {player:?}");
+            let secrets: Vec<bool> = game
+                .arsenal(player)
+                .iter()
+                .map(|slot| slot.is_secret())
+                .collect();
+            assert_eq!(self.secrets[i], secrets, "cartes secrètes de {player:?}");
         }
         assert_eq!(self.current_player, game.current_player());
         assert_eq!(self.end, game.end());

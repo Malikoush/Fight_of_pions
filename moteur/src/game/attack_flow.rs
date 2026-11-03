@@ -328,8 +328,13 @@ impl Game {
 
         // Le coût a été vérifié au début de l'attaque, et rien ne l'a changé depuis.
         self.pay(player, stats.cost);
-        if let Some(slot) = self.arsenals[player.index()].get_mut(slot) {
-            slot.set_cooldown(stats.cooldown);
+        if let Some(arsenal_slot) = self.arsenals[player.index()].get_mut(slot) {
+            arsenal_slot.set_cooldown(stats.cooldown);
+            // Une carte de la cache est révélée quand elle est jouée pour la première fois.
+            if arsenal_slot.is_secret() {
+                arsenal_slot.reveal();
+                events.push(Event::CardRevealed { player, slot });
+            }
         }
         events.push(Event::AttackUsed {
             player,

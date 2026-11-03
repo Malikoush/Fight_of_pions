@@ -11,6 +11,14 @@ use crate::{
 /// (lanceur, cibles) n'en produisent aucun : l'attaque est annoncée quand elle est résolue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Event {
+    /// Une carte de la cache de ce joueur, à cet emplacement de son arsenal, est jouée pour
+    /// la première fois : elle n'est plus secrète. Suit l'annonce de l'attaque.
+    CardRevealed {
+        /// Son propriétaire.
+        player: Player,
+        /// Son emplacement dans son arsenal.
+        slot: usize,
+    },
     /// Un choix du draft : la carte mise en cache ou prise s'ajoute à l'arsenal du joueur
     /// (emplacement suivant), la carte bannie disparaît des cartes tirées.
     Drafted {

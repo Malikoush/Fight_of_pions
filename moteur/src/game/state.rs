@@ -218,9 +218,32 @@ impl Game {
         self.banked_actions[player.index()]
     }
 
-    /// L'arsenal d'un joueur : ses attaques, dans l'ordre de leurs emplacements.
+    /// L'arsenal d'un joueur : ses attaques, dans l'ordre de leurs emplacements. Toutes,
+    /// cartes secrètes comprises : ce que voit un joueur, c'est [`Game::arsenal_seen_by`].
     pub fn arsenal(&self, player: Player) -> &[ArsenalSlot] {
         &self.arsenals[player.index()]
+    }
+
+    /// L'arsenal de `player` tel que `viewer` le voit : `None` pour une carte secrète de
+    /// l'adversaire (sa cache, pas encore jouée). C'est la vue joueur des arsenaux.
+    pub fn arsenal_seen_by(&self, player: Player, viewer: Player) -> Vec<Option<ArsenalSlot>> {
+        self.arsenal(player)
+            .iter()
+            .map(|&slot| (player == viewer || !slot.is_secret()).then_some(slot))
+            .collect()
+    }
+
+    /// Cette partie telle que `viewer` peut se la représenter : chaque carte secrète de son
+    /// adversaire est remplacée par la carte que donne `guess` (un bot qui cherche ne doit
+    /// pas lire la cache adverse). Le reste est identique.
+    pub fn with_secrets_guessed(&self, viewer: Player, mut guess: impl FnMut() -> Attack) -> Game {
+        let mut copy = self.clone();
+        for slot in &mut copy.arsenals[viewer.opponent().index()] {
+            if slot.is_secret() {
+                slot.replace_attack(guess());
+            }
+        }
+        copy
     }
 
     /// Numéro du tour en cours, à partir de 1 ; chaque joueur qui joue compte pour un tour.

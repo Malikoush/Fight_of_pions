@@ -300,7 +300,7 @@ Avant la partie, si la configuration a un draft (`draft`, absent par défaut ; v
   4. **3 picks** chacun **en serpent**, J2 d'abord puisque J1 joue en premier : J2, J1, J1, J2, J2, J1.
 - Les cartes mises en cache et prises s'ajoutent à l'arsenal de départ, dans l'ordre (la cache d'abord). Les cartes tirées ni bannies ni prises sont écartées.
 - Pendant le draft, seul le choix d'une carte est permis ; la partie commence ensuite normalement (J1, tour 1).
-- **Pas encore codé (B9b)** : la cache est encore visible de l'adversaire. Elle sera cachée, puis révélée **quand elle est jouée pour la première fois**. La fenêtre de réaction reste un indice pour l'adversaire : c'est voulu.
+- **La cache est secrète** (B9b) : l'adversaire ne la voit pas, ni au labo, ni au terminal, ni dans le journal (« met une carte en cache »). Elle est **révélée quand elle est jouée pour la première fois** (attaque ou réaction), et reste visible ensuite. Les picks sont publics. La fenêtre de réaction reste un indice pour l'adversaire : c'est voulu.
 
 ### Fin de partie (2026-10-26)
 
@@ -320,7 +320,6 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 ## Pas encore implémenté
 
 - Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, la Reine, Attila, le Médecin, le Massacre divin, l'Interchange, le Coup du taureau, le Lièvre, la Familia et Meilleurs amis ; et les réactions sont toutes codées (B8).
-- La cache secrète cachée à l'adversaire, et sa révélation (B9b).
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
 
 ### Règles cibles (décidées le 2026-10-28, par défaut depuis le 2026-11-02)
@@ -500,3 +499,4 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-11-03 | B8b : Queue du lézard (Commune, Rare : jusqu'à 2 pions collés à la case du mort, jamais dessus) et Perroquet (Commune, Rare : rejoue l'attaque adverse de 1 ou 2 points au plus, payé et rechargé comme une carte). |
 | 2026-11-03 | B8c : Feintaille (Commune contre 2 points au plus, Rare contre tout) : seule fenêtre ouverte avant le coup ; le pion choisi comme cible esquive d'une case, l'attaque s'applique sur les cases choisies. |
 | 2026-11-03 | B9a : le draft, réglable (`DraftRules`) : 1 carte en cache dans tout le catalogue, 10 cartes tirées avec la graine, 1 ban chacun, 3 picks chacun en serpent (J2 d'abord) ; les cartes choisies remplissent l'arsenal. |
+| 2026-11-03 | B9b : la cache est secrète pour l'adversaire et révélée à sa première utilisation (`ArsenalSlot::is_secret`, `Event::CardRevealed`). |

@@ -19,6 +19,8 @@
 //!   nombre fixe d'itérations (jamais une durée), et son hasard vient du générateur que
 //!   l'arène lui passe. Les calculs en flottant n'utilisent que +, −, ×, ÷ et la racine
 //!   carrée, exacts selon la norme IEEE : le même coup sur toutes les machines.
+//! - **Il ne triche pas** : la cache adverse, secrète, est remplacée par une carte du
+//!   catalogue tirée au hasard avant de chercher (une seule hypothèse par décision).
 //!
 //! Sa limite : au-delà de son horizon, il ne juge que par l'évaluation. Un effet qui ne
 //! change ni les fenêtres ni les actions disponibles, et ne paie qu'après cet horizon,
@@ -67,9 +69,18 @@ impl Bot for MctsBot {
     }
 
     fn choose(&self, game: &Game, rng: &mut Rng) -> Option<Action> {
-        game.pending_decision()?;
-        let windows = Windows::new(game.board(), game.config().align_to_win);
-        let mut tree = Tree::new(&self.weights, &windows, game.clone(), rng);
+        let me = game.pending_decision()?.player();
+        // Il ne lit pas la cache adverse : il cherche dans une partie où chaque carte
+        // secrète de l'adversaire est remplacée par une carte du catalogue tirée au hasard.
+        let catalog = game.config().catalog_attacks();
+        let seen = match catalog.first() {
+            Some(&any) => {
+                game.with_secrets_guessed(me, || rng.pick(&catalog).copied().unwrap_or(any))
+            }
+            None => game.clone(),
+        };
+        let windows = Windows::new(seen.board(), seen.config().align_to_win);
+        let mut tree = Tree::new(&self.weights, &windows, seen, rng);
         if let Some(action) = tree.forced_action() {
             return Some(action);
         }

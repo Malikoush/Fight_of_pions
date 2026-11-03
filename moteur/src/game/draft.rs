@@ -106,8 +106,13 @@ impl Game {
         if step.uses_the_pool() {
             draft.pool.retain(|&card| card != attack);
         }
-        if !matches!(step, DraftStep::Ban(_)) {
-            self.arsenals[step.player().index()].push(ArsenalSlot::new(attack));
+        let slot = match step {
+            DraftStep::Cache(_) => Some(ArsenalSlot::secret(attack)),
+            DraftStep::Pick(_) => Some(ArsenalSlot::new(attack)),
+            DraftStep::Ban(_) => None,
+        };
+        if let Some(slot) = slot {
+            self.arsenals[step.player().index()].push(slot);
         }
         draft.next_step += 1;
         events.push(Event::Drafted { step, attack });

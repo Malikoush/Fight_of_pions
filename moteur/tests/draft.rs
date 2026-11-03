@@ -4,10 +4,10 @@
 
 mod common;
 
-use common::{game_with, place, play};
+use common::{choose, game_with, place, play};
 use fight_of_pions::{
-    Action, Attack, AttackKind, ConfigError, Decision, DraftRules, DraftStep, Game, GameConfig,
-    GameError, Player, Rarity,
+    Action, Attack, AttackKind, ConfigError, Decision, DraftRules, DraftStep, Event, Game,
+    GameConfig, GameError, Player, Rarity,
 };
 
 /// Les règles actuelles avec le draft standard, sans carte de départ.
@@ -178,4 +178,74 @@ fn the_draft_format_is_checked_against_the_catalog() {
         with_draft(7, 1, 3).validate(),
         Err(GameError::InvalidConfig(ConfigError::DraftPoolTooSmall))
     );
+}
+
+/// Seulement la cache, sans mur : J1 et J2 cachent chacun un Lièvre Commune.
+fn hares_in_cache() -> Game {
+    let config = GameConfig {
+        wall_thickness: 0,
+        draft: Some(DraftRules::new(1, 0, 0, 0)),
+        ..GameConfig::default()
+    };
+    let mut game = game_with(config);
+    play(&mut game, &[Action::Draft(hare()), Action::Draft(hare())]);
+    game
+}
+
+fn hare() -> Attack {
+    Attack {
+        kind: AttackKind::Lievre,
+        rarity: Rarity::Common,
+    }
+}
+
+#[test]
+fn the_cache_is_seen_only_by_its_owner() {
+    let game = hares_in_cache();
+    assert!(game.arsenal(Player::One)[0].is_secret());
+    assert_eq!(game.arsenal_seen_by(Player::One, Player::Two), [None]);
+    assert_eq!(
+        game.arsenal_seen_by(Player::One, Player::One),
+        [Some(game.arsenal(Player::One)[0])]
+    );
+}
+
+#[test]
+fn a_cached_card_is_revealed_when_first_played() {
+    let mut game = hares_in_cache();
+    play(&mut game, &[place(4, 4), Action::EndTurn]);
+    play(&mut game, &[place(0, 0), Action::EndTurn]);
+    let events = play(
+        &mut game,
+        &[
+            Action::UseAttack(0),
+            choose(4, 4),
+            choose(4, 5),
+            Action::FinishAttack,
+        ],
+    );
+    assert!(events.contains(&Event::CardRevealed {
+        player: Player::One,
+        slot: 0
+    }));
+    assert!(!game.arsenal(Player::One)[0].is_secret());
+    assert_eq!(
+        game.arsenal_seen_by(Player::One, Player::Two),
+        [Some(game.arsenal(Player::One)[0])]
+    );
+    // Celle de J2, jamais jouée, reste secrète.
+    assert!(game.arsenal(Player::Two)[0].is_secret());
+}
+
+#[test]
+fn a_guess_replaces_only_the_opponent_secret_cards() {
+    let game = hares_in_cache();
+    let ours = Attack {
+        kind: AttackKind::Ours,
+        rarity: Rarity::Rare,
+    };
+    let guessed = game.with_secrets_guessed(Player::One, || ours);
+    assert_eq!(guessed.arsenal(Player::One)[0].attack(), hare());
+    assert_eq!(guessed.arsenal(Player::Two)[0].attack(), ours);
+    assert_eq!(guessed.board(), game.board());
 }

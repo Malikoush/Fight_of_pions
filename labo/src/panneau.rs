@@ -9,8 +9,8 @@ use crate::theme;
 use bots::BotKind;
 use eframe::egui;
 use fight_of_pions::{
-    Action, ActiveEffect, Decision, DraftStep, EffectEnd, Event, Game, GameConfig, GameEnd,
-    GameRecord, Outcome, Player, Position, TokenPile, TokenReward,
+    Action, ActiveEffect, ArsenalSlot, Decision, DraftStep, EffectEnd, Event, Game, GameConfig,
+    GameEnd, GameRecord, Outcome, Player, Position, TokenPile, TokenReward,
 };
 use std::time::Duration;
 
@@ -27,6 +27,8 @@ pub struct Panneau {
     /// Les bots jouent-ils seuls, avec cette attente entre deux coups ?
     lecture_auto: bool,
     attente_ms: u64,
+    /// Mode test : les cartes secrètes des deux joueurs sont visibles.
+    tout_voir: bool,
 }
 
 impl Panneau {
@@ -41,6 +43,7 @@ impl Panneau {
             controleurs: [None, None],
             lecture_auto: true,
             attente_ms: theme::ATTENTE_BOT_DEFAUT_MS,
+            tout_voir: false,
         }
     }
 
@@ -78,6 +81,21 @@ impl Panneau {
 
     fn humains(&self) -> [bool; 2] {
         self.controleurs.map(|controleur| controleur.is_none())
+    }
+
+    /// Le joueur dont l'écran prend le point de vue : l'humain face à un bot, celui qui
+    /// décide entre deux humains (ils se passent l'écran). `None` : on voit tout (deux bots,
+    /// ou mode test).
+    fn spectateur(&self, game: &Game) -> Option<Player> {
+        if self.tout_voir {
+            return None;
+        }
+        match self.humains() {
+            [true, false] => Some(Player::One),
+            [false, true] => Some(Player::Two),
+            [true, true] => game.pending_decision().map(Decision::player),
+            [false, false] => None,
+        }
     }
 
     /// Vrai si c'est à un humain de décider : les boutons de jeu ne servent qu'à lui.
@@ -163,10 +181,11 @@ impl Panneau {
         ui.separator();
         self.joueurs(ui, game, intentions);
         ui.separator();
+        let spectateur = self.spectateur(game);
         if let Some(Decision::Draft { step }) = game.pending_decision() {
-            draft(ui, game, step, tour_humain, intentions);
+            draft(ui, game, step, spectateur, tour_humain, intentions);
         } else {
-            attaques(ui, game, apercu, tour_humain, intentions);
+            attaques(ui, game, apercu, spectateur, tour_humain, intentions);
         }
         ui.separator();
         self.outils(ui, record, intentions);
@@ -245,6 +264,8 @@ impl Panneau {
                     }
                 });
         }
+        ui.checkbox(&mut self.tout_voir, "Voir les caches (mode test)")
+            .on_hover_text("Montre les cartes secrètes des deux joueurs.");
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.lecture_auto, "Lecture automatique");
             ui.add(
@@ -326,10 +347,17 @@ impl Panneau {
 /// Pendant le choix d'une attaque (sur la copie `apercu`, ou dans la vraie partie si elle
 /// a été chargée en plein choix), « Jouer l'attaque » est activé si le moteur permet de la
 /// jouer avec les cibles déjà choisies.
+/// L'arsenal de `player` tel que le voit `spectateur` (`None` : tout), `None` pour une
+/// carte secrète.
+fn arsenal_vu(game: &Game, player: Player, spectateur: Option<Player>) -> Vec<Option<ArsenalSlot>> {
+    game.arsenal_seen_by(player, spectateur.unwrap_or(player))
+}
+
 fn attaques(
     ui: &mut egui::Ui,
     game: &Game,
     apercu: Option<&Game>,
+    spectateur: Option<Player>,
     tour_humain: bool,
     intentions: &mut Vec<Intention>,
 ) {
@@ -344,7 +372,11 @@ fn attaques(
         ui.label("(aucune)");
     }
     let legales = game.legal_actions();
-    for (slot, emplacement) in game.arsenal(player).iter().enumerate() {
+    for (slot, emplacement) in arsenal_vu(game, player, spectateur).into_iter().enumerate() {
+        let Some(emplacement) = emplacement else {
+            ui.label(theme::CARTE_SECRETE);
+            continue;
+        };
         let attaque = emplacement.attack();
         let cout = game
             .config()
@@ -425,6 +457,7 @@ fn draft(
     ui: &mut egui::Ui,
     game: &Game,
     step: DraftStep,
+    spectateur: Option<Player>,
     tour_humain: bool,
     intentions: &mut Vec<Intention>,
 ) {
@@ -439,10 +472,13 @@ fn draft(
         theme::nom_joueur(step.player())
     ));
     for player in [Player::One, Player::Two] {
-        let main: Vec<String> = game
-            .arsenal(player)
-            .iter()
-            .map(|slot| slot.attack().to_string())
+        let main: Vec<String> = arsenal_vu(game, player, spectateur)
+            .into_iter()
+            .map(|slot| {
+                slot.map_or(theme::CARTE_SECRETE.to_string(), |slot| {
+                    slot.attack().to_string()
+                })
+            })
             .collect();
         ui.label(format!(
             "{} : {}",
@@ -584,16 +620,18 @@ fn nom_controleur(controleur: Option<BotKind>) -> &'static str {
 fn decrire(event: &Event) -> Option<String> {
     match event {
         Event::Drafted { step, attack } => {
-            let choix = match step {
-                DraftStep::Cache(_) => "met en cache",
-                DraftStep::Ban(_) => "bannit",
-                DraftStep::Pick(_) => "prend",
-            };
-            Some(format!(
-                "{} {choix} {attack}",
-                theme::nom_joueur(step.player())
-            ))
+            let nom = theme::nom_joueur(step.player());
+            // Le journal est commun aux deux joueurs : la cache n'y est jamais nommée.
+            Some(match step {
+                DraftStep::Cache(_) => format!("{nom} met une carte en cache"),
+                DraftStep::Ban(_) => format!("{nom} bannit {attack}"),
+                DraftStep::Pick(_) => format!("{nom} prend {attack}"),
+            })
         }
+        Event::CardRevealed { player, .. } => Some(format!(
+            "{} joue la carte de sa cache",
+            theme::nom_joueur(*player)
+        )),
         Event::PionPlaced { pion, at } => Some(format!(
             "{} pose le pion {} en {}",
             theme::nom_joueur(pion.owner()),
