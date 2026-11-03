@@ -2,8 +2,8 @@
 #![allow(dead_code)] // chaque fichier de tests n'utilise qu'une partie de ces outils
 
 use fight_of_pions::{
-    Action, Attack, AttackKind, AttackStats, CatalogEntry, Event, Game, GameConfig, Pion, Position,
-    Rarity, Rng,
+    Action, Attack, AttackKind, AttackStats, CatalogEntry, DraftRules, Event, Game, GameConfig,
+    Pion, Position, Rarity, Rng,
 };
 
 /// L'Ours dans cette rareté.
@@ -133,6 +133,12 @@ pub fn random_config(rng: &mut Rng) -> GameConfig {
         starting_attacks,
         // Tiré en dernier : les autres tirages restent ceux d'avant le mur.
         wall_thickness: random_below(rng, 3),
+        // Puis le draft, une partie sur quatre, après le mur pour la même raison.
+        draft: (random_below(rng, 4) == 0).then(|| {
+            let (bans, picks) = (random_below(rng, 2), random_below(rng, 4));
+            let pool = (2 * (bans + picks) + random_below(rng, 4)).min(attacks.len());
+            DraftRules::new(random_below(rng, 2), pool, bans, picks)
+        }),
     };
     assert_eq!(config.validate(), Ok(()), "{config:?}");
     config

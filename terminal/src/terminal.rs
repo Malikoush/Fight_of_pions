@@ -2,8 +2,8 @@
 //! Elle ne décide jamais si un coup est légal : c'est le travail du moteur.
 
 use fight_of_pions::{
-    Action, ActiveEffect, Decision, EffectEnd, Game, GameConfig, Player, Position, TokenPile,
-    TokenReward,
+    Action, ActiveEffect, Decision, DraftStep, EffectEnd, Game, GameConfig, Player, Position,
+    TokenPile, TokenReward,
 };
 
 /// Ce que le joueur peut taper.
@@ -27,6 +27,8 @@ Commandes :
   t C5   faire tirer un garde de sa reine sur le pion en C5
   l C5 D6  faire avancer d'un pas le pion en C5, qui a des jetons du Lièvre, vers D6
   f      finir le tour (les actions restantes sont gardées, {} maximum)
+  d 2    choisir la carte n°2 de l'étape du draft (cache, ban ou pick)
+  n      ne pas réagir au coup adverse (une réaction se joue avec a 1, payée avec la banque)
   Sur le plateau : X et O les pions, + une tombe libre (le Médecin y ressuscite), # le mur
   (le Coup du taureau le creuse).
   h      afficher l'aide
@@ -120,7 +122,17 @@ pub fn render(game: &Game) -> String {
         game.actions_left(),
         game.reserve_pions(player),
     ));
-    for (index, slot) in game.arsenal(player).iter().enumerate() {
+    // Pendant une réaction, c'est l'autre joueur qui choisit : son arsenal et sa banque.
+    let deciding = game.pending_decision().map_or(player, Decision::player);
+    if deciding != player {
+        out.push_str(&format!(
+            "
+{} réagit — banque : {}",
+            player_name(deciding),
+            game.banked_actions(deciding)
+        ));
+    }
+    for (index, slot) in game.arsenal(deciding).iter().enumerate() {
         let state = match slot.cooldown_left() {
             0 => "prête".to_string(),
             1 => "en recharge (1 tour)".to_string(),
@@ -192,13 +204,42 @@ pub fn render(game: &Game) -> String {
                 "\n{attack} : choisis une cible (c C5){or_tokens}{or_finish}"
             ));
         }
+        Some(Decision::Draft { step }) => {
+            let quoi = match step {
+                DraftStep::Cache(_) => "met une carte du catalogue en cache",
+                DraftStep::Ban(_) => "bannit une carte tirée",
+                DraftStep::Pick(_) => "prend une carte tirée",
+            };
+            out.push_str(&format!(
+                "
+Draft : {} {quoi} (d N)",
+                player_name(step.player())
+            ));
+            for (index, action) in game.legal_actions().iter().enumerate() {
+                if let Action::Draft(attack) = action {
+                    out.push_str(&format!(
+                        "
+  {} : {attack}",
+                        index + 1
+                    ));
+                }
+            }
+        }
+        Some(Decision::React { player }) => {
+            out.push_str(&format!(
+                "
+{} peut réagir : joue une réaction (a 1) ou passe (n)",
+                player_name(player)
+            ));
+        }
         Some(Decision::MainAction { .. }) | None => {}
     }
     out
 }
 
-/// Transforme une ligne tapée en commande.
-pub fn parse_command(line: &str) -> Result<Command, String> {
+/// Transforme une ligne tapée en commande ; `game` sert à retrouver la carte n° d'une
+/// étape du draft.
+pub fn parse_command(line: &str, game: &Game) -> Result<Command, String> {
     let words: Vec<&str> = line.split_whitespace().collect();
     match words.as_slice() {
         ["p", pos] => Ok(Command::Play(Action::Place(pos.parse()?))),
@@ -218,6 +259,16 @@ pub fn parse_command(line: &str) -> Result<Command, String> {
             to: to.parse()?,
         })),
         ["f"] => Ok(Command::Play(Action::EndTurn)),
+        ["n"] => Ok(Command::Play(Action::Pass)),
+        ["d", number] => number
+            .parse::<usize>()
+            .ok()
+            .and_then(|n| game.legal_actions().get(n.checked_sub(1)?).copied())
+            .filter(|action| matches!(action, Action::Draft(_)))
+            .map(Command::Play)
+            .ok_or_else(|| {
+                format!("« {number} » : aucune carte de ce numéro à cette étape du draft")
+            }),
         ["h"] => Ok(Command::Help),
         ["q"] => Ok(Command::Quit),
         _ => Err("Commande inconnue (tape h pour l'aide)".to_string()),

@@ -4,8 +4,9 @@ mod common;
 
 use common::{SEED, game_with, new_game, place, random_config};
 use fight_of_pions::{
-    Action, ActiveEffect, AttackKind, EffectKind, Event, Game, GameConfig, GameEnd, GameError,
-    GameRecord, Patient, Pion, PionId, Player, Position, Rarity, ReplayError, Rng, TokenPile,
+    Action, ActiveEffect, AttackKind, DraftStep, EffectKind, Event, Game, GameConfig, GameEnd,
+    GameError, GameRecord, Patient, Pion, PionId, Player, Position, Rarity, ReplayError, Rng,
+    TokenPile,
 };
 
 /// Ce qu'un client sait de la partie s'il ne suit **que** les événements, en partant de
@@ -22,6 +23,8 @@ struct EventMirror {
     actions_left: [u32; 2],
     banked: [u32; 2],
     cooldowns: [Vec<u32>; 2],
+    /// Pour chaque emplacement, vrai si la carte est encore secrète.
+    secrets: [Vec<bool>; 2],
     current_player: Player,
     end: Option<GameEnd>,
     /// Les poses restantes de chaque joueur, telles qu'annoncées.
@@ -64,6 +67,8 @@ impl EventMirror {
             actions_left: [config.first_turn_actions + first_bank, 0],
             banked: [0, second_bank],
             cooldowns: [ready(Player::One), ready(Player::Two)],
+            secrets: [Player::One, Player::Two]
+                .map(|p| vec![false; config.starting_attacks[p.index()].len()]),
             current_player: Player::One,
             end: None,
             placements: [game.placements_left(), 0],
@@ -160,6 +165,19 @@ impl EventMirror {
                 let placements = &mut self.placements[player.index()];
                 assert_ne!(*placements, placements_left, "annonce inutile : {event:?}");
                 *placements = placements_left;
+            }
+            // Une carte mise en cache ou prise arrive prête, à l'emplacement suivant.
+            Event::Drafted { step, .. } => {
+                if !matches!(step, DraftStep::Ban(_)) {
+                    self.cooldowns[step.player().index()].push(0);
+                    let secret = matches!(step, DraftStep::Cache(_));
+                    self.secrets[step.player().index()].push(secret);
+                }
+            }
+            Event::CardRevealed { player, slot } => {
+                let secret = &mut self.secrets[player.index()][slot];
+                assert!(*secret, "révélée deux fois : {event:?}");
+                *secret = false;
             }
             Event::CooldownChanged {
                 player,
@@ -309,6 +327,12 @@ impl EventMirror {
                 .map(|slot| slot.cooldown_left())
                 .collect();
             assert_eq!(self.cooldowns[i], cooldowns, "recharges de {player:?}");
+            let secrets: Vec<bool> = game
+                .arsenal(player)
+                .iter()
+                .map(|slot| slot.is_secret())
+                .collect();
+            assert_eq!(self.secrets[i], secrets, "cartes secrètes de {player:?}");
         }
         assert_eq!(self.current_player, game.current_player());
         assert_eq!(self.end, game.end());
@@ -429,10 +453,12 @@ fn events_are_enough_to_follow_the_board() {
     let mut kinds_played = Vec::new();
     for seed in 0..500 {
         let mut rng = Rng::new(seed);
-        let config = if seed % 2 == 0 {
-            GameConfig::first_rules()
-        } else {
-            random_config(&mut rng)
+        // Une partie sur quatre avec les règles actuelles et toutes les cartes : les
+        // réactions n'ont de chances d'y être jouées qu'avec beaucoup de cartes en main.
+        let config = match seed % 4 {
+            0 => GameConfig::first_rules(),
+            2 => GameConfig::default().with_full_arsenals(),
+            _ => random_config(&mut rng),
         };
         let played = play_random_game(config, seed, &mut rng);
         attacks += played.count(|event| matches!(event, Event::AttackUsed { .. }));
@@ -508,6 +534,11 @@ fn events_are_enough_to_follow_the_board() {
         AttackKind::Lievre,
         AttackKind::MeilleursAmis,
         AttackKind::Familia,
+        AttackKind::Sentinelle,
+        AttackKind::Hibou,
+        AttackKind::QueueDuLezard,
+        AttackKind::Perroquet,
+        AttackKind::Feintaille,
     ] {
         assert!(kinds_played.contains(&kind), "{kind} jamais jouée");
     }

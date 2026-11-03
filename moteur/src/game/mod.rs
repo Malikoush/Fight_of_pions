@@ -3,16 +3,19 @@ mod arsenal;
 mod attack_flow;
 mod clock;
 mod decision;
+mod draft;
 mod end;
 mod event;
 mod hare;
 mod kill;
 mod lasting;
 mod queen;
+mod reaction;
 mod record;
 mod returns;
 mod state;
 mod tokens;
+mod view;
 
 pub use action::Action;
 pub use arsenal::ArsenalSlot;
@@ -24,3 +27,4 @@ pub(crate) use lasting::{cancellable_plays_on, has_effect_of, is_child, pion_has
 pub use record::{GameRecord, ReplayError};
 pub use state::Game;
 pub use tokens::{TokenPile, TokenReward};
+pub use view::{BoardView, PlayerView, SideView};

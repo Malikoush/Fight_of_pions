@@ -8,33 +8,73 @@ use fight_of_pions::{
     Action, Attack, EndReason, Event, Game, GameConfig, GameError, GameRecord, Outcome, Player, Rng,
 };
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
+use std::ops::Range;
 use std::{fmt, panic, thread};
 
 /// Joue `games` parties entre ces deux bots, avec les graines 0 à `games - 1` ; `bots[0]`
 /// est toujours le joueur 1. Le moteur et les bots étant déterministes, le même appel
 /// donne toujours le même bilan. Erreur si la configuration est invalide.
+///
+/// Les parties se jouent sur tous les cœurs de la machine sauf un, laissé au reste du
+/// PC : chaque fil joue un bloc de graines consécutives, et les bilans s'additionnent
+/// dans l'ordre des graines. Le bilan est celui des parties jouées l'une après l'autre,
+/// premier refus compris.
 pub fn run(config: &GameConfig, bots: [&dyn Bot; 2], games: u64) -> Result<Report, GameError> {
     config.validate()?;
-    let mut report = Report::new([bots[0].name(), bots[1].name()]);
-    for seed in 0..games {
-        let (game, rng) = start_game(config, seed)?;
-        report.play(game, rng, bots);
+    let names = [bots[0].name(), bots[1].name()];
+    let reports = on_every_core(games, |seeds| {
+        let mut report = Report::new(names);
+        for seed in seeds {
+            let (game, rng) = start_game(config, seed)?;
+            report.play(game, rng, bots);
+        }
+        Ok::<_, GameError>(report)
+    });
+    let mut total = Report::new(names);
+    for report in reports {
+        total.add(report?);
     }
-    Ok(report)
+    Ok(total)
 }
 
-/// [`run`] pour chacune de ces paires, en parallèle (une paire par fil). Les bilans sont
-/// rendus dans l'ordre des paires, et ne dépendent que des graines.
-pub fn run_pairs(
+/// Les parties que [`run`] joue (graines 0 à `games - 1`), enregistrées, dans l'ordre des
+/// graines et sur les mêmes cœurs : de quoi les relire pour d'autres statistiques.
+/// Erreur au premier refus, ou si la configuration est invalide.
+pub fn record_games(
     config: &GameConfig,
-    pairs: &[[BotKind; 2]],
+    bots: [&dyn Bot; 2],
     games: u64,
-) -> Result<Vec<Report>, GameError> {
+) -> Result<Vec<GameRecord>, String> {
+    config.validate().map_err(|error| error.to_string())?;
+    let chunks = on_every_core(games, |seeds| {
+        seeds
+            .map(|seed| record_game(config, seed, bots))
+            .collect::<Result<Vec<_>, _>>()
+    });
+    let mut records = Vec::new();
+    for chunk in chunks {
+        records.extend(chunk?);
+    }
+    Ok(records)
+}
+
+/// Fait `play` sur des blocs de graines consécutives de `0..games`, sur tous les cœurs de
+/// la machine sauf un (laissé au reste du PC), et rend les résultats dans l'ordre des
+/// graines.
+fn on_every_core<T: Send>(games: u64, play: impl Fn(Range<u64>) -> T + Sync) -> Vec<T> {
+    let cores = thread::available_parallelism().map_or(1, NonZeroUsize::get);
+    let threads = u64::try_from(cores.saturating_sub(1))
+        .unwrap_or(1)
+        .clamp(1, games.max(1));
+    let per_thread = games.div_ceil(threads);
+    let play = &play;
     thread::scope(|scope| {
-        let handles: Vec<_> = pairs
-            .iter()
-            .map(|&[first, second]| {
-                scope.spawn(move || run(config, [first.bot(), second.bot()], games))
+        let handles: Vec<_> = (0..threads)
+            .map(|index| {
+                let first = index.saturating_mul(per_thread);
+                let seeds = first..first.saturating_add(per_thread).min(games);
+                scope.spawn(move || play(seeds))
             })
             .collect();
         // Un bot qui plante est un bug : sa panique remonte telle quelle à l'appelant.
@@ -47,6 +87,20 @@ pub fn run_pairs(
             })
             .collect()
     })
+}
+
+/// [`run`] pour chacune de ces paires, l'une après l'autre : chacune occupe déjà les
+/// cœurs, en lancer plusieurs à la fois ne ferait que ralentir la machine. Les bilans
+/// sont rendus dans l'ordre des paires, et ne dépendent que des graines.
+pub fn run_pairs(
+    config: &GameConfig,
+    pairs: &[[BotKind; 2]],
+    games: u64,
+) -> Result<Vec<Report>, GameError> {
+    pairs
+        .iter()
+        .map(|&[first, second]| run(config, [first.bot(), second.bot()], games))
+        .collect()
 }
 
 /// La partie que [`run`] joue avec cette graine, enregistrée : la référence qui vérifie
@@ -151,6 +205,42 @@ impl Report {
             passes: 0,
             refused: 0,
             first_refusal: None,
+        }
+    }
+
+    /// Ajoute le bilan des parties suivantes (graines plus grandes) : le premier refus reste
+    /// le plus ancien.
+    fn add(&mut self, later: Report) {
+        // Déstructuré en entier : un compteur ajouté au bilan doit l'être ici aussi.
+        let Report {
+            bots: _,
+            games,
+            wins,
+            frozen,
+            turn_limit,
+            turns,
+            attacks,
+            kills,
+            turns_keeping_actions,
+            passes,
+            refused,
+            first_refusal,
+        } = later;
+        self.games += games;
+        self.wins[0] += wins[0];
+        self.wins[1] += wins[1];
+        self.frozen += frozen;
+        self.turn_limit += turn_limit;
+        self.turns += turns;
+        for (attack, count) in attacks {
+            *self.attacks.entry(attack).or_default() += count;
+        }
+        self.kills += kills;
+        self.turns_keeping_actions += turns_keeping_actions;
+        self.passes += passes;
+        self.refused += refused;
+        if self.first_refusal.is_none() {
+            self.first_refusal = first_refusal;
         }
     }
 
@@ -317,6 +407,28 @@ mod tests {
     fn wilson_interval_stays_honest_at_the_extremes() {
         assert_close(wilson_interval(0, 10), (0.0, 0.2775));
         assert_close(wilson_interval(10, 10), (0.7225, 1.0));
+    }
+
+    #[test]
+    fn a_run_on_every_core_gives_the_report_of_one_game_after_another() {
+        use crate::{Banking, GreedyBot, RandomBot, current_rules};
+        let config = GameConfig {
+            board_size: 5,
+            wall_thickness: 0,
+            align_to_win: 4,
+            pions_per_player: 6,
+            ..current_rules()
+        };
+        let greedy = GreedyBot::new(Banking::SpendAll);
+        let bots: [&dyn Bot; 2] = [&greedy, &RandomBot];
+        // Un nombre de parties qui ne se partage pas également entre les cœurs.
+        let games = 13;
+        let mut one_by_one = Report::new([bots[0].name(), bots[1].name()]);
+        for seed in 0..games {
+            let (game, rng) = start_game(&config, seed).unwrap();
+            one_by_one.play(game, rng, bots);
+        }
+        assert_eq!(run(&config, bots, games).unwrap(), one_by_one);
     }
 
     #[test]

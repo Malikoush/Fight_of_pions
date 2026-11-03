@@ -39,6 +39,24 @@ pub(crate) fn can_act(
     pion.owner() == player && !held_back
 }
 
+/// Ce qui déclenche une réaction, jouée pendant le tour adverse (carnet, « Réactions »).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Trigger {
+    /// L'adversaire pose un pion. La réaction part d'un des pions posés : c'est lui qu'on
+    /// choisit comme lanceur (Sentinelle).
+    Placement,
+    /// Un de tes pions meurt. La réaction part de la case du pion mort : c'est elle qu'on
+    /// choisit comme lanceur (Queue du lézard).
+    Death,
+    /// L'adversaire déplace un pion, le sien ou un des tiens (Hibou).
+    Move,
+    /// L'adversaire joue une attaque, une carte (Perroquet).
+    Attack,
+    /// Une attaque adverse, ses choix faits, vise un de tes pions : avant qu'elle ne
+    /// s'applique. La réaction part du pion visé, qui doit pouvoir agir (Feintaille).
+    Targeted,
+}
+
 /// Tout ce qu'une famille sait d'une attaque en cours de choix.
 pub(crate) struct AttackContext<'a> {
     pub board: &'a Board,
@@ -154,6 +172,19 @@ pub(crate) trait AttackRules {
     /// des parties au hasard, que chaque famille qui le dit a raison.
     fn ignores_launcher(&self, _rarity: Rarity) -> bool {
         false
+    }
+
+    /// Ce qui déclenche la carte si c'est une réaction ; `None` pour une attaque, qui se
+    /// joue pendant son tour. Par défaut, une attaque.
+    fn trigger(&self) -> Option<Trigger> {
+        None
+    }
+
+    /// Pour une réaction qui répond à une attaque (Perroquet, Feintaille) : le coût le plus
+    /// haut de l'attaque adverse à laquelle elle répond dans cette rareté. Par défaut,
+    /// `None` : aucune limite.
+    fn attack_cost_limit(&self, _rarity: Rarity) -> Option<u32> {
+        None
     }
 }
 

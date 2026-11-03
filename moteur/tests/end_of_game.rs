@@ -331,6 +331,15 @@ fn has_a_target_without_effects(game: &Game, player: Player, attack: Attack) -> 
             (AttackKind::Lievre, _) => free_neighbor(launcher),
             (AttackKind::Familia, rarity) => familia(launcher, rarity),
             (AttackKind::CoupDuTaureau, rarity) => charges(launcher, rarity),
+            // Une réaction ne dépend pas de lui : c'est l'adversaire qui la déclenche.
+            (
+                AttackKind::Sentinelle
+                | AttackKind::Hibou
+                | AttackKind::QueueDuLezard
+                | AttackKind::Perroquet
+                | AttackKind::Feintaille,
+                _,
+            ) => false,
         })
 }
 

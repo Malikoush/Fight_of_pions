@@ -2,7 +2,7 @@
 //! disponibles, les paires de l'arène et les variantes de configuration.
 
 use crate::{Banking, Bot, GreedyBot, MctsBot, RandomBot, Weights};
-use fight_of_pions::{Attack, AttackKind, GameConfig, Rarity};
+use fight_of_pions::{Attack, AttackKind, DraftRules, GameConfig, Rarity};
 
 /// Un des bots disponibles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -121,6 +121,13 @@ pub fn variants() -> Vec<Variant> {
         Variant {
             name: "premières règles, banque max 1 et Ours Rare à 1 action",
             config: with_cost(bank_of_one, ours_rare, 1),
+        },
+        Variant {
+            name: "règles actuelles avec draft",
+            config: GameConfig {
+                draft: Some(DraftRules::standard()),
+                ..GameConfig::default()
+            },
         },
     ]
 }

@@ -251,6 +251,57 @@ Le **regard** : un pion adverse en ligne droite (8 directions), à 1 ou 2 cases,
   - Le lanceur qui atteint le mur le creuse et continue dans la case creusée ; un pion poussé ne creuse pas : le mur le bloque. Tes propres pions arrêtent la charge, une tombe non. Au-delà du mur, le bord de la grille l'arrête.
 - **Une reine sauvée par un garde** arrête la charge : le lanceur ne peut pas entrer sur sa case, et le reste de la charge n'a pas lieu (2026-11-03). Plus généralement, dans toute attaque, un déplacement impossible arrête la suite.
 
+### Réactions (2026-11-03, B8a : la fenêtre, Sentinelle et Hibou ; B8b : Queue du lézard et Perroquet ; B8c : Feintaille)
+
+Les réactions se jouent pendant le tour adverse, payées avec la banque (fiches). Règles communes, pour les cinq :
+
+- **Dans l'arsenal** : une réaction est une carte de l'arsenal, comme une attaque, avec son coût et sa recharge du catalogue. Elle ne se joue que pendant le tour adverse, jamais pendant le sien.
+- **Paiement** : avec les points en banque du joueur qui réagit.
+- **Une par tour** : un joueur joue au plus une réaction pendant chaque tour adverse. On ne réagit pas à une réaction.
+- **La fenêtre** : quand un déclencheur a lieu, le moteur demande au joueur qui ne joue pas s'il réagit, **seulement s'il a une réaction prête, payable et utilisable maintenant** ; sinon le jeu continue sans s'arrêter. Il choisit sa réaction, ou passe (`Action::Pass`). Une réaction commencée va au bout, comme une attaque.
+- **Une fois par attaque** : une attaque qui pose ou déplace plusieurs pions (Familia, Lièvre Rare…) n'ouvre qu'une fenêtre, à sa fin (après les vengeances) ; le joueur choisit à quel pion il répond. Un geste gratuit (pas de la reine, pas du Lièvre Épique) ouvre la sienne aussitôt.
+- **Partie finie** : aucune fenêtre ne s'ouvre si l'action vient de finir la partie.
+- **Le pion qui réagit** suit les règles du lanceur : posé avant ce tour (un pion posé à ton dernier tour peut réagir), non immobilisé.
+- **Ligne faite par une réaction** : elle ne gagne jamais tout de suite (même sans la règle d'or). Elle doit survivre au tour adverse suivant, **complet** : si une réaction te fait passer d'aucune ligne à au moins une, la règle d'or ne te fait pas gagner au début de ton prochain tour, mais au début du suivant, si tu as encore une ligne.
+- **Terre brûlée** : une réaction qui créerait un effet continu (Sentinelle Rare) n'est pas jouable pendant elle (2026-11-02).
+
+Les cartes de B8a :
+
+- **Sentinelle** (déclencheur : l'adversaire pose un pion, par sa pose normale ou par une carte : Familia, Reine, Meilleurs amis, séduction, Médecin…). Tu poses un pion de ta réserve sur une case libre collée au sien ; impossible si ta réserve est vide.
+  - Commune (1) : la pose.
+  - Rare (2) : la pose, et son pion est immobilisé 2 tours (les tours de l'adversaire ; celui-ci ne compte pas).
+- **Hibou** (déclencheur : l'adversaire déplace un pion, le sien ou un des tiens : saut, poussée, charge, échange, téléportation, Lièvre, pas de la reine). Ton pion avance d'1 pas, vers une case libre collée (8 directions). Il doit être posé avant ce tour et non immobilisé.
+  - Commune (1) : 1 de tes pions.
+  - Rare (2) : jusqu'à 2 de tes pions différents, l'un après l'autre.
+
+Les cartes de B8b :
+
+- **Queue du lézard** (déclencheur : un de tes pions meurt pendant le tour adverse, à l'infirmerie ou au cimetière, quelle que soit la cause : attaque, tir, vengeance). Tu poses des pions de ta réserve sur des cases libres collées à la case du pion mort, **jamais sur cette case**. Le lanceur est la case du mort : si plusieurs de tes pions meurent dans le même coup, tu choisis autour duquel. La fenêtre s'ouvre à la fin de l'attaque, comme les autres.
+  - Commune (1) : 1 pion.
+  - Rare (2) : jusqu'à 2 pions (réserve vide : la carte pose ce qu'elle peut, au moins 1).
+- **Perroquet** (déclencheur : l'adversaire joue une **carte** d'attaque ; ni le tir d'un garde, ni une réaction). Une fois son attaque terminée, tu la rejoues dans la même rareté, comme si c'était ta carte : ton lanceur (posé avant ce tour, non immobilisé), tes cibles, ta réserve, tes effets. Tu paies le Perroquet, et c'est lui qui part en recharge ; l'annonce dit « Perroquet », les effets créés viennent de l'attaque copiée (pour Attila).
+  - Commune (1) : une attaque de 1 point.
+  - Rare (2) : une attaque de 2 points ou moins. La limite se lit sur le coût de l'attaque.
+
+La carte de B8c :
+
+- **Feintaille** (déclencheur : une carte d'attaque adverse vise un de tes pions, c'est-à-dire le **choisit comme cible** ; un pion survolé, chargé ou pris dans une zone n'est pas visé, et le tir d'un garde ne compte pas). C'est la seule fenêtre qui s'ouvre **avant** le coup : les choix de l'attaque faits, elle attend ta réponse pour s'appliquer. Ton pion visé esquive d'1 case vers une case libre collée ; il doit pouvoir agir (non immobilisé, posé avant ce tour). L'attaque s'applique ensuite sur les cases choisies : le pion n'y est plus, elle ne le touche pas, les autres pions visés sont touchés normalement. L'adversaire la paie quand même.
+  - Commune (1) : contre une attaque de 2 points ou moins.
+  - Rare (2) : contre n'importe quelle attaque.
+
+### Draft et cache secrète (2026-11-03, B9a : le draft ; B9b : la cache cachée)
+
+Avant la partie, si la configuration a un draft (`draft`, absent par défaut ; variante « règles actuelles avec draft » au labo) :
+
+- **Le format** est une suite de choix dans la configuration (`DraftRules::steps`) : rien n'est écrit en dur. Le format décidé (`DraftRules::standard`) :
+  1. chaque joueur met **1 carte en cache**, choisie dans **tout le catalogue**, Légendaires comprises (J1, puis J2) ; les deux peuvent choisir la même ;
+  2. **10 cartes** sont tirées avec la graine, toutes différentes, dans tout le catalogue, Légendaires et réactions comprises ;
+  3. **1 ban** chacun (J1, puis J2) : la carte bannie n'est plus prenable ;
+  4. **3 picks** chacun **en serpent**, J2 d'abord puisque J1 joue en premier : J2, J1, J1, J2, J2, J1.
+- Les cartes mises en cache et prises s'ajoutent à l'arsenal de départ, dans l'ordre (la cache d'abord). Les cartes tirées ni bannies ni prises sont écartées.
+- Pendant le draft, seul le choix d'une carte est permis ; la partie commence ensuite normalement (J1, tour 1).
+- **La cache est secrète** (B9b) : l'adversaire ne la voit pas, ni au labo, ni au terminal, ni dans le journal (« met une carte en cache »). Elle est **révélée quand elle est jouée pour la première fois** (attaque ou réaction), et reste visible ensuite. Les picks sont publics. La fenêtre de réaction reste un indice pour l'adversaire : c'est voulu.
+
 ### Fin de partie (2026-10-26)
 
 Une partie se termine dans l'un de ces cas, vérifiés dans cet ordre (le manque de pions, ajouté en B6b, se vérifie à la fin de chaque action, avant la partie figée) :
@@ -268,8 +319,7 @@ Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors a
 
 ## Pas encore implémenté
 
-- Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, la Reine, Attila, le Médecin, le Massacre divin, l'Interchange, le Coup du taureau, le Lièvre, la Familia et Meilleurs amis ; et les réactions.
-- Le draft et la cache secrète.
+- Les autres attaques que l'Ours, la Beauté fatale, le Saut du loup, la Reine, Attila, le Médecin, le Massacre divin, l'Interchange, le Coup du taureau, le Lièvre, la Familia et Meilleurs amis ; et les réactions sont toutes codées (B8).
 - La mécanique anti-stagnation (Effondrement et/ou boost d'actions), qui fera de vraies fins de partie au lieu de nuls. À trancher par playtests puis bots (voir la feuille de route).
 
 ### Règles cibles (décidées le 2026-10-28, par défaut depuis le 2026-11-02)
@@ -399,12 +449,22 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | Statuts | Une attaque « sans effet » n'est jamais proposée : mais une immobilisation qui se superpose à une autre plus longue (Grognement juste après un Rugissement), ou une seconde protection sur un pion déjà protégé, compte-t-elle comme un effet ? Elle ne change rien en jeu. | Oui, elle compte (c'est ce que fait le moteur depuis B3) : « sans effet » veut dire « aucune primitive », pas « rien ne change ». Plus simple à expliquer et à calculer. | **2026-10-30** : oui, elle compte. |
 | B6 | Interchange Légendaire : double échange, ou une des autres pistes de la fiche ? | Échange protégé (fait seulement de briques existantes : échanger + protéger) | **2026-11-02** : le double échange de la fiche. |
 | B7 | Qu'est-ce que le « mur » du Coup du taureau ? Un trou est-il permanent ? | À définir | **2026-10-29** (fiches) : le lanceur creuse le bord, la case creusée devient normale pour toujours (plateau 14 × 14 dont le tour est du mur). Proposé le 2026-10-30 : coder d'abord la charge qui s'arrête au bord (B4), le mur ensuite s'il est gardé (B7). **2026-10-30** : le mur est gardé, à toutes les raretés ; tout le Coup du taureau passe donc en B7, avec le mur. |
-| B8 | Quand plusieurs effets réagissent au même événement, dans quel ordre ? | D'abord le joueur qui subit, puis l'autre | |
-| B8 | Avec le mal du débarquement, un pion posé à son dernier tour peut-il **réagir** pendant le tour adverse ? (Aujourd'hui, l'ancienneté se compte depuis le début du tour en cours : il n'est déjà plus « nouveau » au tour adverse.) | Oui | |
-| B8 | Le Perroquet peut-il copier le tir d'un garde (« une attaque de 1 point ») ? | Non : il ne copie que des cartes | |
+| B8 | Quand plusieurs effets réagissent au même événement, dans quel ordre ? | D'abord le joueur qui subit, puis l'autre | **2026-11-03** : seul le joueur qui ne joue pas réagit, une fois ; les vengeances (automatiques) passent avant la fenêtre. |
+| B8 | Avec le mal du débarquement, un pion posé à son dernier tour peut-il **réagir** pendant le tour adverse ? (Aujourd'hui, l'ancienneté se compte depuis le début du tour en cours : il n'est déjà plus « nouveau » au tour adverse.) | Oui | **2026-11-03** : oui (réponse par défaut). |
+| B8 | Les réactions sont-elles des cartes de l'arsenal, avec coût et recharge ? | Oui, jouables seulement pendant le tour adverse | **2026-11-03** : oui. |
+| B8 | Quand le moteur demande-t-il « tu réagis ? » | Seulement si le joueur a une réaction prête, payable et utilisable ; sinon le jeu continue. Nouvelle action `Pass` | **2026-11-03** : oui. La fenêtre révèle qu'on a une réaction : à revoir avec la vue par joueur (B9). |
+| B8 | Une attaque qui pose ou déplace plusieurs pions ouvre-t-elle une fenêtre par pion ? | Une seule, à la fin de l'attaque ; le joueur choisit à quel pion il répond | **2026-11-03** : oui. |
+| B8 | Queue du lézard : la fenêtre s'ouvre-t-elle juste après le kill ? | À la fin de l'attaque (le lézard ne pose jamais sur la case du mort) | **2026-11-03** : oui. |
+| B8 | Feintaille : qu'est-ce qu'un pion « visé » ? (Question B4 sur le bouclier et la Feintaille.) | Seulement un pion choisi comme cible ; survolé, chargé ou pris dans une zone, il n'est pas visé | **2026-11-03** : oui. |
+| B8 | Une ligne faite par une réaction gagne-t-elle au début du prochain tour de son propriétaire ? | Non : elle doit survivre au tour adverse suivant, complet (fiches) | **2026-11-03** : oui, elle gagne un tour plus tard. |
+| B8 | Combien de réactions par tour ? | Une par joueur, pendant chaque tour adverse (fiches) | **2026-11-03** : oui. |
+| B8 | Le Perroquet peut-il copier le tir d'un garde (« une attaque de 1 point ») ? | Non : il ne copie que des cartes | **2026-11-03** : non (réponse par défaut). |
+| B8b | Queue du lézard Rare : exactement 2 pions, ou jusqu'à 2 ? | Jusqu'à 2, comme le Hibou Rare ; réserve vide, elle pose ce qu'elle peut | **2026-11-03** : jusqu'à 2 (réponse par défaut). |
 | Règles cibles | Le mot-clé « Charge » (ignorer le mal du débarquement), prévu le 2026-10-28, a disparu des fiches : abandonné ? | Oui, abandonné | |
-| B9 | Les Légendaires peuvent-elles sortir au draft ? | Non (comme le GDD actuel) | |
-| B9 | Comment se déclenche la révélation d'une carte de la cache adverse ? | À définir | |
+| B9 | Les Légendaires peuvent-elles sortir au draft ? | Non (comme le GDD actuel) | **2026-11-03** : oui, le tirage et la cache se font dans tout le catalogue. |
+| B9 | Comment se déclenche la révélation d'une carte de la cache adverse ? | À définir | **2026-11-03** : quand elle est jouée pour la première fois. |
+| B9 | Le format : combien en cache, combien au draft ? | 1 en cache, 3 au draft | **2026-11-03** : oui, réglable ; 10 cartes tirées, 1 ban chacun, picks en serpent (J2 d'abord). |
+| B9 | La fenêtre de réaction révèle qu'on a une réaction : ouvrir une fenêtre même sans réaction ? | Oui, pour un humain | **2026-11-03** : non, l'indice donné à l'adversaire fait partie du jeu. |
 
 ## Historique
 
@@ -435,3 +495,8 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-11-02 | B6d : Terre brûlée (Attila Légendaire) : annule comme l'Épique, puis l'adversaire ne peut jouer aucun coup qui créerait un effet continu pendant son tour suivant. |
 | 2026-11-02 | Correctif de lecture : un pion qui attend son retour (Interchange Commune) ne peut pas être téléporté de nouveau, comme en B6c (Martin avait répondu « non »). |
 | 2026-11-03 | B7 : le mur (3 rangées par défaut, réglable ; la grille entière est nommée) et le Coup du taureau (Commune à Légendaire) : charge qui pousse, écrase ou tue, et creuse le mur ; un déplacement impossible arrête la suite d'une attaque. |
+| 2026-11-03 | B8a : la fenêtre de réaction (`Action::Pass`), une réaction par tour adverse, payée avec la banque ; Sentinelle (Commune, Rare) et Hibou (Commune, Rare) ; une ligne faite par une réaction gagne un tour plus tard. |
+| 2026-11-03 | B8b : Queue du lézard (Commune, Rare : jusqu'à 2 pions collés à la case du mort, jamais dessus) et Perroquet (Commune, Rare : rejoue l'attaque adverse de 1 ou 2 points au plus, payé et rechargé comme une carte). |
+| 2026-11-03 | B8c : Feintaille (Commune contre 2 points au plus, Rare contre tout) : seule fenêtre ouverte avant le coup ; le pion choisi comme cible esquive d'une case, l'attaque s'applique sur les cases choisies. |
+| 2026-11-03 | B9a : le draft, réglable (`DraftRules`) : 1 carte en cache dans tout le catalogue, 10 cartes tirées avec la graine, 1 ban chacun, 3 picks chacun en serpent (J2 d'abord) ; les cartes choisies remplissent l'arsenal. |
+| 2026-11-03 | B9b : la cache est secrète pour l'adversaire et révélée à sa première utilisation (`ArsenalSlot::is_secret`, `Event::CardRevealed`). |

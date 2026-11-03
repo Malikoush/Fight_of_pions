@@ -19,7 +19,7 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Joueur | `Player` | Les deux camps : `One` (commence) et `Two` |
 | Tour | `turn` | Le tour **d'un** joueur. Le compteur avance à chaque fin de tour. |
 | Manche | `round` (cible) | Un tour de chaque joueur (le « Tour 1 » du tableau du GDD) |
-| Action | `Action` | Une décision envoyée au moteur : `Place`, `UseAttack`, `Choose`, `FinishAttack`, `EndTurn` (plus tard `Pass` pour les réactions…) |
+| Action | `Action` | Une décision envoyée au moteur : `Place`, `UseAttack`, `Choose`, `FinishAttack`, `Pass` (ne pas réagir), `EndTurn`… |
 | Coût de la pose | `place_cost` | Actions que coûte la pose d'un pion (0 dans les règles actuelles, 1 dans les premières). 0 (pose gratuite) seulement si les poses sont limitées par tour. |
 | Poses par tour | `max_placements_per_turn`, `GameError::NoPlacementLeft` | Le plus de pions qu'un joueur peut poser dans un tour ; elles ne s'accumulent pas. 1 dans les règles actuelles ; `None` (premières règles) : seules les actions limitent les poses. Une pose de trop est refusée (`NoPlacementLeft`) ; une limite de 0 est refusée à la configuration (`ConfigError::NoPlacementPerTurn`), comme une pose gratuite sans limite (`ConfigError::FreePlacement`). |
 | Poses restantes | `Game::placements_left()` | Combien de pions le joueur courant peut encore poser ce tour : selon ses actions, ses poses permises, sa réserve et les cases libres |
@@ -119,7 +119,9 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Jeton, pile de jetons | `TokenPile`, `TokenReward`, `Game::token_piles()`, `Effect::AddTokens`, `Event::TokenPileStarted`, `Event::TokenUsed`, `Event::TokenPileEnded` | Une **pile** est posée devant un joueur par un jeu du Massacre divin (pas sur un pion : ce n'est pas un `ActiveEffect`). Chacun de ses prochains kills use un **jeton** de chacune de ses piles, qui rend des points (`Points`) ou envoie au cimetière (`Graveyard`). Une pile est un effet entier : Attila Rare et Épique l'annulent (`Effect::CancelEnemyTokens`). Les gardes de la reine, sur la reine, ne sont pas des jetons. |
 | Viser les jetons adverses | `Action::ChooseEnemyTokens`, `AttackRules::enemy_tokens_effects`, `Targets` (interne) | Une cible qui n'est pas une case : toutes les piles de l'adversaire (Attila Rare et Épique). Elle compte pour une cible. Les cibles d'une attaque en cours (`Targets`) sont des cases, plus peut-être les jetons adverses. |
 | Pions en vie, manque de pions | `Game::living_pions(player)`, `EndReason::TooFewPions` | Les pions d'un joueur sur le plateau, en réserve et à l'infirmerie. Un joueur qui a un pion au cimetière et moins de `align_to_win` pions en vie a perdu (nul si les deux). |
-| Réaction | attaque avec déclencheur (cible) | Attaque jouée pendant le tour adverse, payée avec les actions en réserve |
+| Réaction | `AttackKind::is_reaction`, `Trigger` (interne) | Carte de l'arsenal jouée pendant le tour adverse, juste après son déclencheur (une pose, un déplacement, la mort d'un de ses pions, une attaque ; ou, avant qu'elle ne s'applique, une attaque qui vise un de ses pions), payée avec les actions en réserve ; une par tour adverse |
+| Fenêtre de réaction, réagir, passer | `Decision::React`, `Action::Pass`, `ReactionWindow` (interne) | Le moment où l'autre joueur peut répondre au coup qui vient d'être joué ; elle ne s'ouvre que s'il a une réaction jouable. Pendant elle, c'est lui qui décide (`Decision::player`) |
+| Ligne tardive | `late_lines` (interne) | Une ligne qu'une réaction a donnée à son joueur : elle gagne un tour plus tard, après un tour adverse complet |
 | Axe d'attaque | aucun (documentation seulement) | Crowd control, Mouvement, Kill, Invocation, Buff, Spécial : sert à l'équilibrage, pas au code. Toujours dire « axe d'attaque », pour ne pas confondre avec l'axe d'alignement. |
 
 ## Bots et arène
@@ -168,8 +170,9 @@ Le labo est entièrement en français, noms du code compris.
 
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
-| Cache secrète | `SecretCache` | Les 3 attaques choisies dans sa collection, cachées à l'adversaire |
-| Draft | `Draft` | Tirage de 14 cartes avec la graine, puis bans et picks en serpent |
+| Cache secrète | `DraftStep::Cache` | Les cartes (1 par défaut) que chaque joueur choisit dans tout le catalogue avant le draft ; cachées à l'adversaire jusqu'à leur premier usage (`ArsenalSlot::is_secret`, `Event::CardRevealed`, `Game::arsenal_seen_by`, `Game::with_secrets_guessed`) |
+| Vue joueur | `PlayerView`, `BoardView`, `SideView`, `Game::view`, `Event::is_visible_to` | Ce qu'un joueur voit de la partie, prêt à envoyer en JSON : tout l'affichage, la décision attendue et ses coups permis, jamais la cache adverse pas encore jouée |
+| Draft | `GameConfig::draft`, `DraftRules`, `DraftStep`, `Decision::Draft`, `Action::Draft`, `Event::Drafted`, `Game::draft_pool` | Avant la partie : la cache, puis des cartes tirées avec la graine (10 par défaut), bannies et prises dans l'ordre des étapes (1 ban chacun, 3 picks en serpent) |
 | Gacha, collection | hors moteur | Le moteur reçoit les cartes déjà choisies |
 
 ## Conventions

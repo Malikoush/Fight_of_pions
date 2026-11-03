@@ -1,4 +1,4 @@
-use crate::Position;
+use crate::{Attack, Position};
 
 /// Une décision du joueur, envoyée au moteur par [`crate::Game::apply`]. Elle doit
 /// répondre à la décision attendue ([`crate::Game::pending_decision`]).
@@ -7,6 +7,9 @@ use crate::Position;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Action {
+    /// Pendant le draft, choisir cette carte pour l'étape en cours
+    /// ([`crate::Decision::Draft`]) : la mettre en cache, la bannir ou la prendre.
+    Draft(Attack),
     /// Poser un pion de sa réserve sur une case libre ; coûte
     /// [`crate::GameConfig::place_cost`] actions, dans la limite de
     /// [`crate::GameConfig::max_placements_per_turn`] poses par tour.
@@ -44,6 +47,9 @@ pub enum Action {
         /// La case où il avance.
         to: Position,
     },
+    /// Ne pas réagir au coup adverse ([`crate::Decision::React`]) : le tour adverse
+    /// continue.
+    Pass,
     /// Finir son tour, gratuitement ; les actions restantes sont gardées dans la limite
     /// de [`crate::GameConfig::max_banked_actions`].
     EndTurn,

@@ -3,6 +3,7 @@ use std::fmt;
 
 /// Le résultat d'une partie terminée.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Outcome {
     /// Ce joueur a gagné.
     Won(Player),
@@ -12,6 +13,7 @@ pub enum Outcome {
 
 /// Pourquoi une partie s'est terminée.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EndReason {
     /// Un joueur a une ligne gagnante : faite en posant (sans la règle d'or), ou encore là
     /// au début de son tour, ou au moment où la partie s'arrête.
@@ -39,6 +41,7 @@ impl fmt::Display for EndReason {
 
 /// La fin d'une partie : son résultat et sa raison.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GameEnd {
     /// Qui a gagné, ou match nul.
     pub outcome: Outcome,

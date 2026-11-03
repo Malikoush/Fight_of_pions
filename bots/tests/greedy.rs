@@ -84,7 +84,7 @@ fn the_banker_still_makes_a_free_placement() {
     let action = banker.choose(&game, &mut Rng::new(0)).unwrap();
     assert!(matches!(action, Action::Place(_)), "{action:?}");
 
-    game.apply(action).unwrap();
+    play(&mut game, &[action]);
     assert_eq!(
         banker.choose(&game, &mut Rng::new(0)),
         Some(Action::EndTurn)

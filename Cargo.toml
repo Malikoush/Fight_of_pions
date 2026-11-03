@@ -1,7 +1,8 @@
 [workspace]
-members = ["moteur", "terminal", "labo", "bots"]
+members = ["moteur", "terminal", "labo", "bots", "serveur"]
 # `cargo test` et `cargo run` à la racine ne compilent jamais le labo (eframe) :
-# `cargo run` lance le terminal, `cargo labo` le labo, `cargo arene` l'arène des bots.
+# `cargo run` lance le terminal, `cargo labo` le labo, `cargo arene` l'arène des bots,
+# `cargo serveur` le serveur en ligne (testé par `cargo test --workspace`).
 # Les bots sont une bibliothèque (l'arène est un exemple) : `cargo test` les vérifie, et
 # `cargo run` n'a toujours qu'un seul binaire à lancer.
 default-members = ["moteur", "terminal", "bots"]

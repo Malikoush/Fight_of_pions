@@ -40,10 +40,11 @@ pub mod rules;
 pub use attacks::{Attack, AttackKind, AttackStats, CatalogEntry, Rarity};
 pub use board::{Board, Cell, Pion, PionId};
 pub use common::{Direction, Player, Position};
-pub use config::{ConfigError, GameConfig};
+pub use config::{ConfigError, DraftRules, DraftStep, GameConfig};
 pub use error::GameError;
 pub use game::{
-    Action, ActiveEffect, ArsenalSlot, Decision, EffectEnd, EffectId, EffectKind, EndReason, Event,
-    Game, GameEnd, GameRecord, Outcome, Patient, PlayId, ReplayError, TokenPile, TokenReward,
+    Action, ActiveEffect, ArsenalSlot, BoardView, Decision, EffectEnd, EffectId, EffectKind,
+    EndReason, Event, Game, GameEnd, GameRecord, Outcome, Patient, PlayId, PlayerView, ReplayError,
+    SideView, TokenPile, TokenReward,
 };
 pub use rng::Rng;

@@ -24,6 +24,8 @@ pub const HAUTEUR_JOURNAL: f32 = 220.0;
 /// Les deux écrans du labo.
 pub const ECRAN_PARTIE: &str = "Partie";
 pub const ECRAN_ARENE: &str = "Arène";
+/// Une carte de la cache adverse, pas encore jouée.
+pub const CARTE_SECRETE: &str = "carte secrète (cache)";
 /// Ce qui contrôle un joueur quand ce n'est pas un bot.
 pub const HUMAIN: &str = "humain";
 /// Attente entre deux coups d'un bot en lecture automatique, en millisecondes : bornes

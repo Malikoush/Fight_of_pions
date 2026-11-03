@@ -11,6 +11,9 @@
 //! ligne adverse déjà faite : il mesure les menaces en finissant son tour sur une copie
 //! (`placement_budget`), où la ligne adverse gagne aussitôt ; il n'y voit donc plus aucune
 //! pose adverse possible, et aucune menace.
+//!
+//! Il ne joue jamais de réaction : pendant le tour adverse, il passe. Au draft, il choisit
+//! au hasard.
 
 use crate::reading::{AttackPlan, attack_plans, placeable, placement_budget};
 use crate::windows::WindowContent;
@@ -84,6 +87,13 @@ impl Bot for GreedyBot {
     fn choose(&self, game: &Game, rng: &mut Rng) -> Option<Action> {
         let me = game.pending_decision()?.player();
         let legal = game.legal_actions();
+        if legal.contains(&Action::Pass) {
+            return Some(Action::Pass);
+        }
+        // Le draft : une carte au hasard.
+        if matches!(legal.first(), Some(Action::Draft(_))) {
+            return rng.pick(&legal).copied();
+        }
         let windows = Windows::new(game.board(), game.config().align_to_win);
         let view = View {
             game,

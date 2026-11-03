@@ -26,6 +26,7 @@ pub fn alternate(game: &mut Game, cells: &[Position]) {
     for &pos in cells {
         let player = game.current_player();
         game.apply(Action::Place(pos)).unwrap();
+        pass_reactions(game);
         if game.end().is_none() && game.current_player() == player {
             game.apply(Action::EndTurn).unwrap();
         }
@@ -33,12 +34,16 @@ pub fn alternate(game: &mut Game, cells: &[Position]) {
 }
 
 /// Laisse le bot jouer pour le joueur courant jusqu'à la fin de son tour (ou de la
-/// partie), et rend les actions qu'il a jouées.
+/// partie), et rend les actions qu'il a jouées. L'adversaire ne réagit pas.
 pub fn play_the_turn(bot: &dyn Bot, game: &mut Game) -> Vec<Action> {
     let player = game.current_player();
     let mut rng = Rng::new(0);
     let mut played = Vec::new();
     while game.end().is_none() && game.current_player() == player {
+        if game.legal_actions().contains(&Action::Pass) {
+            game.apply(Action::Pass).unwrap();
+            continue;
+        }
         let action = bot.choose(game, &mut rng).unwrap();
         game.apply(action).unwrap();
         played.push(action);
@@ -46,9 +51,17 @@ pub fn play_the_turn(bot: &dyn Bot, game: &mut Game) -> Vec<Action> {
     played
 }
 
-/// Joue une suite d'actions qui doivent toutes réussir.
+/// Joue une suite d'actions qui doivent toutes réussir ; l'adversaire ne réagit pas.
 pub fn play(game: &mut Game, actions: &[Action]) {
     for &action in actions {
         game.apply(action).unwrap();
+        pass_reactions(game);
+    }
+}
+
+/// L'adversaire ne réagit pas au dernier coup, s'il le pouvait.
+pub fn pass_reactions(game: &mut Game) {
+    if game.legal_actions().contains(&Action::Pass) {
+        game.apply(Action::Pass).unwrap();
     }
 }

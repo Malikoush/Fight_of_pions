@@ -9,6 +9,7 @@ use std::fmt;
 /// L'identité d'un effet continu, donnée dans l'ordre de création à partir de 0 : une même
 /// suite d'actions donne toujours les mêmes identités.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EffectId(u32);
 
 impl EffectId {
@@ -32,6 +33,7 @@ impl fmt::Display for EffectId {
 /// de 0. Tous les effets continus d'un même jeu forment un **effet entier**, qu'Attila Rare
 /// et Épique annulent d'un coup (carnet, 2026-11-02).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayId(u32);
 
 impl PlayId {
@@ -61,6 +63,7 @@ pub(crate) struct CardPlay {
 /// Ce que fait un effet continu. D'autres sortes viendront avec les cartes qui en ont
 /// besoin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EffectKind {
     /// Statut immobilisé : le pion ne peut pas lancer d'attaque, donc pas non plus bouger
     /// par une carte de son propriétaire.
@@ -92,6 +95,7 @@ pub enum EffectKind {
 
 /// Comment un effet continu finit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EffectEnd {
     /// À la fin de ce tour ([`crate::Game::turn`]).
     Turn(u32),
@@ -137,6 +141,7 @@ impl fmt::Display for EffectKind {
 /// Un effet continu : ce qu'une carte laisse en jeu après avoir été jouée. Il vise un pion
 /// par son identité, pas par sa case, pour le suivre s'il bouge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ActiveEffect {
     id: EffectId,
     kind: EffectKind,
@@ -265,6 +270,7 @@ impl ActiveEffect {
 /// Un pion tué qui attend à l'infirmerie de revenir dans la réserve de son propriétaire.
 /// L'infirmerie n'est pas un effet continu : aucune carte ne l'annule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Patient {
     pion: Pion,
     last_turn: u32,

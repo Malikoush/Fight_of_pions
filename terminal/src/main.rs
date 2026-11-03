@@ -1,6 +1,6 @@
 mod terminal;
 
-use fight_of_pions::{Event, Game, GameConfig, Outcome};
+use fight_of_pions::{DraftStep, Event, Game, GameConfig, Outcome};
 use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 use terminal::Command;
@@ -38,7 +38,7 @@ fn main() {
             Ok(_) => {}
         }
 
-        match terminal::parse_command(&line) {
+        match terminal::parse_command(&line, &game) {
             Ok(Command::Quit) => break,
             Ok(Command::Help) => println!("{}", terminal::help(game.config())),
             Ok(Command::Play(action)) => match game.apply(action) {
@@ -76,6 +76,23 @@ fn main() {
                                 terminal::player_name(pion.owner()),
                                 from,
                                 to
+                            ),
+                            // La cache n'est jamais nommée : l'adversaire regarde l'écran.
+                            Event::Drafted { step, attack } => match step {
+                                DraftStep::Cache(player) => println!(
+                                    "{} met une carte en cache.",
+                                    terminal::player_name(player)
+                                ),
+                                _ => println!(
+                                    "{} choisit {} ({:?}).",
+                                    terminal::player_name(step.player()),
+                                    attack,
+                                    step
+                                ),
+                            },
+                            Event::CardRevealed { player, .. } => println!(
+                                "{} joue la carte de sa cache.",
+                                terminal::player_name(player)
                             ),
                             Event::WallDug { at } => {
                                 println!("Le mur est creusé en {}.", at)

@@ -102,17 +102,8 @@ impl Weights {
     /// ajoute aux siennes, plus ce qu'il retire à l'adversaire en entrant dans les
     /// siennes. Un seul passage sur les fenêtres, pour trier toutes les poses à la fois
     /// sans les jouer.
-    pub fn placement_gains(
-        &self,
-        board: &Board,
-        windows: &Windows,
-        player: Player,
-    ) -> PlacementGains {
-        let size = board.size();
-        let mut gains = PlacementGains {
-            size,
-            gains: vec![0_u64; size * size],
-        };
+    pub fn placement_gains(&self, board: &Board, windows: &Windows, player: Player) -> CellValues {
+        let mut gains = CellValues::new(board);
         for window in windows.iter() {
             let pions = pions_in(board, window);
             let own = pions[player.index()];
@@ -133,6 +124,27 @@ impl Weights {
         gains
     }
 
+    /// Où se jouent les lignes : pour chaque case, ce que valent pour les deux joueurs les
+    /// fenêtres qui la contiennent, ouvertes ou disputées, comme si chacun y était seul.
+    /// Une case chaude est une cible ou une destination qui compte, quelle que soit
+    /// l'attaque : un pion qui bloque une ligne, un pion d'une ligne avancée, une case libre
+    /// au milieu des lignes. Une case loin de tout pion vaut 0.
+    pub fn heat(&self, board: &Board, windows: &Windows) -> CellValues {
+        let mut heat = CellValues::new(board);
+        for window in windows.iter() {
+            let [first, second] = pions_in(board, window);
+            let value = self
+                .window_points(first, 0)
+                .saturating_add(self.window_points(second, 0));
+            for &pos in window {
+                if let Some(cell) = heat.cell_mut(pos) {
+                    *cell = cell.saturating_add(value);
+                }
+            }
+        }
+        heat
+    }
+
     /// Ce que rapporte une fenêtre à un joueur qui y a `own` pions, face à `opponent` pions
     /// adverses.
     fn window_points(&self, own: u32, opponent: u32) -> u64 {
@@ -144,27 +156,36 @@ impl Weights {
     }
 }
 
-/// Ce qu'une pose rapporterait sur chaque case : voir [`Weights::placement_gains`].
+/// Une valeur par case du plateau : le gain d'une pose ([`Weights::placement_gains`]) ou
+/// la chaleur d'une case ([`Weights::heat`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlacementGains {
+pub struct CellValues {
     size: usize,
-    /// Rangés par case, rangée par rangée.
-    gains: Vec<u64>,
+    /// Rangées par case, rangée par rangée, mur compris.
+    values: Vec<u64>,
 }
 
-impl PlacementGains {
-    /// Le gain d'une pose sur cette case ; 0 pour une case occupée, hors de toute fenêtre
-    /// ou hors du plateau.
+impl CellValues {
+    /// Des valeurs nulles pour toutes les cases de ce plateau.
+    fn new(board: &Board) -> CellValues {
+        let size = board.size();
+        CellValues {
+            size,
+            values: vec![0; size * size],
+        }
+    }
+
+    /// La valeur de cette case ; 0 hors du plateau.
     pub fn at(&self, pos: Position) -> u64 {
         self.index(pos)
-            .and_then(|index| self.gains.get(index))
+            .and_then(|index| self.values.get(index))
             .copied()
             .unwrap_or(0)
     }
 
     fn cell_mut(&mut self, pos: Position) -> Option<&mut u64> {
         let index = self.index(pos)?;
-        self.gains.get_mut(index)
+        self.values.get_mut(index)
     }
 
     /// La seule conversion case → rang dans le tableau.
@@ -212,11 +233,12 @@ mod tests {
         Position { row, col }
     }
 
-    /// Un morpion dans les règles actuelles sans la règle d'or : une ligne faite en posant
-    /// gagne aussitôt.
+    /// Un morpion dans les règles actuelles sans la règle d'or ni le mur : une ligne faite
+    /// en posant gagne aussitôt, et A1 est le coin du plateau.
     fn morpion() -> Game {
         let config = GameConfig {
             board_size: 3,
+            wall_thickness: 0,
             align_to_win: 3,
             pions_per_player: 5,
             golden_rule: false,
@@ -234,6 +256,10 @@ mod tests {
         for &pos in cells {
             let player = game.current_player();
             game.apply(Action::Place(pos)).unwrap();
+            // L'adversaire ne réagit pas à ces poses.
+            if game.legal_actions().contains(&Action::Pass) {
+                game.apply(Action::Pass).unwrap();
+            }
             if game.end().is_none() && game.current_player() == player {
                 game.apply(Action::EndTurn).unwrap();
             }

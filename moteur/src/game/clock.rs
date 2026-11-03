@@ -52,8 +52,8 @@ impl Game {
             .saturating_add(turns.saturating_sub(1).saturating_mul(2))
     }
 
-    /// Donne au pion de cette case un effet de `turns` tours, créé par le joueur courant
-    /// avec cette carte. Il se compte en tours de l'adversaire du joueur courant.
+    /// Donne au pion de cette case un effet de `turns` tours, créé par le joueur qui agit
+    /// avec cette carte. Il se compte en tours de l'adversaire de ce joueur.
     pub(super) fn start_effect(
         &mut self,
         at: Position,
@@ -65,7 +65,7 @@ impl Game {
         let Some(pion) = self.board.get(at).and_then(Cell::pion) else {
             return;
         };
-        let last_turn = self.last_turn_of(self.current_player.opponent(), turns);
+        let last_turn = self.last_turn_of(self.acting_player().opponent(), turns);
         self.add_effect(pion.id(), kind, play, EffectEnd::Turn(last_turn), events);
     }
 
@@ -209,7 +209,7 @@ impl Game {
         let Some(pion) = self.board.get(at).and_then(Cell::pion) else {
             return;
         };
-        let enemy = self.current_player.opponent();
+        let enemy = self.acting_player().opponent();
         let plays: Vec<PlayId> = cancellable_plays_on(&self.effects, pion.id(), enemy);
         self.end_effects(
             |effect| effect.kind().is_cancellable() && plays.contains(&effect.play()),
@@ -217,7 +217,7 @@ impl Game {
         );
     }
 
-    /// Crée un effet continu du joueur courant sur le pion de cette case, qui finit ainsi,
+    /// Crée un effet continu du joueur qui agit sur le pion de cette case, qui finit ainsi,
     /// et l'annonce (retour d'Interchange, jetons du Lièvre).
     pub(super) fn add_effect_at(
         &mut self,
@@ -232,7 +232,7 @@ impl Game {
         }
     }
 
-    /// Crée un effet continu du joueur courant sur ce pion, et l'annonce.
+    /// Crée un effet continu du joueur qui agit sur ce pion, et l'annonce.
     fn add_effect(
         &mut self,
         pion: PionId,
@@ -245,7 +245,7 @@ impl Game {
             self.next_effect_id,
             kind,
             pion,
-            self.current_player,
+            self.acting_player(),
             play,
             end,
         );

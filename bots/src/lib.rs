@@ -41,7 +41,7 @@ pub mod windows;
 
 mod reading;
 
-pub use arena::{Report, record_game, run, run_pairs, start_game};
+pub use arena::{Report, record_game, record_games, run, run_pairs, start_game};
 pub use bot::Bot;
 pub use evaluation::Weights;
 pub use greedy::{Banking, GreedyBot};
