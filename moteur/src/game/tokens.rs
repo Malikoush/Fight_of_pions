@@ -92,7 +92,7 @@ impl Game {
             .saturating_add(self.reserve_pions[player.index()])
     }
 
-    /// Pose devant le joueur courant une pile de ces jetons (Massacre divin).
+    /// Pose devant le joueur qui agit une pile de ces jetons (Massacre divin).
     pub(super) fn add_tokens(
         &mut self,
         reward: TokenReward,
@@ -103,7 +103,7 @@ impl Game {
         let pile = TokenPile {
             play: play.id,
             source: play.attack,
-            owner: self.current_player,
+            owner: self.acting_player(),
             reward,
             tokens,
         };
@@ -111,10 +111,10 @@ impl Game {
         events.push(Event::TokenPileStarted(pile));
     }
 
-    /// Annule toutes les piles de jetons de l'adversaire du joueur courant (Attila Rare et
+    /// Annule toutes les piles de jetons de l'adversaire du joueur qui agit (Attila Rare et
     /// Épique) : chacune est un effet entier.
     pub(super) fn cancel_enemy_tokens(&mut self, events: &mut Vec<Event>) {
-        let enemy = self.current_player.opponent();
+        let enemy = self.acting_player().opponent();
         let (ended, kept): (Vec<TokenPile>, Vec<TokenPile>) = std::mem::take(&mut self.token_piles)
             .into_iter()
             .partition(|pile| pile.owner == enemy);

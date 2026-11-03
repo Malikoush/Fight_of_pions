@@ -62,6 +62,11 @@ pub enum GameError {
     /// tour, posée ce tour, immobilisée, ou pas un pion adverse non protégé au bout d'une
     /// ligne droite depuis elle.
     QueenCannotShoot(Position),
+    /// Seule une réaction se joue pendant le tour adverse : cette carte est une attaque.
+    NotAReaction(Attack),
+    /// Rien ne déclenche cette réaction maintenant : elle ne se joue que pendant le tour
+    /// adverse, juste après son déclencheur.
+    NotTriggered(Attack),
 }
 
 impl fmt::Display for GameError {
@@ -114,6 +119,16 @@ impl fmt::Display for GameError {
             GameError::QueenCannotShoot(pos) => {
                 write!(f, "aucun garde de la reine ne peut tirer sur {}", pos)
             }
+            GameError::NotAReaction(attack) => write!(
+                f,
+                "{} n'est pas une réaction : pendant le tour adverse, seule une réaction se joue",
+                attack
+            ),
+            GameError::NotTriggered(attack) => write!(
+                f,
+                "{} est une réaction : elle se joue pendant le tour adverse, quand elle est déclenchée",
+                attack
+            ),
             GameError::TargetsMissing(attack) => {
                 write!(f, "l'attaque {} attend encore une cible", attack)
             }

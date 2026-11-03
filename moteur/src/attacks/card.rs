@@ -31,6 +31,16 @@ pub enum AttackKind {
     Familia,
     /// Deux pions liés par un pacte : si l'un est tué, l'autre le venge (fiche n°12).
     MeilleursAmis,
+    /// Réaction : quand l'adversaire pose un pion, tu poses juste à côté (fiche R2).
+    Sentinelle,
+    /// Réaction : quand l'adversaire déplace un pion, tes pions avancent d'un pas (fiche R5).
+    Hibou,
+    /// Réaction : quand un de tes pions meurt, tu reposes juste à côté (fiche R3).
+    QueueDuLezard,
+    /// Réaction : quand l'adversaire joue une attaque, tu la rejoues aussitôt (fiche R4).
+    Perroquet,
+    /// Réaction : quand une attaque adverse vise un de tes pions, il l'esquive (fiche R1).
+    Feintaille,
 }
 
 impl fmt::Display for AttackKind {
@@ -48,6 +58,11 @@ impl fmt::Display for AttackKind {
             AttackKind::Lievre => write!(f, "Lièvre"),
             AttackKind::Familia => write!(f, "Familia"),
             AttackKind::MeilleursAmis => write!(f, "Meilleurs amis"),
+            AttackKind::Sentinelle => write!(f, "Sentinelle"),
+            AttackKind::Hibou => write!(f, "Hibou"),
+            AttackKind::QueueDuLezard => write!(f, "Queue du lézard"),
+            AttackKind::Perroquet => write!(f, "Perroquet"),
+            AttackKind::Feintaille => write!(f, "Feintaille"),
         }
     }
 }

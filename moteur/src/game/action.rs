@@ -44,6 +44,9 @@ pub enum Action {
         /// La case où il avance.
         to: Position,
     },
+    /// Ne pas réagir au coup adverse ([`crate::Decision::React`]) : le tour adverse
+    /// continue.
+    Pass,
     /// Finir son tour, gratuitement ; les actions restantes sont gardées dans la limite
     /// de [`crate::GameConfig::max_banked_actions`].
     EndTurn,

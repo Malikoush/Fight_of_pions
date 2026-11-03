@@ -1,6 +1,8 @@
 use super::arsenal::ArsenalSlot;
+use super::attack_flow::Resolution;
 use super::hare::HareWalk;
 use super::lasting::{ActiveEffect, EffectId, Patient, PlayId};
+use super::reaction::ReactionWindow;
 use super::tokens::TokenPile;
 use crate::attacks::{Launch, Targets, is_new};
 use crate::{
@@ -54,6 +56,16 @@ pub struct Game {
     /// Pour chaque joueur sous Terre brûlée, le dernier tour où il ne peut créer aucun effet
     /// continu.
     pub(super) scorched_until: [Option<u32>; 2],
+    /// La fenêtre de réaction ouverte, s'il y en a une : l'autre joueur décide.
+    pub(super) reaction_window: Option<ReactionWindow>,
+    /// L'attaque du joueur courant qui attend, pour s'appliquer, la réponse de l'autre
+    /// joueur à la fenêtre ouverte (Feintaille).
+    pub(super) paused_attack: Option<Resolution>,
+    /// Vrai si l'autre joueur a déjà joué une réaction pendant ce tour.
+    pub(super) reacted_this_turn: bool,
+    /// Pour chaque joueur, vrai si une de ses réactions lui a donné une ligne : la règle
+    /// d'or ne le fera pas gagner au début de son prochain tour, mais du suivant.
+    pub(super) late_lines: [bool; 2],
 }
 
 /// Une attaque commencée dont les choix ne sont pas finis. Rien n'est modifié tant que le
@@ -62,7 +74,10 @@ pub struct Game {
 pub(super) struct PendingAttack {
     /// L'emplacement de l'attaque dans l'arsenal du joueur courant.
     pub(super) slot: usize,
-    /// L'attaque elle-même, retenue au début : rien ne la relit ensuite dans l'arsenal.
+    /// La carte jouée, retenue au début : c'est elle qu'on paie et qui part en recharge.
+    pub(super) card: Attack,
+    /// L'attaque qu'elle fait jouer : la carte elle-même, ou pour un Perroquet l'attaque
+    /// adverse qu'il rejoue. Rien ne la relit ensuite dans l'arsenal.
     pub(super) attack: Attack,
     /// La case du pion lanceur, une fois choisie.
     pub(super) launcher: Option<Position>,
@@ -225,8 +240,9 @@ impl Game {
         if self.end.is_some() {
             return None;
         }
-        let player = self.current_player;
+        let player = self.acting_player();
         Some(match &self.pending_attack {
+            None if self.reaction_window.is_some() => Decision::React { player },
             None => Decision::MainAction { player },
             Some(pending) => {
                 let attack = pending.attack;
@@ -254,9 +270,9 @@ impl Game {
     /// toujours identique : les poses rangée par rangée (A1, B1… puis A2…), les attaques
     /// dans l'ordre de l'arsenal, les pas de la reine puis ses tirs (dans l'ordre des
     /// directions, [`crate::Direction::ALL`]), les pas du Lièvre (par case de départ), puis
-    /// `EndTurn` ; pendant une attaque, les
-    /// choix de case rangée par rangée, puis `ChooseEnemyTokens`, puis `FinishAttack`. Vide
-    /// si la partie est finie.
+    /// `EndTurn` ; pendant une fenêtre de réaction, les réactions dans l'ordre de l'arsenal,
+    /// puis `Pass` ; pendant une attaque, les choix de case rangée par rangée, puis
+    /// `ChooseEnemyTokens`, puis `FinishAttack`. Vide si la partie est finie.
     ///
     /// La liste est construite en passant chaque action candidate par la validation
     /// elle-même : elle ne peut pas contredire `apply`. Les candidates sont seulement
@@ -267,6 +283,10 @@ impl Game {
             return Vec::new();
         }
         let candidates: Vec<Action> = match self.pending_attack {
+            None if self.reaction_window.is_some() => {
+                let slots = 0..self.arsenal(self.acting_player()).len();
+                slots.map(Action::UseAttack).chain([Action::Pass]).collect()
+            }
             None => {
                 let slots = 0..self.arsenal(self.current_player).len();
                 self.board
@@ -332,11 +352,16 @@ impl Game {
             queen_shot: false,
             hare_walks: Vec::new(),
             scorched_until: [None, None],
+            reaction_window: None,
+            paused_attack: None,
+            reacted_this_turn: false,
+            late_lines: [false, false],
             config,
         })
     }
 
-    /// Applique une action du joueur courant et renvoie les événements produits.
+    /// Applique une action du joueur qui décide ([`Decision::player`]) et renvoie les
+    /// événements produits.
     ///
     /// Une action refusée renvoie une erreur et ne modifie rien.
     pub fn apply(&mut self, action: Action) -> Result<Vec<Event>, GameError> {
@@ -349,8 +374,11 @@ impl Game {
             return Err(GameError::GameOver);
         }
         match (&self.pending_attack, action) {
-            (None, Action::Place(pos)) => self.validate_place(pos),
             (None, Action::UseAttack(slot)) => self.validate_use_attack(slot),
+            // Pendant une fenêtre de réaction : réagir ou passer, rien d'autre.
+            (None, Action::Pass) if self.reaction_window.is_some() => Ok(()),
+            (None, _) if self.reaction_window.is_some() => Err(GameError::UnexpectedAction),
+            (None, Action::Place(pos)) => self.validate_place(pos),
             (None, Action::StepQueen(to)) => self.validate_step(to),
             (None, Action::Shoot(at)) => self.validate_shot(at),
             (None, Action::HareStep { from, to }) => self.validate_hare_step(from, to),
@@ -362,15 +390,39 @@ impl Game {
         }
     }
 
-    /// Vérifie qu'il reste assez d'actions pour payer ce coût.
+    /// Vérifie qu'il reste au joueur courant assez d'actions pour payer ce coût.
     pub(super) fn ensure_actions(&self, needed: u32) -> Result<(), GameError> {
-        if self.actions_left < needed {
-            return Err(GameError::NotEnoughActions {
-                needed,
-                available: self.actions_left,
-            });
+        self.ensure_points(self.current_player, needed)
+    }
+
+    /// Les points que ce joueur peut dépenser maintenant : ses actions du tour pendant son
+    /// tour, sa banque pendant le tour adverse (une réaction).
+    fn points_of(&self, player: Player) -> u32 {
+        if player == self.current_player {
+            self.actions_left
+        } else {
+            self.banked_actions[player.index()]
+        }
+    }
+
+    /// Vérifie que ce joueur a assez de points pour payer ce coût.
+    pub(super) fn ensure_points(&self, player: Player, needed: u32) -> Result<(), GameError> {
+        let available = self.points_of(player);
+        if available < needed {
+            return Err(GameError::NotEnoughActions { needed, available });
         }
         Ok(())
+    }
+
+    /// Fait payer ce coût, déjà vérifié, à ce joueur : avec ses actions du tour, ou avec sa
+    /// banque pendant le tour adverse.
+    pub(super) fn pay(&mut self, player: Player, cost: u32) {
+        let points = if player == self.current_player {
+            &mut self.actions_left
+        } else {
+            &mut self.banked_actions[player.index()]
+        };
+        *points = points.saturating_sub(cost);
     }
 
     fn validate_place(&self, pos: Position) -> Result<(), GameError> {
@@ -406,6 +458,7 @@ impl Game {
             Action::StepQueen(to) => self.execute_step(to, &mut events),
             Action::Shoot(at) => self.execute_shot(at, &mut events),
             Action::HareStep { from, to } => self.execute_hare_step(from, to, &mut events),
+            Action::Pass => self.execute_pass(&mut events),
             Action::EndTurn => self.finish_turn(&mut events),
         }
         self.announce_placements(placements_before, &mut events);
@@ -461,11 +514,11 @@ impl Game {
         }
     }
 
-    /// Pose sur cette case libre un nouveau pion du joueur courant, pris dans sa réserve, et
+    /// Pose sur cette case libre un nouveau pion du joueur qui agit, pris dans sa réserve, et
     /// l'annonce : la pose normale et les cartes qui posent passent par ici. Faux, sans rien
     /// changer, si la case n'est pas libre ou la réserve vide.
     pub(super) fn put_pion(&mut self, at: Position, events: &mut Vec<Event>) -> bool {
-        let player = self.current_player;
+        let player = self.acting_player();
         if self.reserve_pions[player.index()] == 0 || !self.create_pion(at, events) {
             return false;
         }
@@ -475,12 +528,12 @@ impl Game {
         true
     }
 
-    /// Crée sur cette case libre un nouveau pion du joueur courant et l'annonce. Il reçoit
+    /// Crée sur cette case libre un nouveau pion du joueur qui agit et l'annonce. Il reçoit
     /// une nouvelle identité, donc compte comme posé ce tour. D'où il vient (réserve,
     /// infirmerie) est l'affaire de l'appelant. Faux, sans rien changer, si la case n'est
     /// pas libre.
     pub(super) fn create_pion(&mut self, at: Position, events: &mut Vec<Event>) -> bool {
-        let pion = Pion::new(self.next_pion_id, self.current_player);
+        let pion = Pion::new(self.next_pion_id, self.acting_player());
         if self.board.place_pion(at, pion).is_err() {
             return false;
         }
@@ -489,14 +542,21 @@ impl Game {
         true
     }
 
-    /// Ce qui suit toute action qui a modifié le plateau sans faire gagner : les enfants que
-    /// leur famille n'encadre plus perdent leur protection, puis un joueur peut perdre par
-    /// manque de pions, la partie se figer, ou le tour se terminer quand il ne reste ni
-    /// action, ni pose, ni pas de reine.
+    /// Ce qui suit toute action du joueur courant qui a modifié le plateau sans faire
+    /// gagner : les enfants que leur famille n'encadre plus perdent leur protection, puis un
+    /// joueur peut perdre par manque de pions, ou la partie se figer ; sinon l'autre joueur
+    /// peut réagir (`events` : ce que l'action a fait), puis le tour se termine s'il ne reste
+    /// ni action, ni pose, ni geste gratuit.
     pub(super) fn after_action(&mut self, events: &mut Vec<Event>) {
-        if self.settle_board(events) {
+        if self.settle_board(events) || self.open_reaction_window(events) {
             return;
         }
+        self.end_turn_if_done(events);
+    }
+
+    /// Termine le tour du joueur courant s'il ne lui reste ni action, ni pose, ni pas de
+    /// reine, ni pas du Lièvre.
+    pub(super) fn end_turn_if_done(&mut self, events: &mut Vec<Event>) {
         if self.actions_left == 0
             && self.placements_left() == 0
             && self.queen_steps().is_empty()
@@ -510,7 +570,7 @@ impl Game {
     /// Ce qui suit tout changement du plateau (une action, les retours d'Interchange) : les
     /// enfants que leur famille n'encadre plus perdent leur protection, puis un joueur peut
     /// perdre par manque de pions, ou la partie se figer. Vrai si la partie est finie.
-    fn settle_board(&mut self, events: &mut Vec<Event>) -> bool {
+    pub(super) fn settle_board(&mut self, events: &mut Vec<Event>) -> bool {
         self.end_unframed_children(events);
         if let Some(outcome) = self.lack_of_pions() {
             self.finish_game(outcome, EndReason::TooFewPions, events);
@@ -523,19 +583,20 @@ impl Game {
     }
 
     /// Vrai si ce joueur a une ligne gagnante n'importe où sur le plateau.
-    fn has_winning_line(&self, player: Player) -> bool {
+    pub(super) fn has_winning_line(&self, player: Player) -> bool {
         rules::has_line(&self.board, player, self.config.align_to_win)
     }
 
     /// Arrête la partie avant son terme (figée, limite de tours). Une ligne qui attendait
     /// le début du tour de son propriétaire gagne quand même : on fait comme si les tours
     /// continuaient, donc l'adversaire du dernier joueur est vérifié d'abord, puis le
-    /// dernier joueur. Sinon, le résultat sans alignement.
+    /// dernier joueur ; une ligne faite par une réaction, qui doit encore survivre à un tour
+    /// adverse, ne compte pas. Sinon, le résultat sans alignement.
     fn stop_game(&mut self, reason: EndReason, events: &mut Vec<Event>) {
         let next = self.current_player.opponent();
         match [next, self.current_player]
             .into_iter()
-            .find(|&player| self.has_winning_line(player))
+            .find(|&player| !self.late_lines[player.index()] && self.has_winning_line(player))
         {
             Some(winner) => self.win_by_alignment(winner, events),
             None => self.finish_game(self.outcome_without_alignment(), reason, events),
@@ -574,6 +635,7 @@ impl Game {
         self.queen_stepped = false;
         self.queen_shot = false;
         self.hare_walks.clear();
+        self.reacted_this_turn = false;
         self.turn_start_pion_id = self.next_pion_id;
         if ending_counters_change {
             events.push(self.actions_changed(ending));
@@ -595,8 +657,11 @@ impl Game {
             return;
         }
         // 1) Une ligne encore là au début de son tour fait gagner, quelle que soit la façon
-        // dont elle a été faite : le joueur ne reçoit alors ni actions ni recharges.
-        if self.has_winning_line(player) {
+        // dont elle a été faite : le joueur ne reçoit alors ni actions ni recharges. Sauf
+        // une ligne qu'une de ses réactions lui a donnée : elle doit encore survivre au
+        // prochain tour adverse, complet.
+        let late = std::mem::take(&mut self.late_lines[player.index()]);
+        if !late && self.has_winning_line(player) {
             self.win_by_alignment(player, events);
             return;
         }
@@ -685,6 +750,8 @@ impl Game {
             || self
                 .arsenal(player)
                 .iter()
+                // Une réaction ne dépend pas de lui : c'est l'adversaire qui la déclenche.
+                .filter(|slot| !slot.attack().kind.is_reaction())
                 .any(|slot| self.attack_has_a_target(player, slot.attack(), Launch::Someday))
     }
 }

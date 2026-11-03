@@ -152,6 +152,16 @@ fn default_attack_catalog() -> Vec<CatalogEntry> {
         entry(AttackKind::Familia, Rarity::Epic, 3),
         entry(AttackKind::Familia, Rarity::Legendary, 4),
         entry(AttackKind::MeilleursAmis, Rarity::Epic, 3),
+        entry(AttackKind::Sentinelle, Rarity::Common, 1),
+        entry(AttackKind::Sentinelle, Rarity::Rare, 2),
+        entry(AttackKind::Hibou, Rarity::Common, 1),
+        entry(AttackKind::Hibou, Rarity::Rare, 2),
+        entry(AttackKind::QueueDuLezard, Rarity::Common, 1),
+        entry(AttackKind::QueueDuLezard, Rarity::Rare, 2),
+        entry(AttackKind::Perroquet, Rarity::Common, 1),
+        entry(AttackKind::Perroquet, Rarity::Rare, 2),
+        entry(AttackKind::Feintaille, Rarity::Common, 1),
+        entry(AttackKind::Feintaille, Rarity::Rare, 2),
     ]
 }
 

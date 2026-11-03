@@ -94,7 +94,7 @@ Tout ce qui change pour un observateur (un pion posé, tué, déplacé, un effet
 
 Les attaques demandent plusieurs choix (carte, pion lanceur, cible, sauts enchaînés). Les réactions se jouent pendant le tour adverse, et le draft est une suite de choix. Au lieu d'une `Action` géante qui contiendrait tout, **le moteur expose à tout moment qui doit choisir quoi** :
 
-- `pending_decision()` : la décision attendue et le joueur concerné. Aujourd'hui `MainAction`, `ChooseLauncher` et `ChooseTarget` ; viendront la fenêtre de réaction et le draft.
+- `pending_decision()` : la décision attendue et le joueur concerné. Aujourd'hui `MainAction`, `React` (la fenêtre de réaction, B8a), `ChooseLauncher` et `ChooseTarget` ; viendra le draft.
 - `legal_actions()` : la liste exacte des actions acceptées maintenant, dans un ordre fixe. Elle est construite en passant chaque candidate par la validation elle-même : elle ne peut pas contredire `apply`. Un test le vérifie sur des parties aléatoires. Les candidates sont seulement celles qui peuvent répondre à la décision attendue (pendant une attaque : ses pions pour le lanceur, puis les cibles proposées par la famille), pour ne pas valider tout le plateau à chaque coup.
 
 Chaque choix est une petite `Action` (`Place(pos)`, `UseAttack(slot)`, `Choose(pos)`, `ChooseEnemyTokens`, `FinishAttack`, `StepQueen(pos)`, `Shoot(pos)`, `HareStep { from, to }`, `EndTurn`, plus tard `Pass`…). Il n'y a **pas d'action « annuler »** : une attaque commencée va au bout, et le moteur ne propose jamais un choix qui mène à une impasse. Les clients font la sélection sur une **copie** de la partie et n'envoient la suite qu'une fois complète : annuler reste gratuit pour le joueur, et aucun bot ne peut boucler. Avantages :

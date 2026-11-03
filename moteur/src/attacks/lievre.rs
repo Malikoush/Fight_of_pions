@@ -33,12 +33,13 @@ pub(crate) struct Lievre;
 
 /// Combien de pions avancent, et de combien de pas chacun, au plus. L'Épique ne passe
 /// jamais par ici : elle ne choisit aucune cible.
-fn limits(rarity: Rarity) -> (usize, usize) {
-    match rarity {
+fn limits(rarity: Rarity) -> Steps {
+    let (pions, steps) = match rarity {
         Rarity::Common | Rarity::Epic => (1, 2),
         Rarity::Rare => (2, 2),
         Rarity::Legendary => (3, 3),
-    }
+    };
+    Steps { pions, steps }
 }
 
 impl AttackRules for Lievre {
@@ -57,26 +58,14 @@ impl AttackRules for Lievre {
         if rarity == Rarity::Epic {
             return 0..=0;
         }
-        let (pions, steps) = limits(rarity);
-        1..=steps + (pions - 1) * (1 + steps)
+        limits(rarity).target_count()
     }
 
     fn candidate_targets(&self, context: &AttackContext, chosen: &[Position]) -> Vec<Position> {
         if context.rarity == Rarity::Epic {
             return Vec::new();
         }
-        let Some(walk) = Walk::replay(context, chosen) else {
-            return Vec::new();
-        };
-        let (pions, steps) = limits(context.rarity);
-        let mut cells = Vec::new();
-        if walk.current.steps < steps {
-            cells.extend(walk.free_steps());
-        }
-        if walk.current.is_done() && walk.pions() < pions {
-            cells.extend(walk.next_pions(context));
-        }
-        cells
+        limits(context.rarity).candidate_targets(context, chosen)
     }
 
     fn effects(&self, context: &AttackContext, targets: &[Position]) -> Vec<Effect> {
@@ -90,7 +79,53 @@ impl AttackRules for Lievre {
                 end: EffectEnd::Tokens(HARE_TOKENS),
             }];
         }
-        Walk::replay(context, targets).map_or_else(Vec::new, |walk| {
+        limits(context.rarity).effects(context, targets)
+    }
+
+    /// Le dernier pion choisi doit avoir bougé ; l'Épique, qui ne fait bouger personne,
+    /// s'arrête toujours.
+    fn can_stop(&self, context: &AttackContext, chosen: &Targets) -> bool {
+        context.rarity == Rarity::Epic || limits(context.rarity).can_stop(context, chosen)
+    }
+}
+
+/// Des pions qui avancent pas à pas, l'un après l'autre : au plus `pions` pions, de jusqu'à
+/// `steps` pas chacun, chacun un lanceur, le premier étant le lanceur choisi. Partagé par le
+/// Lièvre et le Hibou.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Steps {
+    pub(super) pions: usize,
+    pub(super) steps: usize,
+}
+
+impl Steps {
+    /// Au plus : les pas du lanceur, puis pour chaque pion suivant, son choix et ses pas.
+    pub(super) fn target_count(self) -> RangeInclusive<usize> {
+        1..=self.steps + (self.pions - 1) * (1 + self.steps)
+    }
+
+    /// Un pas du pion en cours, ou le pion suivant une fois qu'il a bougé.
+    pub(super) fn candidate_targets(
+        self,
+        context: &AttackContext,
+        chosen: &[Position],
+    ) -> Vec<Position> {
+        let Some(walk) = Walk::replay(context, chosen, self) else {
+            return Vec::new();
+        };
+        let mut cells = Vec::new();
+        if walk.current.steps < self.steps {
+            cells.extend(walk.free_steps());
+        }
+        if walk.current.is_done() && walk.pions() < self.pions {
+            cells.extend(walk.next_pions(context));
+        }
+        cells
+    }
+
+    /// Un déplacement par pion qui a bougé, dans l'ordre des pions.
+    pub(super) fn effects(self, context: &AttackContext, targets: &[Position]) -> Vec<Effect> {
+        Walk::replay(context, targets, self).map_or_else(Vec::new, |walk| {
             walk.legs()
                 .filter(|leg| leg.is_done())
                 .map(|leg| Effect::Move {
@@ -101,11 +136,9 @@ impl AttackRules for Lievre {
         })
     }
 
-    /// Le dernier pion choisi doit avoir bougé ; l'Épique, qui ne fait bouger personne,
-    /// s'arrête toujours.
-    fn can_stop(&self, context: &AttackContext, chosen: &Targets) -> bool {
-        context.rarity == Rarity::Epic
-            || Walk::replay(context, &chosen.cells).is_some_and(|walk| walk.current.is_done())
+    /// Le dernier pion choisi doit avoir bougé.
+    pub(super) fn can_stop(self, context: &AttackContext, chosen: &Targets) -> bool {
+        Walk::replay(context, &chosen.cells, self).is_some_and(|walk| walk.current.is_done())
     }
 }
 
@@ -145,14 +178,14 @@ struct Walk {
 
 impl Walk {
     /// Rejoue ces choix depuis le lanceur ; `None` si l'un d'eux n'est pas permis.
-    fn replay(context: &AttackContext, chosen: &[Position]) -> Option<Walk> {
+    fn replay(context: &AttackContext, chosen: &[Position], limits: Steps) -> Option<Walk> {
         let launcher = context.board.get(context.launcher).and_then(Cell::pion)?;
         let mut walk = Walk {
             board: context.board.clone(),
             done: Vec::new(),
             current: Leg::at_start(launcher.id(), context.launcher),
         };
-        let (pions, steps) = limits(context.rarity);
+        let Steps { pions, steps } = limits;
         for &pos in chosen {
             if walk.current.steps < steps && walk.free_steps().any(|cell| cell == pos) {
                 walk.board.move_pion(walk.current.at, pos).ok()?;

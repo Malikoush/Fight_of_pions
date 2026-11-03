@@ -9,8 +9,8 @@ use crate::theme;
 use bots::BotKind;
 use eframe::egui;
 use fight_of_pions::{
-    Action, ActiveEffect, EffectEnd, Event, Game, GameConfig, GameEnd, GameRecord, Outcome, Player,
-    Position, TokenPile, TokenReward,
+    Action, ActiveEffect, Decision, EffectEnd, Event, Game, GameConfig, GameEnd, GameRecord,
+    Outcome, Player, Position, TokenPile, TokenReward,
 };
 use std::time::Duration;
 
@@ -332,7 +332,10 @@ fn attaques(
     let selection_en_cours = apercu.is_some();
     let en_choix = apercu.unwrap_or(game);
     ui.label("Attaques");
-    let player = game.current_player();
+    // Pendant une réaction, c'est l'autre joueur qui choisit, dans son arsenal.
+    let player = game
+        .pending_decision()
+        .map_or(game.current_player(), Decision::player);
     if game.arsenal(player).is_empty() {
         ui.label("(aucune)");
     }
@@ -343,6 +346,11 @@ fn attaques(
             .config()
             .attack_stats(attaque)
             .map_or(String::new(), |stats| format!(", coût {}", stats.cost));
+        let reaction = if attaque.kind.is_reaction() {
+            ", réaction"
+        } else {
+            ""
+        };
         let etat = match emplacement.cooldown_left() {
             0 => String::new(),
             1 => ", recharge 1 tour".to_string(),
@@ -357,8 +365,24 @@ fn attaques(
             {
                 intentions.push(Intention::CommencerAttaque(slot));
             }
-            ui.label(format!("{attaque}{cout}{etat}"));
+            ui.label(format!("{attaque}{reaction}{cout}{etat}"));
         });
+    }
+    if legales.contains(&Action::Pass) {
+        ui.label(format!(
+            "{} peut réagir, avec sa banque ({}).",
+            theme::nom_joueur(player),
+            game.banked_actions(player)
+        ));
+        if ui
+            .add_enabled(
+                tour_humain && !selection_en_cours,
+                egui::Button::new("Ne pas réagir"),
+            )
+            .clicked()
+        {
+            intentions.push(Intention::Demande(Demande::Agir(Action::Pass)));
+        }
     }
     gestes(ui, &legales, tour_humain && !selection_en_cours, intentions);
     if en_choix.attack_in_progress() {

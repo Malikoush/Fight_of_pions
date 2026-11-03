@@ -429,10 +429,12 @@ fn events_are_enough_to_follow_the_board() {
     let mut kinds_played = Vec::new();
     for seed in 0..500 {
         let mut rng = Rng::new(seed);
-        let config = if seed % 2 == 0 {
-            GameConfig::first_rules()
-        } else {
-            random_config(&mut rng)
+        // Une partie sur quatre avec les règles actuelles et toutes les cartes : les
+        // réactions n'ont de chances d'y être jouées qu'avec beaucoup de cartes en main.
+        let config = match seed % 4 {
+            0 => GameConfig::first_rules(),
+            2 => GameConfig::default().with_full_arsenals(),
+            _ => random_config(&mut rng),
         };
         let played = play_random_game(config, seed, &mut rng);
         attacks += played.count(|event| matches!(event, Event::AttackUsed { .. }));
@@ -508,6 +510,11 @@ fn events_are_enough_to_follow_the_board() {
         AttackKind::Lievre,
         AttackKind::MeilleursAmis,
         AttackKind::Familia,
+        AttackKind::Sentinelle,
+        AttackKind::Hibou,
+        AttackKind::QueueDuLezard,
+        AttackKind::Perroquet,
+        AttackKind::Feintaille,
     ] {
         assert!(kinds_played.contains(&kind), "{kind} jamais jouée");
     }

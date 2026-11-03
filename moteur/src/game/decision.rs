@@ -3,8 +3,10 @@ use crate::{Attack, Player, Position};
 /// La décision que le moteur attend, et de quel joueur.
 ///
 /// Les actions acceptées pour cette décision sont données par
-/// [`crate::Game::legal_actions`]. D'autres décisions s'ajouteront avec les réactions et
-/// le draft.
+/// [`crate::Game::legal_actions`]. D'autres décisions s'ajouteront avec le draft.
+///
+/// Pendant le tour adverse, juste après un déclencheur, c'est l'autre joueur qui décide :
+/// il réagit ([`Decision::React`]), puis choisit le lanceur et les cibles de sa réaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Decision {
     /// Le joueur choisit sa prochaine action du tour : poser un pion, lancer une attaque,
@@ -13,7 +15,15 @@ pub enum Decision {
         /// Le joueur qui doit choisir.
         player: Player,
     },
-    /// Le joueur choisit le pion depuis lequel il lance son attaque.
+    /// Le joueur peut répondre au coup adverse par une de ses réactions
+    /// ([`crate::Action::UseAttack`]), ou passer ([`crate::Action::Pass`]). Le moteur ne le
+    /// demande que s'il a une réaction prête, payable avec sa banque et utilisable.
+    React {
+        /// Le joueur qui peut réagir, celui qui ne joue pas ce tour.
+        player: Player,
+    },
+    /// Le joueur choisit le pion depuis lequel il lance son attaque (pour une Sentinelle :
+    /// le pion adverse posé auquel elle répond).
     ChooseLauncher {
         /// Le joueur qui doit choisir.
         player: Player,
@@ -47,6 +57,7 @@ impl Decision {
     pub fn player(self) -> Player {
         match self {
             Decision::MainAction { player }
+            | Decision::React { player }
             | Decision::ChooseLauncher { player, .. }
             | Decision::ChooseTarget { player, .. } => player,
         }

@@ -15,6 +15,25 @@ use crate::attacks::{
 };
 use crate::{Attack, AttackStats, Cell, Event, GameError, Pion, PionId, Player, Position};
 
+/// Une attaque dont les choix sont faits, prête à s'appliquer : ce qu'elle fera est fixé au
+/// dernier choix. Elle peut attendre la réponse de l'autre joueur (Feintaille) ; les
+/// effets portent alors sur les cases choisies, d'où un pion qui esquive est parti.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) struct Resolution {
+    /// L'emplacement de la carte dans l'arsenal du joueur.
+    slot: usize,
+    /// La carte jouée, payée et mise en recharge.
+    pub(super) card: Attack,
+    /// L'attaque qu'elle fait jouer (l'attaque copiée, pour un Perroquet).
+    attack: Attack,
+    /// La case du lanceur.
+    launcher: Position,
+    /// Le pion lanceur, l'assassin de ses kills.
+    killer: Option<PionId>,
+    /// Ses effets, dans l'ordre.
+    effects: Vec<Effect>,
+}
+
 /// Ce qu'a donné un effet, pour la suite de l'attaque.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Applied {
@@ -28,15 +47,17 @@ enum Applied {
 
 impl Game {
     pub(super) fn validate_use_attack(&self, slot: usize) -> Result<(), GameError> {
-        let player = self.current_player;
+        let player = self.acting_player();
         let Some(slot_state) = self.arsenal(player).get(slot) else {
             return Err(GameError::NoSuchAttack(slot));
         };
-        let attack = slot_state.attack();
+        let card = slot_state.attack();
+        self.ensure_right_moment(card)?;
         if slot_state.cooldown_left() > 0 {
-            return Err(GameError::AttackRecharging(attack));
+            return Err(GameError::AttackRecharging(card));
         }
-        self.ensure_actions(self.attack_stats(attack).cost)?;
+        self.ensure_points(player, self.attack_stats(card).cost)?;
+        let attack = self.played_attack(card)?;
         if !self.attack_has_a_target(player, attack, Launch::Now) {
             if self.only_scorched_earth_forbids(player, attack) {
                 return Err(GameError::ScorchedEarth(attack));
@@ -59,13 +80,13 @@ impl Game {
         pending: &PendingAttack,
         pos: Position,
     ) -> Result<(), GameError> {
-        let player = self.current_player;
+        let player = self.acting_player();
         let attack = pending.attack;
         let allowed = match pending.launcher {
             // Le lanceur : un de ses pions prêt à lancer, depuis lequel l'attaque peut
             // aller au bout.
             None => {
-                self.can_launch(player, pos, Launch::Now)
+                self.is_launcher(player, attack, pos, Launch::Now)
                     && self.can_complete_from(player, attack, pos, Launch::Now)
             }
             // Une cible : proposée par la famille, et après laquelle on peut encore finir.
@@ -95,7 +116,7 @@ impl Game {
         };
         let attack = pending.attack;
         let rules = attack.kind.rules();
-        let context = self.context(self.current_player, attack, launcher, Launch::Now);
+        let context = self.context(self.acting_player(), attack, launcher, Launch::Now);
         let mut chosen = pending.targets.clone();
         if can_complete_with_enemy_tokens(rules, &context, &mut chosen) {
             Ok(())
@@ -104,16 +125,16 @@ impl Game {
         }
     }
 
-    /// Les seules cases qui peuvent répondre au choix attendu, rangée par rangée : ses
-    /// pions pour le lanceur, puis les cibles que propose la famille. C'est
-    /// `validate_choice` qui décide ; cette liste évite seulement de tester tout le plateau.
+    /// Les seules cases qui peuvent répondre au choix attendu, rangée par rangée : les
+    /// lanceurs possibles, puis les cibles que propose la famille. C'est `validate_choice`
+    /// qui décide ; cette liste évite seulement de tester tout le plateau.
     pub(super) fn choice_candidates(&self, pending: &PendingAttack) -> Vec<Position> {
-        let player = self.current_player;
+        let player = self.acting_player();
         let mut cells: Vec<Position> = match pending.launcher {
             None => self
                 .board
                 .positions()
-                .filter(|&pos| self.board.owner(pos) == Some(player))
+                .filter(|&pos| self.is_launcher(player, pending.attack, pos, Launch::Now))
                 .collect(),
             Some(launcher) => {
                 let context = self.context(player, pending.attack, launcher, Launch::Now);
@@ -134,7 +155,7 @@ impl Game {
             return Err(GameError::UnexpectedAction);
         };
         let attack = pending.attack;
-        let context = self.context(self.current_player, attack, launcher, Launch::Now);
+        let context = self.context(self.acting_player(), attack, launcher, Launch::Now);
         if is_complete(attack.kind.rules(), &context, &pending.targets) {
             Ok(())
         } else {
@@ -148,7 +169,7 @@ impl Game {
         let mut launchers = self
             .board
             .positions()
-            .filter(|&pos| self.can_launch(player, pos, when));
+            .filter(|&pos| self.is_launcher(player, attack, pos, when));
         if attack.kind.rules().ignores_launcher(attack.rarity) {
             // Les cibles ne dépendent pas du lanceur : le premier lanceur prêt suffit.
             return launchers
@@ -170,9 +191,17 @@ impl Game {
         free.attack_has_a_target(player, attack, Launch::Now)
     }
 
+    /// Vrai si cette attaque de ce joueur peut partir de cette case `when` : de son
+    /// déclencheur pour une réaction qui en part, sinon d'un de ses pions prêt
+    /// ([`Game::can_launch`]).
+    fn is_launcher(&self, player: Player, attack: Attack, pos: Position, when: Launch) -> bool {
+        self.is_trigger_launcher(player, attack, pos, when)
+            .unwrap_or_else(|| self.can_launch(player, pos, when))
+    }
+
     /// Vrai si le pion de cette case est à ce joueur et peut lancer une attaque `when` :
     /// maintenant, ni posé ce tour (mal du débarquement), ni immobilisé.
-    fn can_launch(&self, player: Player, pos: Position, when: Launch) -> bool {
+    pub(super) fn can_launch(&self, player: Player, pos: Position, when: Launch) -> bool {
         self.board
             .get(pos)
             .and_then(Cell::pion)
@@ -181,12 +210,18 @@ impl Game {
 
     pub(super) fn start_attack(&mut self, slot: usize) {
         // L'emplacement a été validé ; à défaut, rien ne commence.
-        let Some(slot_state) = self.arsenal(self.current_player).get(slot) else {
+        let Some(slot_state) = self.arsenal(self.acting_player()).get(slot) else {
+            return;
+        };
+        let card = slot_state.attack();
+        // Validée : la carte a bien une attaque à faire jouer.
+        let Ok(attack) = self.played_attack(card) else {
             return;
         };
         self.pending_attack = Some(PendingAttack {
             slot,
-            attack: slot_state.attack(),
+            card,
+            attack,
             launcher: None,
             targets: Targets::default(),
         });
@@ -226,18 +261,14 @@ impl Game {
         };
         let attack = pending.attack;
         let rules = attack.kind.rules();
-        let context = self.context(self.current_player, attack, launcher, Launch::Now);
+        let context = self.context(self.acting_player(), attack, launcher, Launch::Now);
         let mut chosen = pending.targets.clone();
         is_complete(rules, &context, &chosen) && !can_choose_more(rules, &context, &mut chosen)
     }
 
-    /// Joue l'attaque dont les choix sont faits : paie le coût, met la carte en recharge,
-    /// applique les effets, puis vérifie la fin du tour ou de la partie.
-    ///
-    /// L'alignement n'est pas vérifié ici : une ligne faite par une carte (un déplacement,
-    /// un échange), pour l'un ou l'autre joueur, gagne au début du tour de son
-    /// propriétaire si elle y est encore, avec ou sans la règle d'or (carnet, « Fin de
-    /// partie »).
+    /// L'attaque dont les choix sont faits : ses effets sont fixés, puis elle s'applique,
+    /// sauf si elle vise un pion de l'autre joueur qui peut l'esquiver (Feintaille) : elle
+    /// attend alors sa réponse ([`Game::open_targeted_window`]).
     pub(super) fn resolve_attack(&mut self, events: &mut Vec<Event>) {
         let Some(pending) = self.pending_attack.take() else {
             return;
@@ -245,15 +276,50 @@ impl Game {
         let Some(launcher) = pending.launcher else {
             return;
         };
-        let player = self.current_player;
         let attack = pending.attack;
-        let stats = self.attack_stats(attack);
-        let effects = effects_of(
-            attack.kind.rules(),
-            &self.context(player, attack, launcher, Launch::Now),
-            &pending.targets,
-        );
-        let killer = self.board.get(launcher).and_then(Cell::pion).map(Pion::id);
+        let resolution = Resolution {
+            slot: pending.slot,
+            card: pending.card,
+            attack,
+            launcher,
+            killer: self.board.get(launcher).and_then(Cell::pion).map(Pion::id),
+            effects: effects_of(
+                attack.kind.rules(),
+                &self.context(self.acting_player(), attack, launcher, Launch::Now),
+                &pending.targets,
+            ),
+        };
+        // On ne réagit pas à une réaction.
+        if self.reaction_window.is_none()
+            && self.open_targeted_window(&resolution, &pending.targets.cells)
+        {
+            self.paused_attack = Some(resolution);
+            return;
+        }
+        self.apply_resolution(resolution, events);
+    }
+
+    /// Joue l'attaque : paie le coût, met la carte en recharge, applique les effets, puis
+    /// vérifie la fin du tour ou de la partie. Une réaction se joue de même, par le joueur
+    /// qui réagit.
+    ///
+    /// L'alignement n'est pas vérifié ici : une ligne faite par une carte (un déplacement,
+    /// un échange), pour l'un ou l'autre joueur, gagne au début du tour de son
+    /// propriétaire si elle y est encore, avec ou sans la règle d'or (carnet, « Fin de
+    /// partie »).
+    pub(super) fn apply_resolution(&mut self, resolution: Resolution, events: &mut Vec<Event>) {
+        let Resolution {
+            slot,
+            card,
+            attack,
+            launcher,
+            killer,
+            effects,
+        } = resolution;
+        let player = self.acting_player();
+        let is_reaction = self.reaction_window.is_some();
+        let had_a_line = self.has_winning_line(player);
+        let stats = self.attack_stats(card);
         let play = CardPlay {
             id: self.next_play_id,
             attack,
@@ -261,19 +327,19 @@ impl Game {
         self.next_play_id = play.id.next();
 
         // Le coût a été vérifié au début de l'attaque, et rien ne l'a changé depuis.
-        self.actions_left = self.actions_left.saturating_sub(stats.cost);
-        if let Some(slot) = self.arsenals[player.index()].get_mut(pending.slot) {
+        self.pay(player, stats.cost);
+        if let Some(slot) = self.arsenals[player.index()].get_mut(slot) {
             slot.set_cooldown(stats.cooldown);
         }
         events.push(Event::AttackUsed {
             player,
-            attack,
+            attack: card,
             launcher,
         });
         events.push(self.actions_changed(player));
         events.push(Event::CooldownChanged {
             player,
-            slot: pending.slot,
+            slot,
             turns_left: stats.cooldown,
         });
 
@@ -297,7 +363,11 @@ impl Game {
         }
         // Les vengeances, une fois l'attaque entière jouée (carnet, 2026-10-30).
         self.avenge(deaths, events);
-        self.after_action(events);
+        if is_reaction {
+            self.after_reaction(player, had_a_line, events);
+        } else {
+            self.after_action(events);
+        }
     }
 
     /// Le résolveur central : le seul endroit où un effet d'attaque modifie la partie. Les
@@ -311,7 +381,7 @@ impl Game {
         events: &mut Vec<Event>,
     ) -> Applied {
         match effect {
-            Effect::Kill { at } => match self.kill(at, by, self.current_player, events) {
+            Effect::Kill { at } => match self.kill(at, by, self.acting_player(), events) {
                 Hit::Killed(death) => deaths.push(death),
                 Hit::Shielded => return Applied::Shielded(at),
                 Hit::Missed => {}
@@ -326,7 +396,7 @@ impl Game {
             Effect::Attach { at, kind, end } => self.add_effect_at(at, kind, play, end, events),
             Effect::RemoveEnemyStatuses { at } => {
                 if let Some(pion) = self.board.get(at).and_then(Cell::pion) {
-                    let enemy = self.current_player.opponent();
+                    let enemy = self.acting_player().opponent();
                     self.end_effects(|effect| effect.is_status_on_by(pion.id(), enemy), events);
                 }
             }
@@ -338,7 +408,7 @@ impl Game {
             Effect::MakeChild { at, framed_by } => self.make_child(at, framed_by, play, events),
             Effect::Resurrect { pion, at } => {
                 let ours = self.infirmary.iter().any(|patient| {
-                    patient.pion().id() == pion && patient.pion().owner() == self.current_player
+                    patient.pion().id() == pion && patient.pion().owner() == self.acting_player()
                 });
                 if ours && self.board.is_free(at) && self.leave_infirmary(pion, events) {
                     self.create_pion(at, events);
@@ -383,7 +453,7 @@ impl Game {
 
     /// Le coût et la recharge d'une attaque. La configuration validée garantit que toute
     /// attaque d'un arsenal est au catalogue ; à défaut, l'attaque serait impayable.
-    fn attack_stats(&self, attack: Attack) -> AttackStats {
+    pub(super) fn attack_stats(&self, attack: Attack) -> AttackStats {
         self.config.attack_stats(attack).unwrap_or(AttackStats {
             cost: u32::MAX,
             cooldown: u32::MAX,

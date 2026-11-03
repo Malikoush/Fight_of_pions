@@ -27,6 +27,7 @@ Commandes :
   t C5   faire tirer un garde de sa reine sur le pion en C5
   l C5 D6  faire avancer d'un pas le pion en C5, qui a des jetons du Lièvre, vers D6
   f      finir le tour (les actions restantes sont gardées, {} maximum)
+  n      ne pas réagir au coup adverse (une réaction se joue avec a 1, payée avec la banque)
   Sur le plateau : X et O les pions, + une tombe libre (le Médecin y ressuscite), # le mur
   (le Coup du taureau le creuse).
   h      afficher l'aide
@@ -120,7 +121,17 @@ pub fn render(game: &Game) -> String {
         game.actions_left(),
         game.reserve_pions(player),
     ));
-    for (index, slot) in game.arsenal(player).iter().enumerate() {
+    // Pendant une réaction, c'est l'autre joueur qui choisit : son arsenal et sa banque.
+    let deciding = game.pending_decision().map_or(player, Decision::player);
+    if deciding != player {
+        out.push_str(&format!(
+            "
+{} réagit — banque : {}",
+            player_name(deciding),
+            game.banked_actions(deciding)
+        ));
+    }
+    for (index, slot) in game.arsenal(deciding).iter().enumerate() {
         let state = match slot.cooldown_left() {
             0 => "prête".to_string(),
             1 => "en recharge (1 tour)".to_string(),
@@ -192,6 +203,13 @@ pub fn render(game: &Game) -> String {
                 "\n{attack} : choisis une cible (c C5){or_tokens}{or_finish}"
             ));
         }
+        Some(Decision::React { player }) => {
+            out.push_str(&format!(
+                "
+{} peut réagir : joue une réaction (a 1) ou passe (n)",
+                player_name(player)
+            ));
+        }
         Some(Decision::MainAction { .. }) | None => {}
     }
     out
@@ -218,6 +236,7 @@ pub fn parse_command(line: &str) -> Result<Command, String> {
             to: to.parse()?,
         })),
         ["f"] => Ok(Command::Play(Action::EndTurn)),
+        ["n"] => Ok(Command::Play(Action::Pass)),
         ["h"] => Ok(Command::Help),
         ["q"] => Ok(Command::Quit),
         _ => Err("Commande inconnue (tape h pour l'aide)".to_string()),

@@ -9,6 +9,7 @@ mod hare;
 mod kill;
 mod lasting;
 mod queen;
+mod reaction;
 mod record;
 mod returns;
 mod state;

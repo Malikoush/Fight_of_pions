@@ -8,23 +8,28 @@ mod card;
 mod coup_du_taureau;
 mod effect;
 mod familia;
+mod feintaille;
+mod hibou;
 mod interchange;
 mod lievre;
 mod massacre_divin;
 mod medecin;
 mod meilleurs_amis;
 mod ours;
+mod perroquet;
+mod queue_du_lezard;
 mod reach;
 mod reine;
 mod rules;
 mod saut_du_loup;
+mod sentinelle;
 
 pub use card::{Attack, AttackKind, AttackStats, CatalogEntry, Rarity};
 pub(crate) use effect::Effect;
 pub(crate) use lievre::HARE_TOKEN_STEPS;
 pub(crate) use reach::{around, both_sides, first_in_lines};
 pub(crate) use rules::{
-    AttackContext, AttackRules, Launch, Targets, can_act, can_choose_more, can_complete,
+    AttackContext, AttackRules, Launch, Targets, Trigger, can_act, can_choose_more, can_complete,
     can_complete_with_enemy_tokens, effects_of, is_complete, is_new,
 };
 
@@ -44,7 +49,18 @@ impl AttackKind {
             AttackKind::Lievre => &lievre::Lievre,
             AttackKind::MeilleursAmis => &meilleurs_amis::MeilleursAmis,
             AttackKind::Familia => &familia::Familia,
+            AttackKind::Sentinelle => &sentinelle::Sentinelle,
+            AttackKind::Hibou => &hibou::Hibou,
+            AttackKind::QueueDuLezard => &queue_du_lezard::QueueDuLezard,
+            AttackKind::Perroquet => &perroquet::Perroquet,
+            AttackKind::Feintaille => &feintaille::Feintaille,
         }
+    }
+
+    /// Vrai si c'est une réaction : elle se joue pendant le tour adverse, quand elle est
+    /// déclenchée, et non pendant son propre tour.
+    pub fn is_reaction(self) -> bool {
+        self.rules().trigger().is_some()
     }
 }
 
