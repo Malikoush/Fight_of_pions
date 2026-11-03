@@ -3,6 +3,7 @@
 //! ([`PlayerView`]), avec la décision attendue et ses coups permis ; il renvoie l'un de
 //! ces coups. Voir `docs/PROTOCOLE.md` pour des exemples.
 
+use crate::ServerError;
 use fight_of_pions::{Action, Event, Player, PlayerView};
 use serde::{Deserialize, Serialize};
 
@@ -14,8 +15,8 @@ pub enum ClientMessage {
     Create {
         /// Contre qui jouer.
         opponent: Opponent,
-        /// Le nom d'une variante (`bots::variants`) ; par défaut, les règles actuelles
-        /// avec draft.
+        /// Le nom d'une variante (`bots::variants`) ; par défaut, celle du jeu en ligne
+        /// (`bots::ONLINE_VARIANT`).
         #[serde(default)]
         variant: Option<String>,
     },
@@ -30,9 +31,12 @@ pub enum ClientMessage {
         code: String,
         /// Sa place.
         player: Player,
-        /// Le jeton reçu en s'asseyant ([`ServerMessage::Seated`]).
-        token: String,
+        /// La clé reçue en s'asseyant ([`ServerMessage::Seated`]).
+        key: String,
     },
+    /// Redemander sa vue actuelle ([`ServerMessage::State`], sans événement) : pour se
+    /// remettre à jour si une vue a été perdue.
+    Sync,
     /// Jouer ce coup : un de ceux de `legal_actions` dans sa dernière vue.
     Play {
         /// Le coup.
@@ -41,7 +45,8 @@ pub enum ClientMessage {
     /// Essayer ces coups à la suite sur une copie de la partie, sans rien jouer : la
     /// réponse ([`ServerMessage::Preview`]) donne les choix suivants. C'est ainsi qu'un
     /// client sans règle choisit une carte en plusieurs étapes et peut l'annuler avant de
-    /// l'envoyer, coup par coup, avec `play`.
+    /// l'envoyer, coup par coup, avec `play`. L'aperçu s'arrête au coup qui finit les
+    /// choix de la carte : la suite dépendrait de ce que l'adversaire cache.
     Preview {
         /// Les coups, depuis la partie actuelle.
         actions: Vec<Action>,
@@ -64,14 +69,14 @@ pub enum Opponent {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
-    /// Le client est assis dans une salle. Il garde `token` pour reprendre sa place.
+    /// Le client est assis dans une salle. Il garde `key` pour reprendre sa place.
     Seated {
         /// Le code de la salle, à donner à l'adversaire.
         code: String,
         /// Sa place.
         player: Player,
-        /// Son jeton, secret.
-        token: String,
+        /// Sa clé de place, secrète.
+        key: String,
     },
     /// La partie a changé : sa vue entière, et ce qui s'est passé depuis la précédente
     /// (pour animer et tenir un journal), filtré pour lui.
@@ -81,14 +86,29 @@ pub enum ServerMessage {
         /// Les événements depuis sa vue précédente, dans l'ordre.
         events: Vec<Event>,
     },
-    /// La vue après les coups d'un aperçu, rien n'étant joué.
+    /// La réponse à un aperçu, rien n'étant joué.
     Preview {
-        /// Ce qu'il verrait.
-        view: Box<PlayerView>,
+        /// Ce qu'il verrait après ces coups, pour faire le choix suivant de la carte ;
+        /// `None` (`null`) si le dernier coup finit ses choix : ces coups sont prêts à être
+        /// joués avec `play`.
+        view: Option<Box<PlayerView>>,
     },
-    /// Une demande refusée ; rien n'a changé.
+    /// Une demande refusée ; rien n'a changé. Arrive aussi sans demande si le bot du
+    /// serveur ne peut plus jouer.
     Error {
+        /// La sorte d'erreur, pour le client ([`ServerError::kind`]).
+        kind: String,
         /// Pourquoi, en français, à afficher.
         message: String,
     },
+}
+
+impl ServerMessage {
+    /// Le message qui annonce cette erreur.
+    pub fn error(error: &ServerError) -> ServerMessage {
+        ServerMessage::Error {
+            kind: error.kind().to_string(),
+            message: error.to_string(),
+        }
+    }
 }

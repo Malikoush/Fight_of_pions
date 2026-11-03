@@ -64,6 +64,10 @@ pub const STANDARD_PAIRS: [[BotKind; 2]; 7] = [
     [BotKind::Banker, BotKind::Banker],
 ];
 
+/// Le nom de la variante jouée en ligne et mesurée par l'outil d'équilibrage : les règles
+/// actuelles avec draft.
+pub const ONLINE_VARIANT: &str = "règles actuelles avec draft";
+
 /// Une configuration à comparer, avec son nom.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Variant {
@@ -123,7 +127,7 @@ pub fn variants() -> Vec<Variant> {
             config: with_cost(bank_of_one, ours_rare, 1),
         },
         Variant {
-            name: "règles actuelles avec draft",
+            name: ONLINE_VARIANT,
             config: GameConfig {
                 draft: Some(DraftRules::standard()),
                 ..GameConfig::default()

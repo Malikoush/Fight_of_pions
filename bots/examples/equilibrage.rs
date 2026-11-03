@@ -8,12 +8,10 @@
 //! Score en main : les victoires de qui l'a en main, un nul comptant pour moitié. À lire
 //! avec sa marge : sur 150 mains, environ ±8 points.
 
-use bots::{Bot, MctsBot, Weights, record_games, variants};
+use bots::{Bot, MctsBot, ONLINE_VARIANT as VARIANT, Weights, record_games, variants};
 use fight_of_pions::{Attack, DraftStep, EndReason, Event, Game, GameRecord, Outcome, Player};
 use std::collections::BTreeMap;
 use std::time::Instant;
-
-const VARIANT: &str = "règles actuelles avec draft";
 
 /// Ce qu'on sait d'une carte, sur toutes les parties.
 #[derive(Default)]

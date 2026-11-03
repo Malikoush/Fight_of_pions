@@ -176,6 +176,26 @@ Le labo est entièrement en français, noms du code compris.
 | Draft | `GameConfig::draft`, `DraftRules`, `DraftStep`, `Decision::Draft`, `Action::Draft`, `Event::Drafted`, `Game::draft_pool` | Avant la partie : la cache, puis des cartes tirées avec la graine (10 par défaut), bannies et prises dans l'ordre des étapes (1 ban chacun, 3 picks en serpent) |
 | Gacha, collection | hors moteur | Le moteur reçoit les cartes déjà choisies |
 
+## Serveur
+
+Le serveur (`serveur/`) est en anglais dans le code, comme le moteur ; ses messages affichés sont en français.
+
+| Terme | Nom dans le code | Rôle |
+|---|---|---|
+| Salle | `Room` | Une partie et ses deux places, sans réseau : qui a le droit de jouer, les coups des bots, ce que voit chacun |
+| Table | `Table`, `SharedTable` | Une salle et les clients branchés sur chacune de ses places ; elle diffuse les vues |
+| Hall | `Lobby` | Les salles ouvertes, par code ; il ferme les salles abandonnées |
+| Code de salle | `code` | 5 caractères à donner à l'adversaire pour qu'il rejoigne |
+| Place | `Seat` | Libre, un humain, ou un bot du serveur |
+| Clé de place | `key`, `ServerError::BadKey`, `ServerError::SeatTaken` | Le secret reçu en s'asseyant, pour reprendre sa place après une coupure (pas « jeton » : ce mot est au Massacre divin). Une reconnexion remplace l'ancienne connexion, qui ne joue plus |
+| Sorte d'erreur | `ServerError::kind`, `ServerMessage::Error { kind }` | Un mot stable (`not_your_turn`, `unknown_room`…) pour que le client réagisse sans lire le message en français |
+| Se remettre à jour | `ClientMessage::Sync`, `Table::state` | Redemander sa vue actuelle, sans événement |
+| Coup de repli | `Room::play_bot` | Le premier coup permis par le moteur, joué à la place d'un bot sans coup valable |
+| Aperçu | `ClientMessage::Preview`, `ServerMessage::Preview`, `Room::preview` | Les choix d'une carte essayés sur une copie, sans rien jouer ; il s'arrête au coup qui finit ces choix (réponse `null`) |
+| Recherche de bot | `BotSearch`, `BotMove`, `Table::start_bots` | La copie de la partie sur laquelle un bot cherche son coup, hors du verrou de la salle ; le coup n'est joué que si la partie n'a pas changé |
+| Variante en ligne | `bots::ONLINE_VARIANT` | La configuration jouée quand le client n'en demande pas : les règles actuelles avec draft |
+| Limites | `serveur/src/limits.rs` | Taille des messages, file d'envoi, nombre de salles, inactivité, cœurs des bots |
+
 ## Conventions
 
 - Une famille d'attaques par fichier.

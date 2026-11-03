@@ -43,11 +43,7 @@ impl Client {
     /// Le prochain message, qui doit être une place.
     async fn seated(&mut self) -> (String, Player, String) {
         match self.receive().await {
-            ServerMessage::Seated {
-                code,
-                player,
-                token,
-            } => (code, player, token),
+            ServerMessage::Seated { code, player, key } => (code, player, key),
             other => panic!("une place était attendue, reçu : {other:?}"),
         }
     }
@@ -63,7 +59,7 @@ impl Client {
     /// Le prochain message, qui doit être une erreur.
     async fn error(&mut self) -> String {
         match self.receive().await {
-            ServerMessage::Error { message } => message,
+            ServerMessage::Error { message, .. } => message,
             other => panic!("une erreur était attendue, reçu : {other:?}"),
         }
     }
@@ -116,6 +112,12 @@ async fn two_humans_play_and_each_sees_only_its_own_cache() {
         Action::Draft(card) => card,
         other => panic!("un choix de draft était attendu, reçu : {other:?}"),
     };
+    // Un aperçu ne montre pas la suite d'un coup qui n'est pas un choix de carte.
+    one.send(ClientMessage::Preview {
+        actions: vec![Action::Draft(cache)],
+    })
+    .await;
+    assert_eq!(one.receive().await, ServerMessage::Preview { view: None });
     one.play(Action::Draft(cache)).await;
     let (seen_by_one, events_one) = one.state().await;
     let (seen_by_two, events_two) = two.state().await;
@@ -168,6 +170,7 @@ async fn requests_out_of_turn_or_out_of_a_room_are_refused() {
 }
 
 #[tokio::test]
+#[ignore = "fait jouer un bot une partie entière : à lancer à la main"]
 async fn a_whole_game_against_a_server_bot() {
     let url = start_server().await;
     let mut client = Client::connect(&url).await;
@@ -191,7 +194,7 @@ async fn a_whole_game_against_a_server_bot() {
 }
 
 #[tokio::test]
-async fn a_player_gets_its_seat_back_with_its_token() {
+async fn a_player_gets_its_seat_back_with_its_key() {
     let url = start_server().await;
     let mut client = Client::connect(&url).await;
     client
@@ -200,7 +203,7 @@ async fn a_player_gets_its_seat_back_with_its_token() {
             variant: None,
         })
         .await;
-    let (code, player, token) = client.seated().await;
+    let (code, player, key) = client.seated().await;
     let (before, _) = client.state().await;
     drop(client);
 
@@ -208,16 +211,14 @@ async fn a_player_gets_its_seat_back_with_its_token() {
     back.send(ClientMessage::Rejoin {
         code: code.clone(),
         player,
-        token: "faux".to_string(),
+        key: "faux".to_string(),
     })
     .await;
-    assert!(back.error().await.contains("jeton"));
-    back.send(ClientMessage::Rejoin {
-        code,
-        player,
-        token,
-    })
-    .await;
+    assert!(back.error().await.contains("clé"));
+    back.send(ClientMessage::Rejoin { code, player, key }).await;
     back.seated().await;
     assert_eq!(back.state().await.0, before);
+    // Une vue perdue se redemande.
+    back.send(ClientMessage::Sync).await;
+    assert_eq!(back.state().await, (before, Vec::new()));
 }

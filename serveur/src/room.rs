@@ -4,17 +4,19 @@
 
 use crate::ServerError;
 use bots::BotKind;
-use fight_of_pions::{Action, Event, Game, GameConfig, GameRecord, Player, PlayerView, Rng};
+use fight_of_pions::{
+    Action, Decision, Event, Game, GameConfig, GameRecord, Player, PlayerView, Rng,
+};
 
 /// Qui occupe une place.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Seat {
     /// Personne encore : un humain peut la prendre.
     Free,
-    /// Un humain, reconnu à son jeton secret.
+    /// Un humain, reconnu à sa clé de place, secrète.
     Human {
-        /// Son jeton.
-        token: String,
+        /// Sa clé.
+        key: String,
     },
     /// Un bot du serveur.
     Bot(BotKind),
@@ -29,6 +31,47 @@ pub struct Room {
     seats: [Seat; 2],
     /// Le hasard des bots, initialisé avec la graine de la partie, comme dans l'arène.
     bot_rng: Rng,
+}
+
+/// Une recherche de bot, prête à tourner hors de la salle : une copie de la partie et du
+/// hasard des bots. La salle reste libre pendant que le bot réfléchit.
+pub struct BotSearch {
+    kind: BotKind,
+    game: Game,
+    rng: Rng,
+    /// Le nombre de coups joués quand la recherche a commencé.
+    moves: usize,
+}
+
+/// Le coup trouvé par une recherche de bot, à jouer dans la salle.
+pub struct BotMove {
+    action: Option<Action>,
+    rng: Rng,
+    moves: usize,
+}
+
+#[cfg(test)]
+impl BotMove {
+    /// Un coup de bot écrit à la main, trouvé après `moves` coups.
+    pub fn new(action: Option<Action>, moves: usize) -> BotMove {
+        BotMove {
+            action,
+            rng: Rng::new(1),
+            moves,
+        }
+    }
+}
+
+impl BotSearch {
+    /// Cherche le coup du bot. Le MCTS cherche sans lire la cache adverse.
+    pub fn think(mut self) -> BotMove {
+        let action = self.kind.bot().choose(&self.game, &mut self.rng);
+        BotMove {
+            action,
+            rng: self.rng,
+            moves: self.moves,
+        }
+    }
 }
 
 impl Room {
@@ -50,21 +93,21 @@ impl Room {
             .find(|player| self.seats[player.index()] == Seat::Free)
     }
 
-    /// Assied un humain, avec ce jeton, à cette place libre.
-    pub fn sit(&mut self, player: Player, token: String) -> Result<(), ServerError> {
+    /// Assied un humain, avec cette clé, à cette place libre.
+    pub fn sit(&mut self, player: Player, key: String) -> Result<(), ServerError> {
         let seat = &mut self.seats[player.index()];
         if *seat != Seat::Free {
             return Err(ServerError::RoomFull);
         }
-        *seat = Seat::Human { token };
+        *seat = Seat::Human { key };
         Ok(())
     }
 
-    /// Vérifie que ce jeton est celui de l'humain assis à cette place.
-    pub fn check_token(&self, player: Player, token: &str) -> Result<(), ServerError> {
+    /// Vérifie que cette clé est celle de l'humain assis à cette place.
+    pub fn check_key(&self, player: Player, key: &str) -> Result<(), ServerError> {
         match &self.seats[player.index()] {
-            Seat::Human { token: own } if own == token => Ok(()),
-            _ => Err(ServerError::BadToken),
+            Seat::Human { key: own } if own == key => Ok(()),
+            _ => Err(ServerError::BadKey),
         }
     }
 
@@ -76,38 +119,76 @@ impl Room {
         self.apply(action)
     }
 
-    /// Ce que verrait ce joueur après ces coups, tous les siens, essayés sur une copie :
-    /// rien n'est joué.
-    pub fn preview(&self, player: Player, actions: &[Action]) -> Result<PlayerView, ServerError> {
+    /// Ce que verrait ce joueur au fil des choix d'une carte (la carte, son lanceur, ses
+    /// cibles), essayés sur une copie : rien n'est joué.
+    ///
+    /// L'aperçu s'arrête au coup qui finit ces choix et rend alors `None` : la suite est
+    /// prête à être jouée. Montrer ce qui vient après (la carte jouée, une fenêtre de
+    /// réaction adverse) dévoilerait ce que l'adversaire cache, sans rien risquer.
+    pub fn preview(
+        &self,
+        player: Player,
+        actions: &[Action],
+    ) -> Result<Option<PlayerView>, ServerError> {
+        if self.decider() != Some(player) {
+            return Err(ServerError::NotYourTurn);
+        }
+        // Tant qu'une carte attend ses choix, c'est à celui qui l'a lancée de choisir.
         let mut copy = self.game.clone();
-        for &action in actions {
-            if copy.pending_decision().map(|decision| decision.player()) != Some(player) {
-                return Err(ServerError::NotYourTurn);
-            }
+        for (done, &action) in actions.iter().enumerate() {
             copy.apply(action)?;
+            if !copy.attack_in_progress() {
+                return if done + 1 == actions.len() {
+                    Ok(None)
+                } else {
+                    Err(ServerError::PreviewPastTheCard)
+                };
+            }
         }
-        Ok(copy.view(player))
+        Ok(Some(copy.view(player)))
     }
 
-    /// Le bot qui doit décider maintenant, s'il y en a un.
-    pub fn bot_to_play(&self) -> Option<BotKind> {
-        match self.seats[self.decider()?.index()] {
-            Seat::Bot(kind) => Some(kind),
-            Seat::Free | Seat::Human { .. } => None,
-        }
+    /// De quoi faire chercher le bot qui doit décider maintenant, s'il y en a un.
+    pub fn bot_search(&self) -> Option<BotSearch> {
+        let kind = match self.seats[self.decider()?.index()] {
+            Seat::Bot(kind) => kind,
+            Seat::Free | Seat::Human { .. } => return None,
+        };
+        Some(BotSearch {
+            kind,
+            game: self.game.clone(),
+            rng: self.bot_rng.clone(),
+            moves: self.record.actions.len(),
+        })
     }
 
-    /// Fait jouer une action au bot qui doit décider ; rend ce qu'elle a produit (parfois
-    /// rien : un choix d'attaque), ou `None` si aucun bot n'a joué. Le MCTS cherche sans
-    /// lire la cache adverse. Un coup refusé serait un bug du bot.
-    pub fn play_bot(&mut self) -> Result<Option<Vec<Event>>, ServerError> {
-        let Some(kind) = self.bot_to_play() else {
+    /// Joue le coup trouvé par le bot ; rend ce qu'il a produit (parfois rien : un choix
+    /// d'attaque). `None` si ce n'est plus au bot de jouer, ou si la partie a changé
+    /// pendant la recherche : le coup n'est pas joué.
+    ///
+    /// Un bot sans coup, ou dont le coup est refusé, ou dont la recherche a paniqué
+    /// (`found` vaut `None`), est un bug du bot : pour que la partie ne reste pas figée, il
+    /// joue à la place le premier coup permis par le moteur, et le serveur le signale.
+    pub fn play_bot(&mut self, found: Option<BotMove>) -> Result<Option<Vec<Event>>, ServerError> {
+        if self.bot_search().is_none() {
             return Ok(None);
-        };
-        let Some(action) = kind.bot().choose(&self.game, &mut self.bot_rng) else {
-            return Ok(None);
-        };
-        self.apply(action).map(Some)
+        }
+        if let Some(found) = found {
+            if found.moves != self.record.actions.len() {
+                return Ok(None);
+            }
+            if let Some(events) = found.action.and_then(|action| self.apply(action).ok()) {
+                self.bot_rng = found.rng;
+                return Ok(Some(events));
+            }
+        }
+        eprintln!("le bot n'a pas trouvé de coup valable : il joue le premier coup permis");
+        let fallback = self.game.legal_actions().first().copied();
+        let fallback =
+            fallback.ok_or_else(|| ServerError::BotFailed("aucun coup permis".to_string()))?;
+        self.apply(fallback)
+            .map(Some)
+            .map_err(|error| ServerError::BotFailed(error.to_string()))
     }
 
     /// Ce que voit ce joueur.
@@ -115,11 +196,14 @@ impl Room {
         self.game.view(player)
     }
 
+    /// Vrai si la partie est finie.
+    pub fn is_over(&self) -> bool {
+        self.decider().is_none()
+    }
+
     /// Le joueur qui doit décider, si la partie n'est pas finie.
     fn decider(&self) -> Option<Player> {
-        self.game
-            .pending_decision()
-            .map(|decision| decision.player())
+        self.game.pending_decision().map(Decision::player)
     }
 
     fn apply(&mut self, action: Action) -> Result<Vec<Event>, ServerError> {
@@ -132,11 +216,11 @@ impl Room {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fight_of_pions::{DraftRules, GameError};
+    use fight_of_pions::{Attack, AttackKind, DraftRules, GameError, Position, Rarity};
 
-    fn human(token: &str) -> Seat {
+    fn human(key: &str) -> Seat {
         Seat::Human {
-            token: token.to_string(),
+            key: key.to_string(),
         }
     }
 
@@ -144,8 +228,22 @@ mod tests {
         Room::new(GameConfig::default(), 0, [human("un"), Seat::Free]).unwrap()
     }
 
+    /// Les règles actuelles sans mur ni draft, J1 avec l'Ours Rare (emplacement 0).
+    fn armed(seats: [Seat; 2]) -> Room {
+        let ours = Attack {
+            kind: AttackKind::Ours,
+            rarity: Rarity::Rare,
+        };
+        let config = GameConfig {
+            wall_thickness: 0,
+            starting_attacks: [vec![ours], Vec::new()],
+            ..GameConfig::default()
+        };
+        Room::new(config, 0, seats).unwrap()
+    }
+
     #[test]
-    fn a_human_takes_the_free_seat_with_a_token() {
+    fn a_human_takes_the_free_seat_with_a_key() {
         let mut room = duel();
         assert_eq!(room.free_seat(), Some(Player::Two));
         room.sit(Player::Two, "deux".to_string()).unwrap();
@@ -154,11 +252,8 @@ mod tests {
             room.sit(Player::Two, "autre".to_string()),
             Err(ServerError::RoomFull)
         );
-        assert_eq!(room.check_token(Player::Two, "deux"), Ok(()));
-        assert_eq!(
-            room.check_token(Player::Two, "un"),
-            Err(ServerError::BadToken)
-        );
+        assert_eq!(room.check_key(Player::Two, "deux"), Ok(()));
+        assert_eq!(room.check_key(Player::Two, "un"), Err(ServerError::BadKey));
     }
 
     #[test]
@@ -176,20 +271,89 @@ mod tests {
     }
 
     #[test]
-    fn a_preview_tries_moves_without_playing_them() {
-        let mut room = duel();
-        room.sit(Player::Two, "deux".to_string()).unwrap();
-        let place = room.view(Player::One).legal_actions[0];
-        let after = room.preview(Player::One, &[place]).unwrap();
-        assert_ne!(after, room.view(Player::One));
-        assert!(room.record.actions.is_empty(), "rien n'est joué");
+    fn a_preview_follows_the_choices_of_a_card_without_playing_them() {
+        let mut room = armed([human("un"), human("deux")]);
+        let at = |row, col| Position { row, col };
+        room.play(Player::One, Action::Place(at(4, 4))).unwrap();
+        room.play(Player::One, Action::EndTurn).unwrap();
+        room.play(Player::Two, Action::Place(at(4, 5))).unwrap();
+        room.play(Player::Two, Action::EndTurn).unwrap();
+        // Tour 3 : l'Ours Rare de J1, lancé depuis E5, vise F5.
+        let start = [Action::UseAttack(0)];
+        let launcher = room.preview(Player::One, &start).unwrap().unwrap();
+        assert!(launcher.decision.is_some_and(Decision::is_attack_choice));
+        let aimed = [start[0], Action::Choose(at(4, 4))];
+        let target = room.preview(Player::One, &aimed).unwrap().unwrap();
+        assert!(target.legal_actions.contains(&Action::Choose(at(4, 5))));
+        let whole = [aimed[0], aimed[1], Action::Choose(at(4, 5))];
+        assert_eq!(room.preview(Player::One, &whole), Ok(None));
+        let past = [whole[0], whole[1], whole[2], Action::EndTurn];
         assert_eq!(
-            room.preview(Player::Two, &[place]),
+            room.preview(Player::One, &past),
+            Err(ServerError::PreviewPastTheCard)
+        );
+        assert_eq!(room.record.actions.len(), 4, "rien n'est joué");
+        assert_eq!(
+            room.preview(Player::Two, &start),
+            Err(ServerError::NotYourTurn)
+        );
+        assert_eq!(
+            room.preview(Player::Two, &[]),
             Err(ServerError::NotYourTurn)
         );
     }
 
     #[test]
+    fn a_preview_stops_at_the_move_that_ends_the_choices() {
+        let room = armed([human("un"), human("deux")]);
+        let place = Action::Place(Position { row: 4, col: 4 });
+        // Une pose finit tout de suite : sa suite (une Sentinelle adverse ?) reste cachée.
+        assert_eq!(room.preview(Player::One, &[place]), Ok(None));
+        assert_eq!(
+            room.preview(Player::One, &[place, Action::EndTurn]),
+            Err(ServerError::PreviewPastTheCard)
+        );
+    }
+
+    #[test]
+    fn a_bot_move_is_dropped_if_the_game_changed_during_the_search() {
+        let mut room = armed([human("un"), Seat::Bot(BotKind::Random)]);
+        let place = Action::Place(Position { row: 4, col: 4 });
+        assert_eq!(
+            room.play_bot(Some(BotMove::new(Some(place), 0))),
+            Ok(None),
+            "c'est à J1"
+        );
+        room.play(Player::One, Action::EndTurn).unwrap();
+        assert!(room.bot_search().is_some(), "c'est au bot");
+        assert_eq!(room.play_bot(Some(BotMove::new(Some(place), 0))), Ok(None));
+        assert_eq!(room.record.actions.len(), 1);
+        assert!(
+            room.play_bot(Some(BotMove::new(Some(place), 1)))
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(room.record.actions, [Action::EndTurn, place]);
+    }
+
+    #[test]
+    fn a_failing_bot_plays_the_first_legal_move_instead() {
+        // Sans coup, une recherche qui a paniqué, un coup refusé.
+        for found in [
+            Some(BotMove::new(None, 1)),
+            None,
+            Some(BotMove::new(Some(Action::Pass), 1)),
+        ] {
+            let mut room = armed([human("un"), Seat::Bot(BotKind::Random)]);
+            room.play(Player::One, Action::EndTurn).unwrap();
+            let first = room.game.legal_actions()[0];
+            assert!(room.play_bot(found).unwrap().is_some());
+            assert_eq!(room.record.actions, [Action::EndTurn, first]);
+        }
+    }
+
+    #[test]
+    #[ignore = "fait jouer un bot une partie entière : à lancer à la main"]
     fn a_bot_plays_its_whole_game_against_a_human_who_only_ends_turns() {
         let config = GameConfig {
             draft: Some(DraftRules::standard()),
@@ -197,9 +361,9 @@ mod tests {
         };
         let mut room = Room::new(config, 3, [human("un"), Seat::Bot(BotKind::Random)]).unwrap();
         let mut moves = 0;
-        while room.view(Player::One).end.is_none() && moves < 2000 {
-            if room.bot_to_play().is_some() {
-                assert!(room.play_bot().unwrap().is_some());
+        while !room.is_over() && moves < 2000 {
+            if let Some(search) = room.bot_search() {
+                assert!(room.play_bot(Some(search.think())).unwrap().is_some());
             } else {
                 let legal = room.view(Player::One).legal_actions;
                 // Le premier coup permis : une carte au draft, sinon finir le tour.
@@ -212,9 +376,6 @@ mod tests {
             }
             moves += 1;
         }
-        assert!(
-            room.view(Player::Two).end.is_some(),
-            "partie finie en {moves} coups"
-        );
+        assert!(room.is_over(), "partie finie en {moves} coups");
     }
 }
