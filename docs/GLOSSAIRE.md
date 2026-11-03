@@ -171,6 +171,7 @@ Le labo est entièrement en français, noms du code compris.
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
 | Cache secrète | `DraftStep::Cache` | Les cartes (1 par défaut) que chaque joueur choisit dans tout le catalogue avant le draft ; cachées à l'adversaire jusqu'à leur premier usage (`ArsenalSlot::is_secret`, `Event::CardRevealed`, `Game::arsenal_seen_by`, `Game::with_secrets_guessed`) |
+| Vue joueur | `PlayerView`, `BoardView`, `SideView`, `Game::view`, `Event::is_visible_to` | Ce qu'un joueur voit de la partie, prêt à envoyer en JSON : tout l'affichage, la décision attendue et ses coups permis, jamais la cache adverse pas encore jouée |
 | Draft | `GameConfig::draft`, `DraftRules`, `DraftStep`, `Decision::Draft`, `Action::Draft`, `Event::Drafted`, `Game::draft_pool` | Avant la partie : la cache, puis des cartes tirées avec la graine (10 par défaut), bannies et prises dans l'ordre des étapes (1 ban chacun, 3 picks en serpent) |
 | Gacha, collection | hors moteur | Le moteur reçoit les cartes déjà choisies |
 

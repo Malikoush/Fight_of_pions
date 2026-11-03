@@ -12,6 +12,7 @@ use crate::{Attack, Event, Outcome, Pion, Player};
 
 /// Ce que rapporte chaque jeton d'une pile, au kill qui l'use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TokenReward {
     /// Ce nombre de points d'action, utilisables tout de suite.
     Points(u32),
@@ -23,6 +24,7 @@ pub enum TokenReward {
 /// prochains kills use un jeton de chacune de ses piles (carnet, 2026-11-02) ; une pile
 /// vide disparaît.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TokenPile {
     play: PlayId,
     source: Attack,

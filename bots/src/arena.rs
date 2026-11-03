@@ -9,6 +9,7 @@ use fight_of_pions::{
 };
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
+use std::ops::Range;
 use std::{fmt, panic, thread};
 
 /// Joue `games` parties entre ces deux bots, avec les graines 0 à `games - 1` ; `bots[0]`
@@ -22,24 +23,58 @@ use std::{fmt, panic, thread};
 pub fn run(config: &GameConfig, bots: [&dyn Bot; 2], games: u64) -> Result<Report, GameError> {
     config.validate()?;
     let names = [bots[0].name(), bots[1].name()];
+    let reports = on_every_core(games, |seeds| {
+        let mut report = Report::new(names);
+        for seed in seeds {
+            let (game, rng) = start_game(config, seed)?;
+            report.play(game, rng, bots);
+        }
+        Ok::<_, GameError>(report)
+    });
+    let mut total = Report::new(names);
+    for report in reports {
+        total.add(report?);
+    }
+    Ok(total)
+}
+
+/// Les parties que [`run`] joue (graines 0 à `games - 1`), enregistrées, dans l'ordre des
+/// graines et sur les mêmes cœurs : de quoi les relire pour d'autres statistiques.
+/// Erreur au premier refus, ou si la configuration est invalide.
+pub fn record_games(
+    config: &GameConfig,
+    bots: [&dyn Bot; 2],
+    games: u64,
+) -> Result<Vec<GameRecord>, String> {
+    config.validate().map_err(|error| error.to_string())?;
+    let chunks = on_every_core(games, |seeds| {
+        seeds
+            .map(|seed| record_game(config, seed, bots))
+            .collect::<Result<Vec<_>, _>>()
+    });
+    let mut records = Vec::new();
+    for chunk in chunks {
+        records.extend(chunk?);
+    }
+    Ok(records)
+}
+
+/// Fait `play` sur des blocs de graines consécutives de `0..games`, sur tous les cœurs de
+/// la machine sauf un (laissé au reste du PC), et rend les résultats dans l'ordre des
+/// graines.
+fn on_every_core<T: Send>(games: u64, play: impl Fn(Range<u64>) -> T + Sync) -> Vec<T> {
     let cores = thread::available_parallelism().map_or(1, NonZeroUsize::get);
     let threads = u64::try_from(cores.saturating_sub(1))
         .unwrap_or(1)
         .clamp(1, games.max(1));
     let per_thread = games.div_ceil(threads);
-    let reports: Vec<Result<Report, GameError>> = thread::scope(|scope| {
+    let play = &play;
+    thread::scope(|scope| {
         let handles: Vec<_> = (0..threads)
             .map(|index| {
                 let first = index.saturating_mul(per_thread);
                 let seeds = first..first.saturating_add(per_thread).min(games);
-                scope.spawn(move || {
-                    let mut report = Report::new(names);
-                    for seed in seeds {
-                        let (game, rng) = start_game(config, seed)?;
-                        report.play(game, rng, bots);
-                    }
-                    Ok(report)
-                })
+                scope.spawn(move || play(seeds))
             })
             .collect();
         // Un bot qui plante est un bug : sa panique remonte telle quelle à l'appelant.
@@ -51,12 +86,7 @@ pub fn run(config: &GameConfig, bots: [&dyn Bot; 2], games: u64) -> Result<Repor
                     .unwrap_or_else(|cause| panic::resume_unwind(cause))
             })
             .collect()
-    });
-    let mut total = Report::new(names);
-    for report in reports {
-        total.add(report?);
-    }
-    Ok(total)
+    })
 }
 
 /// [`run`] pour chacune de ces paires, l'une après l'autre : chacune occupe déjà les

@@ -8,6 +8,7 @@ use crate::{Attack, DraftStep, Player, Position};
 /// Pendant le tour adverse, juste après un déclencheur, c'est l'autre joueur qui décide :
 /// il réagit ([`Decision::React`]), puis choisit le lanceur et les cibles de sa réaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Decision {
     /// Avant la partie, un choix du draft ([`crate::Action::Draft`]) : une carte pour sa
     /// cache, à bannir ou à prendre. Le joueur est celui de l'étape.

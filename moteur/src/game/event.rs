@@ -10,6 +10,7 @@ use crate::{
 /// le vérifie sur des centaines de parties. Les choix intermédiaires d'une attaque
 /// (lanceur, cibles) n'en produisent aucun : l'attaque est annoncée quand elle est résolue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Event {
     /// Une carte de la cache de ce joueur, à cet emplacement de son arsenal, est jouée pour
     /// la première fois : elle n'est plus secrète. Suit l'annonce de l'attaque.

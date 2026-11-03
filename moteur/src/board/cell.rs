@@ -6,6 +6,7 @@ use crate::{Pion, Player};
 /// tombe d'un pion tué (le Médecin) ; une tombe ne bloque pas la case. Le mur n'est pas
 /// une couche : une case de mur n'est pas sur le plateau ([`crate::Board::is_wall`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cell {
     pub(super) pion: Option<Pion>,
     pub(super) tomb: Option<Pion>,

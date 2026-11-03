@@ -7,6 +7,7 @@ use std::fmt;
 /// Les identités sont données dans l'ordre des poses, à partir de 0 : une même suite
 /// d'actions donne toujours les mêmes identités.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PionId(u32);
 
 impl PionId {
@@ -29,6 +30,7 @@ impl fmt::Display for PionId {
 
 /// Un pion posé sur le plateau.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pion {
     id: PionId,
     owner: Player,

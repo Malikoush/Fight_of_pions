@@ -1,6 +1,7 @@
 [alias]
 labo = "run -p labo"
 arene = "run --release -p bots --example arene --"
+equilibrage = "run --release -p bots --example equilibrage --"
 
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"

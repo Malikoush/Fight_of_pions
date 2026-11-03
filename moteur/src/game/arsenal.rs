@@ -3,6 +3,7 @@ use crate::Attack;
 /// Un emplacement de l'arsenal d'un joueur : une attaque, sa recharge en cours, et si elle
 /// est encore secrète (sa cache, pas encore jouée).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ArsenalSlot {
     attack: Attack,
     cooldown_left: u32,
