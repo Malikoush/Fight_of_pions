@@ -24,10 +24,6 @@ func setup(dead: Dictionary) -> void:
 	add_child(band)
 
 
-## Une tombe ne bouge pas : elle reste sur sa case quand les pions bougent.
-func move_to(target: Vector3) -> void:
-	position = target
-
 
 static func _prepare() -> void:
 	if _stone_mesh != null:

@@ -6,10 +6,12 @@ extends RefCounted
 
 const PRISM_SHADER := "res://board/shaders/prism.gdshader"
 const PION_SHADER := "res://board/shaders/pion.gdshader"
+const GHOST_SHADER := "res://board/shaders/pion_ghost.gdshader"
 const OUTLINE_SHADER := "res://board/shaders/outline.gdshader"
 const FLAT_SHADER := "res://board/shaders/flat_mark.gdshader"
 
 static var _pions := {}
+static var _ghosts := {}
 
 
 ## Vrai si les pions de ce joueur sont des palets octogonaux (J2) plutôt que ronds.
@@ -36,11 +38,28 @@ static func prism(size: Vector3, top: Color, side_a: Color, side_b: Color, edge:
 
 ## Le matériau des pions de ce joueur, contour compris.
 static func pion(player: String) -> ShaderMaterial:
-	if _pions.has(player):
-		return _pions[player]
+	if not _pions.has(player):
+		var material := _painted_pion(PION_SHADER, player)
+		var radius := pion_radius(player)
+		material.next_pass = outline(Vector3(radius, Look.PION_HEIGHT / 2.0, radius))
+		_pions[player] = material
+	return _pions[player]
+
+
+## Le matériau du palet fantôme de ce joueur : le même dessin, transparent, sans contour.
+static func ghost(player: String) -> ShaderMaterial:
+	if not _ghosts.has(player):
+		var material := _painted_pion(GHOST_SHADER, player)
+		material.set_shader_parameter(&"ghost_alpha", Look.GHOST_ALPHA)
+		_ghosts[player] = material
+	return _ghosts[player]
+
+
+## Le palet peint de ce joueur, avec ce shader (posé ou fantôme).
+static func _painted_pion(shader_path: String, player: String) -> ShaderMaterial:
 	var octagon := is_octagon(player)
 	var radius := pion_radius(player)
-	var material := _material(PION_SHADER)
+	var material := _material(shader_path)
 	material.set_shader_parameter(&"top_color", Look.J2_TOP if octagon else Look.J1_TOP)
 	material.set_shader_parameter(&"side_color", Look.J2_SIDE if octagon else Look.J1_SIDE)
 	material.set_shader_parameter(&"motif_color", Look.J2_MOTIF if octagon else Look.J1_STRIPE)
@@ -58,8 +77,6 @@ static func pion(player: String) -> ShaderMaterial:
 	material.set_shader_parameter(&"shade_dark", Look.PION_SHADE_DARK)
 	material.set_shader_parameter(&"shade_light", Look.PION_SHADE_LIGHT)
 	material.set_shader_parameter(&"underside", Look.PION_UNDERSIDE)
-	material.next_pass = outline(Vector3(radius, Look.PION_HEIGHT / 2.0, radius))
-	_pions[player] = material
 	return material
 
 
@@ -72,14 +89,16 @@ static func outline(half_extent: Vector3) -> ShaderMaterial:
 	return material
 
 
-## Une marque à plat : un voile et son bord, ou une ombre ronde.
-static func flat(fill: Color, border: Color, round_shadow: bool) -> ShaderMaterial:
+## Une marque à plat : un voile et son bord (en pointillés si `dashes` > 0), ou une ombre
+## ronde.
+static func flat(fill: Color, border: Color, round_shadow: bool, dashes: float = 0.0) -> ShaderMaterial:
 	var material := _material(FLAT_SHADER)
 	material.set_shader_parameter(&"fill_color", fill)
 	material.set_shader_parameter(&"border_color", border)
 	material.set_shader_parameter(&"border", Look.MARK_BORDER_WIDTH)
 	material.set_shader_parameter(&"round_shadow", round_shadow)
 	material.set_shader_parameter(&"softness", Look.PION_SHADOW_SOFTNESS)
+	material.set_shader_parameter(&"dashes", dashes)
 	return material
 
 

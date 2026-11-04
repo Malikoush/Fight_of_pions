@@ -24,8 +24,8 @@ ServerLink="*uid://dsux4l03crvh4"
 
 window/size/viewport_width=390
 window/size/viewport_height=844
-window/size/window_width_override=1280
-window/size/window_height_override=720
+window/size/window_width_override=420
+window/size/window_height_override=880
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1

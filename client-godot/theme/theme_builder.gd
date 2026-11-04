@@ -18,6 +18,10 @@ const MUTED_LABEL := &"MutedLabel"
 const NUMBER_LABEL := &"NumberLabel"
 const PILL_LABEL := &"PillLabel"
 const PRIMARY_BUTTON := &"PrimaryButton"
+const WAITING_PANEL := &"WaitingPanel"
+const WAITING_LABEL := &"WaitingLabel"
+const BANNER := &"Banner"
+const BANNER_LABEL := &"BannerLabel"
 const SECONDARY_BUTTON := &"SecondaryButton"
 const PANEL := &"GamePanel"
 const PANEL_ACTIVE := &"GamePanelActive"
@@ -35,15 +39,19 @@ static func build() -> Theme:
 	theme.set_color(&"font_color", &"Label", Look.CREAM)
 
 	_label(theme, DISPLAY_LABEL, display, Look.FONT_DISPLAY, Look.GOLD, true)
+	_label(theme, BANNER_LABEL, display, Look.FONT_DISPLAY, Look.INK, false)
 	_label(theme, NAME_LABEL, display, Look.FONT_HEADING, Look.GOLD, false)
 	_label(theme, STRONG_LABEL, strong, Look.FONT_BODY, Look.CREAM, false)
 	_label(theme, MUTED_LABEL, body, Look.FONT_BODY, Look.MUTED, false)
 	_label(theme, NUMBER_LABEL, caps, Look.FONT_NUMBER, Look.CREAM, false)
 	_label(theme, PILL_LABEL, caps, Look.FONT_BODY, Look.CREAM, false)
+	_label(theme, WAITING_LABEL, caps, Look.FONT_BUTTON, Look.MUTED, false)
 
 	_primary_button(theme, caps)
 	_secondary_button(theme, caps)
+	_waiting_panel(theme)
 	_panels(theme)
+	_banner(theme)
 	return theme
 
 
@@ -96,6 +104,20 @@ static func _secondary_button(theme: Theme, font: Font) -> void:
 	theme.set_stylebox(&"focus", variation, _focus())
 	_button_text(theme, variation, font, Look.CREAM)
 	theme.set_color(&"font_disabled_color", variation, Look.DISABLED_TEXT)
+
+
+## La place du bouton d'action quand on attend l'adversaire : un cadre en pointillés, sans
+## fond (maquettes). Son sablier et son texte ternes sont centrés ensemble.
+static func _waiting_panel(theme: Theme) -> void:
+	theme.set_type_variation(WAITING_PANEL, &"PanelContainer")
+	var dashed := StyleBoxDashed.new()
+	dashed.color = Look.WAITING_BORDER
+	dashed.width = Look.BORDER
+	dashed.radius = Look.RADIUS_CONTROL
+	dashed.dash = Look.DASH_LENGTH
+	dashed.gap = Look.DASH_GAP
+	dashed.corner_steps = Look.CORNER_STEPS
+	theme.set_stylebox(&"panel", WAITING_PANEL, dashed)
 
 
 static func _button_text(theme: Theme, variation: StringName, font: Font, color: Color) -> void:
@@ -157,6 +179,15 @@ static func _panels(theme: Theme) -> void:
 	pill.content_margin_top = Look.GAP_S
 	pill.content_margin_bottom = Look.GAP_S
 	theme.set_stylebox(&"panel", PILL, pill)
+
+
+## Le bandeau qui annonce ton tour : un hexagone d'or, comme les boutons d'action.
+static func _banner(theme: Theme) -> void:
+	theme.set_type_variation(BANNER, &"PanelContainer")
+	var style := _hex(Look.GOLD, Look.GOLD_SHADE, false)
+	style.content_margin_left = Look.GAP_XXL
+	style.content_margin_right = Look.GAP_XXL
+	theme.set_stylebox(&"panel", BANNER, style)
 
 
 static func _rounded(fill: Color, radius: int) -> StyleBoxFlat:

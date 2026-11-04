@@ -70,6 +70,24 @@ const MARK_BORDER := Color(GOLD, 0.95)
 ## Le bord d'un panneau au repos, et celui du joueur qui doit jouer.
 const PANEL_BORDER := Color(GOLD, 0.28)
 const PANEL_BORDER_ACTIVE := GOLD
+## Le panneau du joueur qui attend passe en retrait.
+const PANEL_IDLE_ALPHA := 0.72
+
+## Le dernier coup adverse : un losange en pointillés (marques/dernier.svg), sans voile.
+const LAST_MARK := Color(INK, 0.85)
+const LAST_MARK_FILL := Color(INK, 0.0)
+## Une case touchée où rien n'est permis : un voile terne, bref.
+const REFUSAL_FILL := Color(MUTED, 0.28)
+const REFUSAL_BORDER := Color(MUTED, 0.7)
+## Le palet fantôme (survol, coup envoyé en attente de réponse) : sa transparence.
+const GHOST_ALPHA := 0.55
+
+## Le cadre en pointillés du bouton d'action quand on attend l'adversaire (maquettes).
+const WAITING_BORDER := Color(MUTED, 0.6)
+const DASH_LENGTH := 7.0
+const DASH_GAP := 5.0
+## Le nombre de traits d'un coin arrondi dessiné.
+const CORNER_STEPS := 6
 
 # --- Typographie (tailles en points) ---
 
@@ -135,6 +153,26 @@ const SIDE_COLUMN_WIDTH := 340
 
 const SCREEN_FADE := 0.2
 const PION_MOVE := 0.22
+## La pose : le palet tombe, s'écrase un peu à l'arrivée, puis reprend sa forme.
+const PION_DROP_TIME := 0.24
+const PION_SQUASH := 0.72
+const PION_SQUASH_TIME := 0.22
+## Le recadrage de la caméra quand le plateau change (une case creusée).
+const REFRAME_TIME := 0.45
+## Le voile d'une case refusée s'efface en si peu de temps.
+const REFUSAL_TIME := 0.3
+## Un pion touché alors que rien n'est permis tremble : l'écart (unités du monde), le nombre
+## d'allers-retours et leur durée totale.
+const WIGGLE_DISTANCE := 0.06
+const WIGGLE_SWINGS := 3
+const WIGGLE_TIME := 0.24
+## Le bandeau « À TOI » : son entrée, son temps à l'écran, sa sortie, et sa taille de départ.
+const TURN_BANNER_IN := 0.18
+const TURN_BANNER_HOLD := 0.7
+const TURN_BANNER_OUT := 0.25
+const TURN_BANNER_START_SCALE := 0.8
+## La vibration du téléphone au début de son tour, en millisecondes.
+const TURN_VIBRATION_MS := 35
 ## Un tour de la barre de chargement indéterminée.
 const PROGRESS_LOOP := 1.4
 
@@ -155,6 +193,9 @@ const PION_HEIGHT := 0.15
 const PION_OCTAGON_SCALE := 1.05
 ## Le prisme de J2 tourne d'un seizième de tour pour présenter une face à la caméra.
 const PION_OCTAGON_TURN := TAU / 16.0
+## La hauteur d'où tombe un palet posé, et celle où flotte le palet d'un coup envoyé.
+const PION_DROP_HEIGHT := 0.9
+const PION_PENDING_LIFT := 0.3
 ## Le contour noir des pions, en unités du monde.
 const PION_OUTLINE := 0.018
 ## Le trait du bord du dessus (en part du rayon), et celui du haut et du bas de la tranche.
@@ -179,9 +220,11 @@ const TOMB_SIZE := Vector3(0.3, 0.34, 0.11)
 const TOMB_OFFSET := Vector2(-0.22, -0.22)
 const TOMB_BAND := 0.07
 const TOMB_BAND_OVERHANG := 1.04
-## La marque de case survolée.
+## La marque de case survolée, et le losange en pointillés du dernier coup.
 const MARK_SIZE := 0.94
 const MARK_BORDER_WIDTH := 0.07
+const LAST_MARK_SIZE := 0.84
+const LAST_MARK_DASHES := 16.0
 ## La caméra, tournée d'un huitième de tour. Sa plongée : l'isométrique 2:1 des maquettes
 ## (30°), ou plus forte (45°) quand elle donne de plus grandes cases (téléphone en portrait).
 const CAMERA_PITCHES_DEGREES: Array[float] = [-30.0, -45.0]

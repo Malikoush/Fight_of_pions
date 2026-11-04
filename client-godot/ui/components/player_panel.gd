@@ -79,6 +79,7 @@ func show_side(view: ViewData, player: String, display_name: String) -> void:
 	_detail.text = Labels.placements(side.get("placements_left", 0), config.get("place_cost", 0), my_turn and mine)
 	_detail.visible = _detail.text != ""
 	theme_type_variation = ThemeBuilder.PANEL_ACTIVE if deciding else ThemeBuilder.PANEL
+	modulate.a = 1.0 if deciding else Look.PANEL_IDLE_ALPHA
 
 
 ## Montre ou cache le palet, le nom et l'état (cachés pour sa propre barre, en portrait).

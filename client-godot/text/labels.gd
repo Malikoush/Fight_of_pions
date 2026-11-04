@@ -24,6 +24,8 @@ const WAITS := "attend"
 const PLAYS := "joue"
 
 const WAITING := "EN ATTENTE"
+## Le bandeau du début de ton tour.
+const YOUR_TURN_BANNER := "À toi !"
 const HOME := "ACCUEIL"
 
 const FREE_PLACEMENT := "Pose gratuite disponible"

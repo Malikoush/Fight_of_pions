@@ -216,6 +216,7 @@ client-godot/
   net/server_link.gd    (autoload ServerLink) la WebSocket, la place gardée et sa reprise
   net/wire.gd           le format du fil (JSON, nombres entiers remis en entiers)
   game/view_data.gd     la vue du serveur, avec des lectures typées et les coups rangés par case
+  game/game_events.gd   la lecture des événements joints à une vue (pour animer)
   board/                le plateau 3D : grid_geometry.gd (la seule conversion case ↔ monde),
                         board_3d.gd (cases, caméra, toucher), pion_3d.gd, tomb_3d.gd,
                         board_materials.gd, shaders/
@@ -233,5 +234,11 @@ client-godot/
 - **Lisible sur un téléphone.** Du mur, on ne voit que les cases qui touchent le plateau. La caméra cadre les cases jouables, plus une demi-case, dans le rectangle que l'écran laisse au plateau, marges de la page comprises. Parmi deux plongées (l'isométrique 2:1 des maquettes, 30°, et 45°), elle prend celle qui donne les plus grandes cases à l'écran : en portrait, où la largeur manque, la plongée de 45° grandit les cases de 41 % en hauteur.
 - **Portrait d'abord, paysage sur PC.** En portrait : l'adversaire en haut, le tour, le plateau, sa barre, puis le bouton d'action sur toute la largeur, sous le pouce. En paysage : le plateau à gauche, une colonne à droite. Les mêmes éléments changent seulement de boîtes.
 - **Un système visuel unique.** Les couleurs et les tailles sont dans `look.gd` (`Look`), et nulle part ailleurs ; `ThemeBuilder` en fait le thème, et les composants choisissent un style par son nom de variante. Les boutons d'action sont dessinés (`StyleBoxHex`), pas étirés depuis une image, pour rester nets à toute taille. L'interface et le plateau sont construits dans le code, pour que tout parte de `Look` ; les scènes `.tscn` se limitent à la racine.
+- **Des retours sans attendre le serveur, sans règle.** Ce qui est montré avant la réponse vient seulement de la liste des coups permis :
+  - le palet fantôme au survol ;
+  - le palet qui flotte au-dessus de la case touchée ;
+  - le refus d'une case où rien n'est permis : le pion tremble, ou un voile terne couvre la case vide.
+
+  La vue qui arrive fait toujours foi. Les animations viennent des événements joints à la vue (`GameEvents`) : chute des pions posés (`PionPlaced`), marque du dernier coup adverse. Une vue sans événement, comme à la reprise d'une partie, s'affiche sans animation.
 - **Pendant le développement** (E3a à E3e), le client joue la variante « règles actuelles » contre le bot aléatoire, qui ne charge pas la machine.
 - **L'outil d'éditeur** `addons/godot_mcp_toolkit/` (greffon tiers, avec son autoload `MCPRuntimeServer`) permet à Claude de piloter l'éditeur et le jeu lancé depuis l'éditeur (captures, touchers simulés). Il ne fait pas partie du jeu : le code du client ne s'en sert jamais, et son serveur ne s'ouvre que lancé depuis l'éditeur (`OS.has_feature("editor")`), jamais dans un export. Il sera exclu des exports avec E3h.

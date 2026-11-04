@@ -93,9 +93,9 @@ func _on_status_changed(status: ServerLink.Status) -> void:
 		(_screen as HomeScreen).reset()
 
 
-func _on_state_received(view: ViewData, _events: Array) -> void:
+func _on_state_received(view: ViewData, events: Array) -> void:
 	var game: GameScreen = _screen if _screen is GameScreen else _show_game()
-	game.show_view(view)
+	game.show_view(view, events)
 	if view.is_over():
 		# La salle fermera : il n'y aura plus de place à reprendre.
 		ServerLink.forget_session()

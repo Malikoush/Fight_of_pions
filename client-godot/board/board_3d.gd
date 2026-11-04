@@ -1,8 +1,9 @@
 class_name Board3D
 extends Node3D
 ## Le plateau en 3D, filmé en isométrique par une caméra orthographique. Il dessine la vue
-## que lui donne l'écran de partie et annonce la case survolée ou touchée ; il ne sait pas
-## ce qui est permis : l'écran de partie le lui dit (`show_mark`).
+## que lui donne l'écran de partie, anime ce que celui-ci lui demande, et annonce la case
+## survolée ou touchée ; il ne sait pas ce qui est permis : l'écran de partie le lui dit
+## (`show_mark`, `show_ghost`, `flash_refusal`).
 ##
 ## Du mur, on ne voit que les cases qui touchent le plateau (la première rangée, et les
 ## voisines des cases creusées). La caméra cadre les cases jouables, plus une demi-case,
@@ -26,6 +27,7 @@ const NEIGHBORS: Array[Vector2i] = [
 var _geometry: GridGeometry
 var _rig: Node3D
 var _camera: Camera3D
+var _reframe: Tween
 var _layers: Dictionary[Tile, MultiMeshInstance3D] = {}
 ## Les cases dessinées, et ce qu'on y dessine.
 var _drawn: Dictionary[Vector2i, Tile] = {}
@@ -34,8 +36,19 @@ var _frame_rect := Rect2()
 ## Les pièces posées, par identité de pion (un pion vivant, ou le mort d'une tombe).
 var _pions: Dictionary[int, Node3D] = {}
 var _tombs: Dictionary[int, Node3D] = {}
+## La case de chaque pion vivant, d'après la dernière vue.
+var _pion_cells: Dictionary[int, Vector2i] = {}
 var _pieces: Node3D
 var _mark: MeshInstance3D
+var _refusal: MeshInstance3D
+var _refusal_fade: Tween
+## Les losanges en pointillés du dernier coup adverse, et les pions qu'ils entourent.
+var _last_marks: Array[MeshInstance3D] = []
+var _last_ids: Array[int] = []
+var _ghost: Pion3D
+var _ghost_player := ""
+var _ghost_cell := ViewData.NO_CELL
+var _ghost_lifted := false
 var _hovered := ViewData.NO_CELL
 var _press_position := Vector2.ZERO
 var _pressing := false
@@ -60,37 +73,80 @@ func _ready() -> void:
 
 	_pieces = Node3D.new()
 	add_child(_pieces)
-
-	_mark = MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2.ONE * Look.MARK_SIZE
-	_mark.mesh = plane
-	_mark.material_override = BoardMaterials.flat(Look.MARK_FILL, Look.MARK_BORDER, false)
-	_mark.visible = false
-	add_child(_mark)
-	get_viewport().size_changed.connect(_update_camera)
+	_mark = _flat_mark(Look.MARK_SIZE, BoardMaterials.flat(Look.MARK_FILL, Look.MARK_BORDER, false))
+	_refusal = _flat_mark(Look.MARK_SIZE, BoardMaterials.flat(Look.REFUSAL_FILL, Look.REFUSAL_BORDER, false))
+	get_viewport().size_changed.connect(_update_camera.bind(false))
 
 
-## Dessine cette vue : cases, mur visible, pions et tombes.
-func show_view(view: ViewData) -> void:
+## Dessine cette vue : cases, mur visible, pions et tombes. Les pions de `dropped` (par
+## identité) viennent d'être posés : ils tombent sur leur case.
+func show_view(view: ViewData, dropped: Array[int] = []) -> void:
 	if _geometry == null or _geometry.size != view.grid_size():
 		_geometry = GridGeometry.new(view.grid_size())
+	var framed := _bounds
 	_update_tiles(view)
-	_update_pieces(view)
-	_update_camera()
+	_update_pieces(view, dropped)
+	# Un palet en attente que cette vue n'a pas posé (le coup a abouti ailleurs) disparaît.
+	if _ghost_lifted:
+		show_ghost(ViewData.NO_CELL, "", false)
+	_update_last_marks()
+	_update_camera(framed.has_volume() and framed != _bounds)
 
 
 ## Cadre le plateau dans ce rectangle de l'écran (en coordonnées de la fenêtre).
 func frame(rect: Rect2) -> void:
 	_frame_rect = rect
-	_update_camera()
+	_update_camera(false)
 
 
 ## Montre la marque sur cette case, ou la cache (`ViewData.NO_CELL`).
 func show_mark(cell: Vector2i) -> void:
-	_mark.visible = _drawn.has(cell)
-	if _mark.visible:
-		_mark.position = _geometry.center(cell) + Vector3.UP * (Look.CASE_HEIGHT + Look.FLAT_LIFT)
+	_place_flat(_mark, cell)
+
+
+## Montre le palet fantôme de ce joueur sur cette case : posé (survol) ou flottant au-dessus
+## (`lifted` : un coup envoyé, en attente de la réponse). `ViewData.NO_CELL` le cache.
+func show_ghost(cell: Vector2i, player: String, lifted: bool) -> void:
+	if not _drawn.has(cell):
+		if _ghost != null:
+			_ghost.visible = false
+		_ghost_cell = ViewData.NO_CELL
+		_ghost_lifted = false
+		return
+	if _ghost == null or player != _ghost_player:
+		if _ghost != null:
+			_ghost.queue_free()
+		_ghost = Pion3D.new()
+		_ghost.setup({"owner": player}, true)
+		_pieces.add_child(_ghost)
+		_ghost_player = player
+	_ghost.visible = true
+	_ghost_cell = cell
+	_ghost_lifted = lifted
+	_ghost.position = _ground(cell) + Vector3.UP * (Look.PION_PENDING_LIFT if lifted else 0.0)
+
+
+## Rien n'est permis sur cette case touchée : son pion tremble, ou, sur une case vide, un
+## bref voile terne la couvre.
+func flash_refusal(cell: Vector2i) -> void:
+	for id: int in _pion_cells:
+		if _pion_cells[id] == cell and _pions.has(id):
+			_pions[id].wiggle()
+			return
+	if not _place_flat(_refusal, cell):
+		return
+	if _refusal_fade != null:
+		_refusal_fade.kill()
+	_refusal.transparency = 0.0
+	_refusal_fade = create_tween()
+	_refusal_fade.tween_property(_refusal, "transparency", 1.0, Look.REFUSAL_TIME)
+	_refusal_fade.tween_callback(func() -> void: _refusal.visible = false)
+
+
+## Entoure de pointillés ces pions (par identité) : le dernier coup adverse.
+func show_last(ids: Array[int]) -> void:
+	_last_ids = ids
+	_update_last_marks()
 
 
 func _update_tiles(view: ViewData) -> void:
@@ -138,35 +194,46 @@ func _tile_of(view: ViewData, cell: Vector2i) -> int:
 	return -1
 
 
-func _update_pieces(view: ViewData) -> void:
-	var seen_pions := {}
+func _update_pieces(view: ViewData, dropped: Array[int]) -> void:
 	var seen_tombs := {}
+	_pion_cells.clear()
 	for cell: Vector2i in _drawn:
-		var ground := _geometry.center(cell) + Vector3.UP * Look.CASE_HEIGHT
 		var pion: Variant = view.pion_at(cell)
 		if pion is Dictionary:
-			seen_pions[pion.get("id", -1)] = true
-			_place(_pions, pion, ground, Pion3D)
+			var id: int = pion.get("id", -1)
+			_pion_cells[id] = cell
+			_place_pion(pion, cell, id in dropped)
 		var tomb: Variant = view.tomb_at(cell)
 		if tomb is Dictionary:
-			seen_tombs[tomb.get("id", -1)] = true
-			_place(_tombs, tomb, ground, Tomb3D)
-	_remove_missing(_pions, seen_pions)
+			var dead: int = tomb.get("id", -1)
+			seen_tombs[dead] = true
+			if not _tombs.has(dead):
+				var stone := Tomb3D.new()
+				stone.setup(tomb)
+				_pieces.add_child(stone)
+				_tombs[dead] = stone
+			_tombs[dead].position = _ground(cell)
+	_remove_missing(_pions, _pion_cells)
 	_remove_missing(_tombs, seen_tombs)
 
 
-## Crée la pièce de ce pion si elle n'existe pas, sinon l'amène à sa case (`move_to` :
-## un pion y glisse, une tombe y est posée).
-func _place(pieces: Dictionary[int, Node3D], pion: Dictionary, ground: Vector3, kind: GDScript) -> void:
+## Crée la pièce de ce pion si elle n'existe pas, sinon la fait glisser à sa case. Un pion
+## qui vient d'être posé tombe : du palet fantôme qui l'attendait, s'il est là.
+func _place_pion(pion: Dictionary, cell: Vector2i, drop: bool) -> void:
 	var id: int = pion.get("id", -1)
-	if pieces.has(id):
-		pieces[id].move_to(ground)
+	if _pions.has(id):
+		_pions[id].move_to(_ground(cell))
 		return
-	var piece: Node3D = kind.new()
+	var piece := Pion3D.new()
 	piece.setup(pion)
-	piece.position = ground
+	piece.position = _ground(cell)
 	_pieces.add_child(piece)
-	pieces[id] = piece
+	_pions[id] = piece
+	if drop:
+		var from_ghost := _ghost_cell == cell and _ghost_lifted
+		piece.drop_in(Look.PION_PENDING_LIFT if from_ghost else Look.PION_DROP_HEIGHT)
+		if from_ghost:
+			show_ghost(ViewData.NO_CELL, "", false)
 
 
 func _remove_missing(pieces: Dictionary[int, Node3D], seen: Dictionary) -> void:
@@ -176,16 +243,56 @@ func _remove_missing(pieces: Dictionary[int, Node3D], seen: Dictionary) -> void:
 			pieces.erase(id)
 
 
+func _update_last_marks() -> void:
+	var cells: Array[Vector2i] = []
+	for id in _last_ids:
+		if _pion_cells.has(id):
+			cells.append(_pion_cells[id])
+	while _last_marks.size() < cells.size():
+		var dashed := BoardMaterials.flat(Look.LAST_MARK_FILL, Look.LAST_MARK, false, Look.LAST_MARK_DASHES)
+		_last_marks.append(_flat_mark(Look.LAST_MARK_SIZE, dashed))
+	for index in _last_marks.size():
+		_place_flat(_last_marks[index], cells[index] if index < cells.size() else ViewData.NO_CELL)
+
+
+## Le sol d'une case : le dessus de la case, là où se posent les pièces.
+func _ground(cell: Vector2i) -> Vector3:
+	return _geometry.center(cell) + Vector3.UP * Look.CASE_HEIGHT
+
+
+## Une marque à plat, cachée, de cette taille et ce matériau.
+func _flat_mark(size: float, material: ShaderMaterial) -> MeshInstance3D:
+	var mark := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2.ONE * size
+	mark.mesh = plane
+	mark.material_override = material
+	mark.visible = false
+	add_child(mark)
+	return mark
+
+
+## Pose cette marque sur une case dessinée, ou la cache ; vrai si elle est montrée.
+func _place_flat(mark: MeshInstance3D, cell: Vector2i) -> bool:
+	mark.visible = _drawn.has(cell)
+	if mark.visible:
+		mark.position = _ground(cell) + Vector3.UP * Look.FLAT_LIFT
+	return mark.visible
+
+
 ## Place la caméra pour que les cases cadrées tiennent dans le rectangle de cadrage. Parmi
 ## les plongées permises, elle prend celle qui donne les plus grandes cases à l'écran : la
 ## surface d'une case y vaut le sinus de la plongée sur le carré de la hauteur filmée.
 ## Quand la largeur manque et que la hauteur abonde (téléphone en portrait), une plongée
-## plus forte grandit les cases en hauteur.
-func _update_camera() -> void:
-	if _camera == null or _bounds.size == Vector3.ZERO:
+## plus forte grandit les cases en hauteur. `animated` : la caméra glisse vers son cadrage
+## (le plateau a changé), sinon elle y saute (la fenêtre a changé).
+func _update_camera(animated: bool) -> void:
+	if _camera == null or not _bounds.has_volume():
 		return
 	var viewport := get_viewport().get_visible_rect().size
 	var rect := _frame_rect if _frame_rect.has_area() else Rect2(Vector2.ZERO, viewport)
+	var start_rotation := _rig.rotation_degrees
+	var start_position := _rig.position
 	_rig.position = _bounds.get_center()
 	var best_pitch: float = Look.CAMERA_PITCHES_DEGREES[0]
 	var best := Rect2()
@@ -201,13 +308,30 @@ func _update_camera() -> void:
 			best_height = world_height
 			best_pitch = pitch
 			best = extent
-	_rig.rotation_degrees = Vector3(best_pitch, Look.CAMERA_YAW_DEGREES, 0.0)
-	_camera.size = best_height * Look.FRAME_MARGIN
-	var per_point := _camera.size / viewport.y
+	var target_size := best_height * Look.FRAME_MARGIN
+	var per_point := target_size / viewport.y
 	var shift := rect.get_center() - viewport / 2.0
 	var middle := best.get_center()
-	_camera.h_offset = middle.x - shift.x * per_point
-	_camera.v_offset = middle.y + shift.y * per_point
+	var target_rotation := Vector3(best_pitch, Look.CAMERA_YAW_DEGREES, 0.0)
+	var target_offset := Vector2(middle.x - shift.x * per_point, middle.y + shift.y * per_point)
+
+	if _reframe != null:
+		_reframe.kill()
+	var target_position := _rig.position
+	if not animated:
+		_rig.rotation_degrees = target_rotation
+		_camera.size = target_size
+		_camera.h_offset = target_offset.x
+		_camera.v_offset = target_offset.y
+		return
+	_rig.rotation_degrees = start_rotation
+	_rig.position = start_position
+	_reframe = create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_reframe.tween_property(_rig, "position", target_position, Look.REFRAME_TIME)
+	_reframe.tween_property(_rig, "rotation_degrees", target_rotation, Look.REFRAME_TIME)
+	_reframe.tween_property(_camera, "size", target_size, Look.REFRAME_TIME)
+	_reframe.tween_property(_camera, "h_offset", target_offset.x, Look.REFRAME_TIME)
+	_reframe.tween_property(_camera, "v_offset", target_offset.y, Look.REFRAME_TIME)
 
 
 ## L'emprise à l'écran des cases cadrées, dans le plan de la caméra telle qu'elle est

@@ -220,6 +220,12 @@ Le client (`client-godot/`) est en anglais dans le code, comme le moteur ; ses c
 | Losanges | `DiamondStrip` | Le symbole des points d'action (grand losange) et de la banque (petits losanges, pleins pour un point gardé) |
 | Briques de l'interface | `Ui` | Libellés, boutons, icônes, boîtes, marges de la page |
 | Texte affiché | `Labels` | Tout le texte du client, en français |
+| Événements (côté client) | `GameEvents` | La lecture des événements joints à une vue : de quoi animer, jamais l'état |
+| Palet fantôme | `Pion3D.setup(…, ghost)`, `BoardMaterials.ghost`, `Board3D.show_ghost` | Le palet transparent qui montre où tombera un pion : posé au survol, flottant au-dessus de la case touchée jusqu'à la réponse |
+| Refus d'une case | `Board3D.flash_refusal` | Le retour d'un toucher où rien n'est permis : le pion tremble, ou la case vide se voile |
+| Dernier coup adverse | `Board3D.show_last` | Les pions que l'adversaire vient de poser, entourés de pointillés |
+| Bandeau du tour | `ThemeBuilder.BANNER` | « À toi ! », au milieu du plateau, au début de son tour |
+| Cadre d'attente | `ThemeBuilder.WAITING_PANEL`, `StyleBoxDashed` | À la place du bouton d'action quand on attend l'adversaire : « ⧗ EN ATTENTE » en pointillés |
 | Écran | `BootScreen`, `HomeScreen`, `GameScreen` | Démarrage, accueil, partie ; la racine (`main.gd`) les enchaîne |
 | Action principale | `GameScreen.MAIN_ACTIONS` | Le coup sans case permis maintenant (finir son tour, passer), recopié de la vue, sur le grand bouton |
 
