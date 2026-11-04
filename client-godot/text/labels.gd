@@ -47,6 +47,44 @@ const PLAY_CARD := "JOUER LA CARTE"
 const AIM_TOKENS := "VISER LES JETONS"
 const HARE_DESTINATION := "Touche la case où va ton pion."
 
+## Ce qui dure, dans le panneau d'un joueur.
+const FACT_SCORCHED := "Terre brûlée · jusqu'au tour %d"
+const FACT_INFIRMARY := "Infirmerie %d"
+const FACT_GRAVEYARD := "Cimetière %d"
+const FACT_GUARDS := "Gardes %d"
+
+## Le journal des coups.
+const JOURNAL_TITLE := "JOURNAL DES COUPS"
+const JOURNAL_ORDER := "les plus récents en haut"
+const JOURNAL_EMPTY := "Rien pour l'instant : les coups s'inscriront ici."
+const JOURNAL_TURN := "T%d"
+## Les lettres des colonnes, de gauche à droite (le moteur s'arrête aussi à Z).
+const COLUMN_LETTERS := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const CLOSE := "FERMER"
+const JOURNAL_PLACE := "pose en %s"
+const JOURNAL_REVEAL := "révèle sa carte cachée : %s"
+const JOURNAL_ATTACK := "lance %s depuis %s"
+const JOURNAL_SHOT := "tire avec un garde de sa reine sur %s"
+const JOURNAL_KILLED := "pion tué en %s"
+const JOURNAL_MOVED := "pion de %s à %s"
+const JOURNAL_SWAPPED := "échange de %s et %s"
+const JOURNAL_DUG := "mur creusé en %s"
+const JOURNAL_GRAVEYARD := "un pion part au cimetière"
+const JOURNAL_HEALED := "un pion sort de l'infirmerie"
+const JOURNAL_SCORCHED := "sous Terre brûlée jusqu'au tour %d"
+const JOURNAL_TOKENS := "reçoit une pile : %s"
+const JOURNAL_CHILD := "enfant en %s"
+## Les effets continus racontés quand ils commencent, par sorte (`%s` : la case du pion).
+const JOURNAL_EFFECTS := {
+	"Immobilized": "pion immobilisé en %s",
+	"Protected": "pion protégé en %s",
+	"Pact": "pacte en %s",
+	"Crown": "reine couronnée en %s",
+	"Guard": "un garde pour la reine en %s",
+	"Return": "retour prévu pour le pion en %s",
+	"StepTokens": "jetons de pas en %s",
+}
+
 ## Le libellé de chaque coup proposé dans le menu d'une case.
 const CELL_ACTIONS := {
 	"Place": "POSER ICI",
@@ -76,3 +114,26 @@ static func placements(left: int, cost: int, my_turn: bool) -> String:
 	if left > 1:
 		return PLACEMENTS % left
 	return FREE_PLACEMENT if cost == 0 else PLACEMENT
+
+
+## Une pile de jetons du Massacre divin : « 3 jetons · +1 point » ou « 2 jetons · cimetière ».
+## `reward` est la récompense telle que la vue l'écrit (`{"Points": 1}` ou `"Graveyard"`).
+static func token_pile(tokens: int, reward: Variant) -> String:
+	var count := _plural(tokens, "jeton")
+	var points: Variant = Wire.content(reward)
+	if points is int:
+		return "%s · +%s" % [count, _plural(points, "point")]
+	return "%s · cimetière" % count
+
+
+## « 1 jeton », « 3 jetons ».
+static func _plural(count: int, word: String) -> String:
+	return "%d %s%s" % [count, word, "s" if count > 1 else ""]
+
+
+## Le nom d'une case, comme le moteur l'écrit (`Position`) : la lettre de sa colonne, puis
+## le numéro de sa rangée, comptés sur toute la grille, mur compris (« C5 »).
+static func cell_name(cell: Vector2i) -> String:
+	if cell.x < 0 or cell.x >= COLUMN_LETTERS.length() or cell.y < 0:
+		return "?"
+	return "%s%d" % [COLUMN_LETTERS[cell.x], cell.y + 1]

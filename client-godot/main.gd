@@ -33,7 +33,7 @@ func _ready() -> void:
 	_ui.name = "Screens"
 	_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ui.theme = ThemeBuilder.build()
+	_ui.theme = ThemeBuilder.shared()
 	layer.add_child(_ui)
 
 	ServerLink.status_changed.connect(_on_status_changed)

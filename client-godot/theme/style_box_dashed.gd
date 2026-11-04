@@ -1,10 +1,12 @@
 @tool
 class_name StyleBoxDashed
 extends StyleBox
-## Un cadre arrondi en pointillés, sans fond : la place d'une action qui n'est pas encore à
-## toi (le bouton « EN ATTENTE » des maquettes). Dessiné, net à toute taille. Tous ses
-## réglages viennent de `Look`, par `ThemeBuilder` : sans eux, il ne dessine rien.
+## Un cadre arrondi en pointillés, avec ou sans fond : la place d'une action qui n'est pas
+## encore à toi (le bouton « EN ATTENTE » des maquettes), le panneau d'un joueur sous Terre
+## brûlée. Dessiné, net à toute taille. Tous ses réglages viennent de `Look`, par
+## `ThemeBuilder` : sans eux, il ne dessine rien.
 
+@export var fill := Color.TRANSPARENT
 @export var color := Color.TRANSPARENT
 @export var width := 0.0
 @export var radius := 0.0
@@ -15,6 +17,9 @@ extends StyleBox
 
 func _draw(to_canvas_item: RID, rect: Rect2) -> void:
 	var path := _rounded_outline(rect.grow(-width / 2.0))
+	if fill.a > 0.0:
+		var inside := path.slice(0, path.size() - 1)
+		RenderingServer.canvas_item_add_polygon(to_canvas_item, inside, PackedColorArray([fill]))
 	var drawing := true
 	var left := dash
 	var stroke := PackedVector2Array([path[0]])

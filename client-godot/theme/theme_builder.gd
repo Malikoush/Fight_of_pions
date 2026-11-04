@@ -9,6 +9,7 @@ const DISPLAY_FONT := "res://assets/fonts/GrenzeGotisch.ttf"
 const BODY_FONT := "res://assets/fonts/BarlowSemiCondensed-Medium.ttf"
 const STRONG_FONT := "res://assets/fonts/BarlowSemiCondensed-SemiBold.ttf"
 const CAPS_FONT := "res://assets/fonts/BarlowCondensed-Bold.ttf"
+const BOLD_FONT := "res://assets/fonts/BarlowSemiCondensed-Bold.ttf"
 
 ## Les variantes proposées aux composants.
 const DISPLAY_LABEL := &"DisplayLabel"
@@ -32,6 +33,24 @@ const SECONDARY_BUTTON := &"SecondaryButton"
 const PANEL := &"GamePanel"
 const PANEL_ACTIVE := &"GamePanelActive"
 const PILL := &"Pill"
+const BADGE_NUMBER_LABEL := &"BadgeNumberLabel"
+const FACT_LABEL := &"FactLabel"
+const SCORCHED_LABEL := &"ScorchedLabel"
+const PANEL_SCORCHED := &"GamePanelScorched"
+const JOURNAL_LINE := &"JournalLine"
+const JOURNAL_TURN_LABEL := &"JournalTurnLabel"
+const ICON_BUTTON := &"IconButton"
+const OVERLAY := &"Overlay"
+
+static var _shared: Theme
+
+
+## Le thème de toute l'interface, construit une fois et partagé (l'écran, les badges du
+## plateau).
+static func shared() -> Theme:
+	if _shared == null:
+		_shared = build()
+	return _shared
 
 
 static func build() -> Theme:
@@ -56,6 +75,12 @@ static func build() -> Theme:
 	_label(theme, CARD_COST_LABEL, caps, Look.FONT_CARD_COST, Look.INK, false)
 	_label(theme, TAG_LABEL, caps, Look.FONT_CARD_TAG, Look.GOLD, false)
 	_label(theme, CAPS_LABEL, caps, Look.FONT_BODY, Look.MUTED, false)
+	_label(theme, BADGE_NUMBER_LABEL, caps, Look.FONT_BODY, Look.CREAM, false)
+	_label(theme, FACT_LABEL, strong, Look.FONT_FACT, Look.CREAM, false)
+	_label(theme, SCORCHED_LABEL, strong, Look.FONT_FACT, Look.SCORCHED, false)
+	_label(theme, JOURNAL_TURN_LABEL, caps, Look.FONT_FACT, Look.MUTED, false)
+	_journal(theme, strong)
+	_icon_button(theme)
 
 	_primary_button(theme, caps)
 	_secondary_button(theme, caps)
@@ -121,14 +146,19 @@ static func _secondary_button(theme: Theme, font: Font) -> void:
 ## fond (maquettes). Son sablier et son texte ternes sont centrés ensemble.
 static func _waiting_panel(theme: Theme) -> void:
 	theme.set_type_variation(WAITING_PANEL, &"PanelContainer")
+	theme.set_stylebox(&"panel", WAITING_PANEL, _dashed(Color.TRANSPARENT, Look.WAITING_BORDER, Look.BORDER, Look.RADIUS_CONTROL))
+
+
+static func _dashed(fill: Color, color: Color, width: float, radius: float) -> StyleBoxDashed:
 	var dashed := StyleBoxDashed.new()
-	dashed.color = Look.WAITING_BORDER
-	dashed.width = Look.BORDER
-	dashed.radius = Look.RADIUS_CONTROL
+	dashed.fill = fill
+	dashed.color = color
+	dashed.width = width
+	dashed.radius = radius
 	dashed.dash = Look.DASH_LENGTH
 	dashed.gap = Look.DASH_GAP
 	dashed.corner_steps = Look.CORNER_STEPS
-	theme.set_stylebox(&"panel", WAITING_PANEL, dashed)
+	return dashed
 
 
 static func _button_text(theme: Theme, variation: StringName, font: Font, color: Color) -> void:
@@ -180,6 +210,12 @@ static func _panels(theme: Theme) -> void:
 		style.border_color = Look.PANEL_BORDER_ACTIVE if variation == PANEL_ACTIVE else Look.PANEL_BORDER
 		style.set_content_margin_all(Look.GAP_L)
 		theme.set_stylebox(&"panel", variation, style)
+	# Sous Terre brûlée, le panneau du joueur qui attend a un bord de braise en pointillés
+	# (maquettes) ; celui qui joue garde son bord d'or.
+	theme.set_type_variation(PANEL_SCORCHED, &"PanelContainer")
+	var scorched := _dashed(Look.FOREST_PANEL, Look.SCORCHED, Look.BORDER_STRONG, Look.RADIUS_PANEL)
+	scorched.set_content_margin_all(Look.GAP_L)
+	theme.set_stylebox(&"panel", PANEL_SCORCHED, scorched)
 
 	theme.set_type_variation(PILL, &"PanelContainer")
 	var pill := _rounded(Look.FOREST_DEEP, Look.RADIUS_PILL)
@@ -207,6 +243,35 @@ static func _cards(theme: Theme) -> void:
 	tag.content_margin_left = Look.GAP_XS
 	tag.content_margin_right = Look.GAP_XS
 	theme.set_stylebox(&"panel", TAG, tag)
+
+
+## Une ligne du journal : un texte riche (le nom du joueur en couleur), sur plusieurs lignes
+## si besoin ; et la page qui couvre l'écran (le journal en portrait).
+static func _journal(theme: Theme, font: Font) -> void:
+	theme.set_type_variation(JOURNAL_LINE, &"RichTextLabel")
+	theme.set_font(&"normal_font", JOURNAL_LINE, font)
+	theme.set_font_size(&"normal_font_size", JOURNAL_LINE, Look.FONT_FACT)
+	theme.set_font(&"bold_font", JOURNAL_LINE, load(BOLD_FONT))
+	theme.set_font_size(&"bold_font_size", JOURNAL_LINE, Look.FONT_FACT)
+	theme.set_color(&"default_color", JOURNAL_LINE, Look.CREAM)
+	theme.set_type_variation(OVERLAY, &"PanelContainer")
+	var overlay := StyleBoxFlat.new()
+	overlay.bg_color = Look.OVERLAY_FILL
+	theme.set_stylebox(&"panel", OVERLAY, overlay)
+
+
+## Un bouton carré à icône (le journal, en portrait) : fond sombre bordé d'or, icône d'or.
+static func _icon_button(theme: Theme) -> void:
+	theme.set_type_variation(ICON_BUTTON, &"Button")
+	for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
+		var style := _rounded(Look.FOREST_RAISED if state == &"hover" else Look.FOREST_DEEP, Look.RADIUS_CONTROL)
+		style.set_border_width_all(Look.BORDER)
+		style.border_color = Look.GOLD
+		style.set_content_margin_all(Look.GAP_S)
+		theme.set_stylebox(state, ICON_BUTTON, style)
+	theme.set_stylebox(&"focus", ICON_BUTTON, _focus())
+	for state in [&"icon_normal_color", &"icon_hover_color", &"icon_pressed_color", &"icon_hover_pressed_color", &"icon_focus_color"]:
+		theme.set_color(state, ICON_BUTTON, Look.GOLD)
 
 
 ## Le bandeau qui annonce ton tour : un hexagone d'or, comme les boutons d'action.

@@ -24,6 +24,15 @@ func setup(dead: Dictionary) -> void:
 	add_child(band)
 
 
+## La tombe sort du sol après ce délai (le kill qui l'a laissée) ; cachée d'ici là.
+func rise_in(delay: float) -> void:
+	scale = Vector3(1.0, Look.TINY_SCALE, 1.0)
+	visible = false
+	var rise := create_tween()
+	rise.tween_interval(delay)
+	rise.tween_callback(show)
+	rise.tween_property(self, "scale", Vector3.ONE, Look.TOMB_RISE_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
 
 static func _prepare() -> void:
 	if _stone_mesh != null:

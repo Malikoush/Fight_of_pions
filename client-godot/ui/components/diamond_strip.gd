@@ -32,12 +32,18 @@ func _draw() -> void:
 	var half := diamond / 2.0
 	for index in count:
 		var center := Vector2(half + index * (diamond + Look.GAP_XS), size.y / 2.0)
-		var outline := PackedVector2Array([
-			center + Vector2(0, -half), center + Vector2(half, 0),
-			center + Vector2(0, half), center + Vector2(-half, 0), center + Vector2(0, -half),
-		])
+		var path := DiamondStrip.outline(center, half)
 		if index < filled:
-			draw_colored_polygon(outline.slice(0, 4), Look.GOLD)
-			draw_polyline(outline, Look.INK, Look.DIAMOND_OUTLINE / 2.0, true)
+			draw_colored_polygon(path.slice(0, 4), Look.GOLD)
+			draw_polyline(path, Look.INK, Look.DIAMOND_OUTLINE / 2.0, true)
 		else:
-			draw_polyline(outline, Look.GOLD, Look.DIAMOND_OUTLINE, true)
+			draw_polyline(path, Look.GOLD, Look.DIAMOND_OUTLINE, true)
+
+
+## Le tour fermé d'un losange de ce centre et de cette demi-diagonale (le premier point est
+## répété à la fin ; sans lui, c'est le polygone à remplir).
+static func outline(center: Vector2, half: float) -> PackedVector2Array:
+	return PackedVector2Array([
+		center + Vector2(0, -half), center + Vector2(half, 0),
+		center + Vector2(0, half), center + Vector2(-half, 0), center + Vector2(0, -half),
+	])

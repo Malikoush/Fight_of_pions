@@ -7,18 +7,13 @@ extends RefCounted
 
 ## La sorte d'un événement (`PionPlaced`, `TurnEnded`…).
 static func kind(event: Variant) -> String:
-	if event is String:
-		return event
-	if event is Dictionary and not event.is_empty():
-		return event.keys()[0]
-	return ""
+	return Wire.tag(event)
 
 
 ## Les données d'un événement, ou un dictionnaire vide.
 static func payload(event: Variant) -> Dictionary:
-	if event is Dictionary and not event.is_empty() and event.values()[0] is Dictionary:
-		return event.values()[0]
-	return {}
+	var data: Variant = Wire.content(event)
+	return data if data is Dictionary else {}
 
 
 ## Les pions posés dans ces événements (`{"id": 3, "owner": "One"}`), dans l'ordre.

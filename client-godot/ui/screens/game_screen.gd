@@ -18,6 +18,13 @@ extends Control
 ## - une carte jouable : le choix commence (lanceur, puis cibles), chaque étape étant un
 ##   aperçu du serveur ; une fois complète, la carte part coup par coup ;
 ## - une case où rien n'est permis : un refus (le pion tremble, la case se voile).
+##
+## Le journal des coups : en paysage, une colonne à gauche ; en portrait, une page qu'ouvre
+## le bouton à côté du tour.
+##
+## Les vues passent par une file : chacune attend que la précédente ait fini de s'animer
+## (le bot joue sans pause). Tant que des vues attendent, celle qui est affichée est
+## périmée : aucun geste n'est pris.
 
 ## Le joueur demande ce coup, recopié de la vue.
 signal play_requested(action: Variant)
@@ -44,8 +51,14 @@ var _board: Board3D
 var _view: ViewData
 var _waiting_reply := false
 ## Les coups d'une carte complète envoyés et pas encore confirmés : on n'affiche pas les
-## vues intermédiaires (le choix du lanceur, des cibles), seulement la dernière.
+## vues intermédiaires (le choix du lanceur, des cibles), seulement la dernière, avec les
+## événements de toutes.
 var _sequence_left := 0
+var _carried_events: Array = []
+## Les vues reçues qui attendent leur tour (`[vue, événements]`), et la fin de l'animation
+## de la vue affichée.
+var _queue: Array[Array] = []
+var _playing: Tween
 var _landscape := false
 var _layout: Control
 var _hovered := ViewData.NO_CELL
@@ -78,6 +91,13 @@ var _choice_panel: ChoicePanel
 var _action_menu: ActionMenu
 var _banner: PanelContainer
 var _banner_show: Tween
+var _journal := GameJournal.new()
+var _journal_panel: JournalPanel
+var _journal_button: Button
+## En portrait, la page du journal, par-dessus tout ; et la ligne du tour qui porte son bouton.
+var _journal_page: PanelContainer
+var _journal_page_column: VBoxContainer
+var _top_row: HBoxContainer
 
 
 func _init(board: Board3D) -> void:
@@ -104,6 +124,7 @@ func _ready() -> void:
 	_build_banner()
 	_action_menu = ActionMenu.new()
 	_action_menu.option_chosen.connect(_on_menu_option)
+	_build_journal()
 
 	_board.cell_clicked.connect(_on_cell_clicked)
 	_board.cell_hovered.connect(_on_cell_hovered)
@@ -119,29 +140,55 @@ func _exit_tree() -> void:
 	_board.empty_tapped.disconnect(_leave_hare_step)
 
 
-## Affiche cette vue et ce qui s'est passé depuis la précédente.
+## Affiche cette vue et ce qui s'est passé depuis la précédente, dès que les vues reçues
+## avant elle ont fini de s'animer.
 func show_view(view: ViewData, events: Array) -> void:
+	_carried_events.append_array(events)
 	if _sequence_left > 0:
 		_sequence_left -= 1
 		if _sequence_left > 0:
 			return
+	_queue.append([view, _carried_events])
+	_carried_events = []
+	if _playing == null or not _playing.is_running():
+		_play_next()
+
+
+## Affiche la vue suivante de la file, puis attend la fin de son animation.
+func _play_next() -> void:
+	while not _queue.is_empty():
+		var next: Array = _queue.pop_front()
+		var duration := _apply_view(next[0], next[1])
+		if duration > 0.0:
+			_playing = create_tween()
+			_playing.tween_interval(duration)
+			_playing.tween_callback(_play_next)
+			return
+
+
+## Vrai si des vues attendent leur tour : celle qui est affichée est périmée.
+func _is_behind() -> bool:
+	return not _queue.is_empty()
+
+
+func _apply_view(view: ViewData, events: Array) -> float:
+	var turn_before := _view.turn() if _view != null else view.turn()
+	_journal_panel.set_names(view.viewer(), {view.viewer(): Labels.YOU, view.opponent(): opponent_name})
+	_journal_panel.add_entries(_journal.lines(events, view, turn_before, catalog))
 	_view = view
 	_waiting_reply = false
 	_end_choice()
 	_leave_hare_step()
 	_action_menu.close()
 	var me := view.viewer()
-	var dropped: Array[int] = []
 	var opponent_placed: Array[int] = []
 	for pion in GameEvents.placed_pions(events):
-		var id: int = pion.get("id", -1)
-		dropped.append(id)
 		if pion.get("owner") != me:
-			opponent_placed.append(id)
+			opponent_placed.append(pion.get("id", -1))
 	if not opponent_placed.is_empty():
 		_last_opponent_pions = opponent_placed
 
-	_board.show_view(view, dropped)
+	var duration := _board.show_view(view, events)
 	_board.show_last(_last_opponent_pions)
 	_opponent_panel.show_side(view, view.opponent(), opponent_name)
 	_my_panel.show_side(view, me, Labels.YOU)
@@ -158,6 +205,7 @@ func show_view(view: ViewData, events: Array) -> void:
 	if my_main_turn and not _was_my_turn:
 		_announce_turn()
 	_was_my_turn = my_main_turn
+	return duration
 
 
 ## La réponse du serveur à l'aperçu du choix en cours.
@@ -174,6 +222,7 @@ func on_refused() -> bool:
 	var was_sending := _sequence_left > 0
 	_waiting_reply = false
 	_sequence_left = 0
+	_carried_events = []
 	_board.show_ghost(ViewData.NO_CELL, "", false)
 	_end_choice()
 	_refresh_main_button()
@@ -186,6 +235,7 @@ func on_refused() -> bool:
 func on_connection_lost() -> void:
 	_waiting_reply = false
 	_sequence_left = 0
+	_carried_events = []
 	_end_choice()
 	_stale_previews = 0
 	_leave_hare_step()
@@ -203,7 +253,7 @@ func set_notice(text: String) -> void:
 # --- Le choix d'une carte ---
 
 func _on_card_chosen(slot: int) -> void:
-	if _view == null or _waiting_reply or _session != null:
+	if _view == null or _waiting_reply or _session != null or _is_behind():
 		return
 	var use_attack: Variant = _view.use_attack(slot)
 	if use_attack == null:
@@ -266,7 +316,7 @@ func _end_choice() -> void:
 # --- Les gestes sur le plateau ---
 
 func _on_cell_clicked(cell: Vector2i) -> void:
-	if _view == null or _waiting_reply:
+	if _view == null or _waiting_reply or _is_behind():
 		return
 	if _session != null:
 		_click_during_choice(cell)
@@ -311,7 +361,7 @@ func _kinds_at(cell: Vector2i) -> Array[String]:
 
 
 func _on_menu_option(kind: String) -> void:
-	if _view == null or _waiting_reply:
+	if _view == null or _waiting_reply or _is_behind():
 		return
 	if kind == PLACE:
 		_place(_menu_cell)
@@ -363,7 +413,7 @@ func _place(cell: Vector2i) -> void:
 
 func _on_cell_hovered(cell: Vector2i) -> void:
 	_hovered = cell
-	if _view == null or _waiting_reply:
+	if _view == null or _waiting_reply or _is_behind():
 		return
 	if _session != null or _hare_from != ViewData.NO_CELL:
 		# Le survol (aimanté) désigne la case proposée qui serait choisie.
@@ -377,8 +427,11 @@ func _on_cell_hovered(cell: Vector2i) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Échap (PC) annule le choix en cours ou le pas du Lièvre.
-	if event.is_action_pressed(&"ui_cancel") and (_session != null or _hare_from != ViewData.NO_CELL):
+	# Échap (PC) ferme la page du journal, ou annule le choix en cours ou le pas du Lièvre.
+	if event.is_action_pressed(&"ui_cancel") and _journal_page.visible:
+		_show_journal_page(false)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(&"ui_cancel") and (_session != null or _hare_from != ViewData.NO_CELL):
 		_end_choice()
 		_leave_hare_step()
 		get_viewport().set_input_as_handled()
@@ -402,7 +455,7 @@ func _refresh_main_button() -> void:
 			var action: Variant = _view.simple_action(kind)
 			if action != null:
 				_main_action = action
-				_show_main_button(Labels.ACTION_LABELS[kind], not _waiting_reply)
+				_show_main_button(Labels.ACTION_LABELS[kind], not _waiting_reply and not _is_behind())
 				return
 	_show_waiting()
 
@@ -422,6 +475,8 @@ func _show_waiting() -> void:
 
 
 func _on_main_button() -> void:
+	if _is_behind():
+		return
 	if _view != null and _view.is_over():
 		home_requested.emit()
 	elif _main_action != null:
@@ -490,6 +545,30 @@ func _build_pill() -> void:
 	_pill.add_child(row)
 
 
+func _build_journal() -> void:
+	_journal_panel = JournalPanel.new()
+	_journal_button = Ui.icon_button("journal", Labels.JOURNAL_TITLE)
+	_journal_button.pressed.connect(_show_journal_page.bind(true))
+	_top_row = Ui.hbox(0)
+	_journal_page = PanelContainer.new()
+	_journal_page.theme_type_variation = ThemeBuilder.OVERLAY
+	_journal_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# La page arrête les touchers : le plateau, dessous, n'en reçoit aucun.
+	_journal_page.mouse_filter = Control.MOUSE_FILTER_STOP
+	_journal_page.visible = false
+	_journal_page_column = Ui.vbox(Look.GAP_M)
+	var close := Ui.button(Labels.CLOSE, ThemeBuilder.SECONDARY_BUTTON)
+	close.pressed.connect(_show_journal_page.bind(false))
+	_journal_page_column.add_child(close)
+	_journal_page.add_child(Ui.page(_journal_page_column))
+	add_child(_journal_page)
+
+
+## Ouvre ou ferme la page du journal (portrait).
+func _show_journal_page(shown: bool) -> void:
+	_journal_page.visible = shown and not _landscape
+
+
 func _build_banner() -> void:
 	_banner = PanelContainer.new()
 	_banner.theme_type_variation = ThemeBuilder.BANNER
@@ -515,14 +594,21 @@ func _on_resized() -> void:
 ## leurs boîtes changent.
 func _arrange(landscape: bool) -> void:
 	_landscape = landscape
-	for item: Control in [_opponent_panel, _my_panel, _pill, _notice, _action_slot, _board_area, _arsenal, _choice_panel]:
+	for item: Control in [_opponent_panel, _my_panel, _pill, _notice, _action_slot, _board_area, _arsenal, _choice_panel, _journal_panel, _journal_button]:
 		if item.get_parent() != null:
 			item.get_parent().remove_child(item)
+	if _top_row.get_parent() != null:
+		_top_row.get_parent().remove_child(_top_row)
+	for old in _top_row.get_children():
+		old.queue_free()
 	if _layout != null:
 		_layout.queue_free()
+	_show_journal_page(false)
 
 	if landscape:
 		var row := Ui.hbox(Look.GAP_XL)
+		_journal_panel.custom_minimum_size.x = Look.JOURNAL_WIDTH
+		row.add_child(_journal_panel)
 		var left := Ui.vbox(Look.GAP_M)
 		left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		left.add_child(_board_area)
@@ -543,7 +629,17 @@ func _arrange(landscape: bool) -> void:
 	else:
 		var column := Ui.vbox(Look.GAP_M)
 		column.add_child(_opponent_panel)
-		column.add_child(_pill)
+		# La pastille du tour reste au centre ; le bouton du journal se range à droite.
+		var right := Ui.hbox(0)
+		right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		right.alignment = BoxContainer.ALIGNMENT_END
+		right.add_child(_journal_button)
+		var left := Ui.gap(Vector2.ZERO)
+		left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_top_row.add_child(left)
+		_top_row.add_child(_pill)
+		_top_row.add_child(right)
+		column.add_child(_top_row)
 		column.add_child(_notice)
 		column.add_child(_board_area)
 		column.add_child(_arsenal)
@@ -551,6 +647,9 @@ func _arrange(landscape: bool) -> void:
 		column.add_child(_action_slot)
 		column.add_child(_choice_panel)
 		_my_panel.set_identity_visible(false)
+		_journal_panel.custom_minimum_size.x = 0.0
+		_journal_page_column.add_child(_journal_panel)
+		_journal_page_column.move_child(_journal_panel, 0)
 		_layout = Ui.page(column)
 	add_child(_layout)
 	_apply_mode()
@@ -559,6 +658,7 @@ func _arrange(landscape: bool) -> void:
 		add_child(_action_menu)
 	move_child(_banner, -1)
 	move_child(_action_menu, -1)
+	move_child(_journal_page, -1)
 
 
 ## Montre l'arsenal et la barre, ou, pendant le choix d'une carte, le panneau de choix à
@@ -575,9 +675,10 @@ func _frame_board() -> void:
 	if not _board_area.is_inside_tree():
 		return
 	var area := _board_area.get_global_rect()
-	# Les marges de la page servent au texte, pas au plateau : il va jusqu'au bord gauche, et
-	# jusqu'au bord droit en portrait.
+	# En portrait, les marges de la page servent au texte, pas au plateau : il va d'un bord
+	# de l'écran à l'autre. En paysage, il reste entre le journal et la colonne de droite.
+	var left := area.position.x if _landscape else 0.0
 	var right := area.end.x if _landscape else get_viewport_rect().size.x
-	_board.frame(Rect2(0.0, area.position.y, right, area.size.y))
+	_board.frame(Rect2(left, area.position.y, right - left, area.size.y))
 	if _banner.visible:
 		_center_banner()

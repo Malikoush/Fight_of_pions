@@ -92,6 +92,22 @@ const CHOSEN_BORDER := GOLD
 ## Pendant un choix, un toucher s'aimante à la case proposée la plus proche, jusqu'à cette
 ## distance (en cases).
 const MAGNET_RADIUS := 0.9
+## Les anneaux des statuts, sous un pion (effets/anneau-*.svg) : son milieu (`band`), son
+## bord (`edge`), et ses traits (`dash`, `dashes` sur le tour ; 0 pour un anneau plein).
+## Immobilisé : une chaîne grise ; protégé : un anneau d'or ; pacte : des tirets magenta.
+const PACT := Color("a33a7e")
+const STATUS_RINGS := {
+	"Immobilized": {"band": Color("56636a"), "edge": Color("2b3438"), "dash": Color("b4bfc3"), "dashes": 20.0},
+	"Protected": {"band": GOLD, "edge": INK, "dash": GOLD, "dashes": 0.0},
+	"Pact": {"band": Color(PACT, 0.0), "edge": Color(PACT, 0.0), "dash": PACT, "dashes": 16.0},
+}
+## Les éclats des événements : l'or d'une attaque lancée, le rouge d'un pion tué, la
+## poussière d'un mur creusé.
+const ATTACK_PULSE := GOLD
+const KILL_PULSE := Color("ff5a3c")
+const DIG_PULSE := Color("c9a96b")
+## Terre brûlée : la braise du panneau du joueur visé.
+const SCORCHED := Color("f0866a")
 ## Le palet fantôme (survol, coup envoyé en attente de réponse) : sa transparence.
 const GHOST_ALPHA := 0.55
 
@@ -109,6 +125,8 @@ const FONT_HEADING := 22
 const FONT_BODY := 17
 const FONT_BUTTON := 21
 const FONT_NUMBER := 32
+## Les faits d'un panneau de joueur (infirmerie, jetons…).
+const FONT_FACT := 14
 ## Le graissage de la police gothique des titres (police variable).
 const DISPLAY_WEIGHT := 800
 ## L'espacement des lettres des libellés en capitales (boutons, pastilles).
@@ -173,6 +191,30 @@ const FONT_CARD_NAME := 12
 const FONT_CARD_COST := 17
 const FONT_CARD_TAG := 11
 
+## Les badges des pions, par-dessus le plateau : leur taille suit celle d'une case à l'écran
+## (en part de sa largeur), entre deux bornes en points ; un losange chiffré est un peu plus
+## grand, et son nombre en occupe cette part. Le calque des badges passe sous l'interface.
+const BADGE_CELL_SHARE := 0.55
+const BADGE_MIN := 18.0
+const BADGE_MAX := 30.0
+const NUMBER_BADGE_SHARE := 1.15
+const BADGE_NUMBER_SHARE := 0.5
+const BADGE_GAP := 2
+const BADGE_CANVAS_LAYER := 0
+## Les badges se posent au bord droit du dessus d'un pion (en part de son rayon).
+const BADGE_ANCHOR_SIDE := 0.35
+## Le journal des coups : les lignes affichées (les plus anciennes s'en vont), la largeur de
+## sa colonne en paysage, celle de la colonne des tours, et le palet de chaque ligne.
+const JOURNAL_SHOWN := 80
+const JOURNAL_WIDTH := 300
+const JOURNAL_TURN_WIDTH := 32
+const JOURNAL_CHIP := Vector2(24, 18)
+## Un bouton carré à icône, et le voile d'une page qui couvre l'écran.
+const ICON_BUTTON_SIZE := 44
+const OVERLAY_FILL := Color(FOREST_DEEP, 0.97)
+## Les faits d'un panneau de joueur (infirmerie, jetons…) : la taille de leur icône.
+const FACT_ICON_SIZE := 16
+
 ## La barre de chargement de l'écran de démarrage.
 const PROGRESS_SIZE := Vector2(210, 6)
 
@@ -190,6 +232,34 @@ const PION_MOVE := 0.22
 const PION_DROP_TIME := 0.24
 const PION_SQUASH := 0.72
 const PION_SQUASH_TIME := 0.22
+## Ce qui se passe (E3d2), joué dans l'ordre des événements (`BoardTimeline`) :
+## - l'éclat d'une case (attaque lancée, pion tué, mur creusé) : un anneau qui s'élargit en
+##   s'effaçant ; l'attaque laisse la suite commencer avant la fin de son éclat ;
+const PULSE_TIME := 0.45
+const ATTACK_BEAT := 0.3
+const DIG_BEAT := 0.3
+## - un pion tué gonfle (cette part du temps), puis se ratatine en s'élevant de cette
+##   hauteur ;
+const KILL_TIME := 0.32
+const KILL_POP := 1.2
+const KILL_POP_SHARE := 0.3
+const KILL_RISE := 0.35
+## - une tombe sort du sol ;
+const TOMB_RISE_TIME := 0.2
+## - un saut (Saut du loup, Interchange, pas de la reine…) : sa durée, sa hauteur par case
+##   franchie et sa hauteur maximale ; dans un échange, le second saute moins haut ;
+const JUMP_TIME := 0.38
+const JUMP_ARC_PER_CELL := 0.22
+const JUMP_ARC_MAX := 0.9
+const SWAP_LOW_ARC := 0.45
+## - le tir d'un garde : la balle vole en cloche.
+const SHOT_TIME := 0.3
+const SHOT_ARC := 0.7
+## Ce qui disparaît ou apparaît part d'une échelle presque nulle (une échelle nulle n'a pas
+## d'inverse).
+const TINY_SCALE := 0.01
+## Un pion qui change de taille (devient enfant, ou ne l'est plus).
+const STATUS_CHANGE_TIME := 0.25
 ## Le recadrage de la caméra quand le plateau change (une case creusée).
 const REFRAME_TIME := 0.45
 ## Le voile d'une case refusée s'efface en si peu de temps.
@@ -248,6 +318,29 @@ const PION_UNDERSIDE := 0.6
 const PION_SHADOW_SIZE := 1.0
 const PION_SHADOW_ALPHA := 0.32
 const PION_SHADOW_SOFTNESS := 0.45
+## L'anneau d'un statut sous un pion : son rayon, sa demi-épaisseur (en part de la case), et
+## la part de son milieu (le reste est son bord).
+const STATUS_RING := 0.45
+const STATUS_RING_WIDTH := 0.045
+const STATUS_RING_CORE := 0.55
+## L'éclat d'un événement : l'anneau (rayon et demi-épaisseur, en part de la case) et la
+## taille où il commence et finit ; la balle du tir de la reine.
+const PULSE_RING := 0.4
+const PULSE_RING_WIDTH := 0.05
+const PULSE_START_SCALE := 0.6
+const PULSE_END_SCALE := 1.6
+const SHOT_RADIUS := 0.1
+## Un enfant (Familia) est un pion plus petit (design/elements/LISEZMOI.txt).
+const CHILD_SCALE := 0.68
+## La couronne d'une reine : son rayon, la hauteur de ses creux et de ses pointes, son
+## nombre de pointes, son trait, et la pierre sur son devant.
+const CROWN_RADIUS := 0.25
+const CROWN_BASE := 0.12
+const CROWN_PEAK := 0.27
+const CROWN_POINTS := 5
+const CROWN_INK := 0.016
+const CROWN_JEWEL_RADIUS := 0.04
+const CROWN_JEWEL := Color("e84a5f")
 ## La tombe : une stèle posée au fond de sa case.
 const TOMB_SIZE := Vector3(0.3, 0.34, 0.11)
 const TOMB_OFFSET := Vector2(-0.22, -0.22)

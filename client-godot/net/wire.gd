@@ -39,3 +39,21 @@ static func normalize(value: Variant) -> Variant:
 				fields[key] = normalize(value[key])
 			return fields
 	return value
+
+
+## Le nom d'une valeur étiquetée du serveur : `"EndTurn"` pour une valeur sans donnée,
+## sa seule clé sinon (`{"Place": {…}}` → `"Place"`) ; vide pour autre chose. Les coups, les
+## décisions, les événements et les effets s'écrivent tous ainsi.
+static func tag(value: Variant) -> String:
+	if value is String:
+		return value
+	if value is Dictionary and value.size() == 1:
+		return value.keys()[0]
+	return ""
+
+
+## La donnée d'une valeur étiquetée (`{"Tokens": 2}` → `2`), ou `null` sans donnée.
+static func content(value: Variant) -> Variant:
+	if value is Dictionary and value.size() == 1:
+		return value.values()[0]
+	return null

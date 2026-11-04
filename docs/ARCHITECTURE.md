@@ -215,15 +215,21 @@ client-godot/
   main.gd / main.tscn   la racine : le plateau 3D, la couche d'interface, l'écran affiché ;
                         elle enchaîne les écrans selon ce que répond le serveur
   net/server_link.gd    (autoload ServerLink) la WebSocket, la place gardée et sa reprise
-  net/wire.gd           le format du fil (JSON, nombres entiers remis en entiers)
+  net/wire.gd           le format du fil (JSON, nombres entiers remis en entiers, valeurs
+                        étiquetées `{"Place": …}` lues par `tag` et `content`)
   game/view_data.gd     la vue du serveur, avec des lectures typées et les coups rangés par case
   game/game_events.gd   la lecture des événements joints à une vue (pour animer)
   game/card_catalog.gd  le catalogue des cartes reçu du serveur (noms et textes)
   game/choice_session.gd  le choix d'une carte en cours, par aperçus du serveur
+  game/game_journal.gd  le journal des coups, raconté à partir des événements
   board/                le plateau 3D : grid_geometry.gd (la seule conversion case ↔ monde),
                         board_3d.gd (cases, caméra, toucher), pion_3d.gd, tomb_3d.gd,
-                        board_materials.gd, shaders/
-  ui/                   ui.gd (les briques), components/ (panneau de joueur, losanges),
+                        crown_3d.gd, pion_status.gd (ce que les effets donnent à un pion),
+                        board_timeline.gd (le déroulé d'une vue, lu dans ses événements),
+                        badge_layer.gd (les badges, en 2D par-dessus), board_materials.gd,
+                        shaders/
+  ui/                   ui.gd (les briques), components/ (panneau de joueur, losanges,
+                        cartes, arsenal, choix, menu de case, journal),
                         screens/ (démarrage, accueil, partie)
   theme/look.gd         l'apparence : couleurs, tailles, marges et durées (comme theme.rs)
   theme/theme_builder.gd  le thème Godot, construit à partir de `Look`
@@ -242,7 +248,16 @@ client-godot/
   - le palet qui flotte au-dessus de la case touchée ;
   - le refus d'une case où rien n'est permis : le pion tremble, ou un voile terne couvre la case vide.
 
-  La vue qui arrive fait toujours foi. Les animations viennent des événements joints à la vue (`GameEvents`) : chute des pions posés (`PionPlaced`), marque du dernier coup adverse. Une vue sans événement, comme à la reprise d'une partie, s'affiche sans animation.
+  La vue qui arrive fait toujours foi. Une vue sans événement, comme à la reprise d'une partie, s'affiche sans animation.
+- **Ce qui se passe s'anime** (E3d2), d'après les seuls événements joints à la vue :
+  - le déroulé (`BoardTimeline`) date chaque animation dans l'ordre des événements : éclat d'or de l'attaque lancée, tir de la reine (une balle en cloche), pions tués (ils gonflent, puis se ratatinent en s'élevant, dans un anneau rouge), tombes qui sortent du sol, sauts en arc et échanges, mur creusé, poses. Des événements de même sorte qui se suivent jouent ensemble ; une autre sorte attend la fin de la précédente. Les statuts changent à la fin du déroulé ;
+  - l'écran de partie fait passer les vues par une file : chacune attend que la précédente ait fini de s'animer, car le bot joue sans pause. Tant que des vues attendent, aucun geste n'est pris : la vue affichée est périmée ;
+  - une carte envoyée coup par coup ne montre que sa dernière vue, avec les événements de toutes.
+- **Le journal des coups** (E3d3) raconte la partie à partir des seuls événements (`GameJournal`) : qui pose, qui lance quelle carte et depuis où, les pions tués et déplacés, les statuts posés, le mur creusé, les jetons, Terre brûlée. Les cases s'écrivent comme le moteur les nomme (« C5 », sur toute la grille, mur compris) et les cartes avec les noms du catalogue. En paysage, il occupe une colonne à gauche du plateau ; en portrait, un bouton à côté du tour l'ouvre en page. Il commence avec la connexion : à la reprise d'une partie, le serveur n'envoie pas les coups passés.
+- **Ce qui dure se voit** (E3d1), tout lu dans la vue :
+  - sur un pion, d'après les effets continus qui le visent (`PionStatus`) : un anneau à ses pieds pour son statut le plus fort (immobilisé : chaîne grise ; protégé : or ; pacte : tirets magenta), la taille d'un enfant (Familia), une couronne en 3D pour une reine ;
+  - au-dessus de lui, ses badges (`BadgeLayer`) : un par sorte d'effet (immobilisé, protégé ou enfant, pacte, retour d'Interchange), puis un losange chiffré pour les gardes d'une reine et les jetons de pas du Lièvre. Les badges sont en 2D, dans un calque entre le plateau et l'interface : nets, et d'une taille qui suit celle des cases à l'écran, entre deux bornes ;
+  - dans le panneau de chaque joueur, une ligne par chose qui dure : Terre brûlée (jusqu'à quel tour, et un bord de braise en pointillés quand il attend), gardes de sa reine, piles de jetons du Massacre divin, pions à l'infirmerie et au cimetière.
 - **Jouer une carte sans règle** (protocole, « Le déroulé »). Toucher une carte vive (son `UseAttack` est permis) ouvre un choix (`ChoiceSession`) : la liste des coups choisis, et l'aperçu que le serveur rend pour elle. Les cases proposées sont celles des coups `Choose` de cet aperçu ; « JOUER LA CARTE » et « VISER LES JETONS » ne s'allument que si l'aperçu propose `FinishAttack` ou `ChooseEnemyTokens`. Quand l'aperçu répond `null`, la carte part coup par coup ; annuler, c'est oublier la liste. Un toucher pendant un choix s'aimante à la case proposée la plus proche : viser une petite case au doigt est difficile, et seules ces cases comptent alors.
 - **Une case, plusieurs coups.** Les coups permis sont rangés par case (le pas du Lièvre sous sa case de départ). Une case où seule la pose est permise pose tout de suite ; sinon, un petit menu propose chaque sorte de coup, et le pas du Lièvre demande ensuite sa case d'arrivée.
 - **Pendant le développement** (E3a à E3e), le client joue la variante « règles actuelles » contre le bot aléatoire, qui ne charge pas la machine.

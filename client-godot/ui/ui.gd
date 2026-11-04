@@ -31,6 +31,18 @@ static func button(text: String, variation: StringName) -> Button:
 	return item
 
 
+## Un bouton carré qui ne montre qu'une icône des éléments fournis (`ThemeBuilder.ICON_BUTTON`).
+static func icon_button(name: String, tooltip: String) -> Button:
+	var item := Button.new()
+	item.theme_type_variation = ThemeBuilder.ICON_BUTTON
+	item.icon = load(ICON_DIR + name + ".svg")
+	item.expand_icon = true
+	item.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	item.tooltip_text = tooltip
+	item.custom_minimum_size = Vector2.ONE * Look.ICON_BUTTON_SIZE
+	return item
+
+
 ## Une icône blanche des éléments fournis, teintée de cette couleur.
 static func icon(name: String, color: Color, size: float = Look.ICON_SIZE) -> TextureRect:
 	return picture(ICON_DIR + name + ".svg", Vector2.ONE * size, color)
@@ -38,9 +50,9 @@ static func icon(name: String, color: Color, size: float = Look.ICON_SIZE) -> Te
 
 ## Le palet d'un joueur, en image (panneaux de joueur), recadré sur le palet : le SVG a
 ## la toile commune des éléments du plateau, bien plus grande que lui.
-static func chip(player: String) -> TextureRect:
+static func chip(player: String, size: Vector2 = Look.CHIP_SIZE) -> TextureRect:
 	var file := "pion-j1.svg" if player == ViewData.PLAYER_ONE else "pion-j2.svg"
-	var item := picture(PION_DIR + file, Look.CHIP_SIZE, Color.WHITE)
+	var item := picture(PION_DIR + file, size, Color.WHITE)
 	var full: Texture2D = item.texture
 	var cropped := AtlasTexture.new()
 	cropped.atlas = full

@@ -5,6 +5,14 @@ extends Node3D
 ## survolée ou touchée ; il ne sait pas ce qui est permis : l'écran de partie le lui dit
 ## (`show_mark`, `show_ghost`, `flash_refusal`).
 ##
+## Ce qui se passe s'anime d'après les événements joints à la vue, dans leur ordre
+## (`BoardTimeline`) : l'éclat de l'attaque lancée, le tir de la reine, les pions tués, les
+## tombes, les sauts et les échanges, le mur creusé, les poses. L'état final est toujours
+## celui de la vue.
+##
+## Les effets continus se voient sur les pions (`PionStatus`) : anneau, taille d'enfant,
+## couronne en 3D ; leurs badges, dans un calque 2D par-dessus (`BadgeLayer`).
+##
 ## Du mur, on ne voit que les cases qui touchent le plateau (la première rangée, et les
 ## voisines des cases creusées). La caméra cadre les cases jouables, plus une demi-case,
 ## dans le rectangle que l'écran lui laisse (`frame`) : sur un téléphone, c'est la largeur
@@ -43,6 +51,9 @@ var _tombs: Dictionary[int, Node3D] = {}
 ## La case de chaque pion vivant, d'après la dernière vue.
 var _pion_cells: Dictionary[int, Vector2i] = {}
 var _pieces: Node3D
+var _badges: BadgeLayer
+## Les statuts de la vue en cours, montrés quand son déroulé a fini.
+var _statuses_later: Tween
 var _mark: MeshInstance3D
 var _refusal: MeshInstance3D
 var _refusal_fade: Tween
@@ -81,6 +92,11 @@ func _ready() -> void:
 
 	_pieces = Node3D.new()
 	add_child(_pieces)
+	_badges = BadgeLayer.new()
+	_badges.visible = visible
+	add_child(_badges)
+	# Un calque 2D ne suit pas la visibilité d'un nœud 3D : on la lui recopie.
+	visibility_changed.connect(func() -> void: _badges.visible = visible)
 	_mark = _flat_mark(Look.MARK_SIZE, BoardMaterials.mark(Look.MARK_FILL, Look.MARK_BORDER))
 	_refusal = _flat_mark(Look.MARK_SIZE, BoardMaterials.mark(Look.REFUSAL_FILL, Look.REFUSAL_BORDER))
 	_mark_materials = {
@@ -93,19 +109,25 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_update_camera.bind(false))
 
 
-## Dessine cette vue : cases, mur visible, pions et tombes. Les pions de `dropped` (par
-## identité) viennent d'être posés : ils tombent sur leur case.
-func show_view(view: ViewData, dropped: Array[int] = []) -> void:
+## Dessine cette vue (cases, mur visible, pions et tombes) en animant ce que racontent ses
+## événements. Rend la durée de l'animation, en secondes (0 sans rien à animer).
+func show_view(view: ViewData, events: Array = []) -> float:
 	if _geometry == null or _geometry.size != view.grid_size():
 		_geometry = GridGeometry.new(view.grid_size())
+	var timeline := BoardTimeline.of(events)
 	var framed := _bounds
 	_update_tiles(view)
-	_update_pieces(view, dropped)
+	_update_pieces(view, timeline)
+	for pulse in timeline.pulses:
+		_pulse(pulse["cell"], pulse["color"], pulse["delay"])
+	for shot in timeline.shots:
+		_shoot(shot["from"], shot["to"], shot["delay"])
 	# Un palet en attente que cette vue n'a pas posé (le coup a abouti ailleurs) disparaît.
 	if _ghost_lifted:
 		show_ghost(ViewData.NO_CELL, "", false)
 	_update_last_marks()
 	_update_camera(framed.has_volume() and framed != _bounds)
+	return timeline.length
 
 
 ## Cadre le plateau dans ce rectangle de l'écran (en coordonnées de la fenêtre).
@@ -225,15 +247,17 @@ func _tile_of(view: ViewData, cell: Vector2i) -> int:
 	return -1
 
 
-func _update_pieces(view: ViewData, dropped: Array[int]) -> void:
+func _update_pieces(view: ViewData, timeline: BoardTimeline) -> void:
 	var seen_tombs := {}
+	var statuses: Dictionary[int, PionStatus] = {}
 	_pion_cells.clear()
 	for cell: Vector2i in _drawn:
 		var pion: Variant = view.pion_at(cell)
 		if pion is Dictionary:
 			var id: int = pion.get("id", -1)
 			_pion_cells[id] = cell
-			_place_pion(pion, cell, id in dropped)
+			_place_pion(pion, cell, timeline)
+			statuses[id] = PionStatus.of(view.effects_on(id))
 		var tomb: Variant = view.tomb_at(cell)
 		if tomb is Dictionary:
 			var dead: int = tomb.get("id", -1)
@@ -243,26 +267,62 @@ func _update_pieces(view: ViewData, dropped: Array[int]) -> void:
 				stone.setup(tomb)
 				_pieces.add_child(stone)
 				_tombs[dead] = stone
+				if timeline.tombs.has(dead):
+					stone.rise_in(timeline.tombs[dead])
 			_tombs[dead].position = _ground(cell)
+	# Un pion tué part en animation, puis se libère tout seul ; les autres absents, aussitôt.
+	for id: int in _pions.keys():
+		if not _pion_cells.has(id) and timeline.kills.has(id):
+			var kill: Dictionary = timeline.kills[id]
+			var cell: Vector2i = kill["cell"]
+			var at := _ground(cell) if _drawn.has(cell) else _pions[id].position
+			(_pions[id] as Pion3D).vanish(kill["delay"], at, timeline.moves.get(id, {}))
+			_pions.erase(id)
 	_remove_missing(_pions, _pion_cells)
 	_remove_missing(_tombs, seen_tombs)
+	# Les statuts changent une fois le déroulé fini : l'anneau d'une cible ne tombe pas
+	# avant qu'on ait vu l'attaque.
+	if _statuses_later != null:
+		_statuses_later.kill()
+	if timeline.length > 0.0:
+		_statuses_later = create_tween()
+		_statuses_later.tween_interval(timeline.length)
+		_statuses_later.tween_callback(_show_statuses.bind(statuses))
+	else:
+		_show_statuses(statuses)
 
 
-## Crée la pièce de ce pion si elle n'existe pas, sinon la fait glisser à sa case. Un pion
-## qui vient d'être posé tombe : du palet fantôme qui l'attendait, s'il est là.
-func _place_pion(pion: Dictionary, cell: Vector2i, drop: bool) -> void:
+func _show_statuses(statuses: Dictionary[int, PionStatus]) -> void:
+	for id: int in statuses:
+		if _pions.has(id):
+			(_pions[id] as Pion3D).show_status(statuses[id])
+	_badges.show_statuses(statuses)
+
+
+func _process(_delta: float) -> void:
+	if visible and _camera != null and _camera.size > 0.0:
+		# La caméra est orthographique et garde sa hauteur : `size` est la hauteur filmée.
+		var cell_pixels := get_viewport().get_visible_rect().size.y / _camera.size * GridGeometry.CELL_SIZE
+		_badges.follow(_camera, _pions, cell_pixels)
+
+
+## Crée la pièce de ce pion si elle n'existe pas, sinon l'amène à sa case (en sautant, si
+## le déroulé le dit). Un pion qui vient d'être posé tombe : du palet fantôme qui
+## l'attendait, s'il est là.
+func _place_pion(pion: Dictionary, cell: Vector2i, timeline: BoardTimeline) -> void:
 	var id: int = pion.get("id", -1)
 	if _pions.has(id):
-		_pions[id].move_to(_ground(cell))
+		var jump: Dictionary = timeline.moves.get(id, {})
+		_pions[id].move_to(_ground(cell), jump.get("delay", 0.0), jump.get("arc", 0.0))
 		return
 	var piece := Pion3D.new()
 	piece.setup(pion)
 	piece.position = _ground(cell)
 	_pieces.add_child(piece)
 	_pions[id] = piece
-	if drop:
+	if timeline.drops.has(id):
 		var from_ghost := _ghost_cell == cell and _ghost_lifted
-		piece.drop_in(Look.PION_PENDING_LIFT if from_ghost else Look.PION_DROP_HEIGHT)
+		piece.drop_in(Look.PION_PENDING_LIFT if from_ghost else Look.PION_DROP_HEIGHT, timeline.drops[id])
 		if from_ghost:
 			show_ghost(ViewData.NO_CELL, "", false)
 
@@ -290,6 +350,45 @@ func _show_marks(kind: Marks, cells: Array[Vector2i]) -> void:
 		pool.append(_flat_mark(size, _mark_materials[kind]))
 	for index in pool.size():
 		_place_flat(pool[index], cells[index] if index < cells.size() else ViewData.NO_CELL)
+
+
+## Un éclat à plat sur cette case, après ce délai : un anneau de cette couleur qui
+## s'élargit en s'effaçant (attaque lancée, pion tué, mur creusé).
+func _pulse(cell: Vector2i, color: Color, delay: float) -> void:
+	if not _drawn.has(cell):
+		return
+	var ring := _flat_mark(GridGeometry.CELL_SIZE, BoardMaterials.pulse(color))
+	_place_flat(ring, cell)
+	ring.visible = false
+	ring.scale = Vector3.ONE * Look.PULSE_START_SCALE
+	var grow := create_tween()
+	grow.tween_interval(delay)
+	grow.tween_callback(ring.show)
+	grow.set_parallel()
+	grow.chain().tween_property(ring, "scale", Vector3.ONE * Look.PULSE_END_SCALE, Look.PULSE_TIME).set_ease(Tween.EASE_OUT)
+	grow.tween_property(ring, "transparency", 1.0, Look.PULSE_TIME).set_ease(Tween.EASE_IN)
+	grow.chain().tween_callback(ring.queue_free)
+
+
+## Le tir d'un garde de la reine, après ce délai : une balle d'or qui vole en cloche de la
+## reine à sa cible.
+func _shoot(from: Vector2i, to: Vector2i, delay: float) -> void:
+	if not (_drawn.has(from) and _drawn.has(to)):
+		return
+	var ball := MeshInstance3D.new()
+	ball.mesh = BoardMaterials.shot_mesh()
+	ball.visible = false
+	add_child(ball)
+	var start := _ground(from) + Vector3.UP * Look.PION_HEIGHT
+	var end := _ground(to) + Vector3.UP * Look.PION_HEIGHT
+	var fly := func(progress: float) -> void:
+		ball.position = BoardTimeline.along_arc(start, end, Look.SHOT_ARC, progress)
+	fly.call(0.0)
+	var flight := create_tween()
+	flight.tween_interval(delay)
+	flight.tween_callback(ball.show)
+	flight.tween_method(fly, 0.0, 1.0, Look.SHOT_TIME)
+	flight.tween_callback(ball.queue_free)
 
 
 ## Le sol d'une case : le dessus de la case, là où se posent les pièces.

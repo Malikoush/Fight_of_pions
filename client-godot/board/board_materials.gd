@@ -9,9 +9,19 @@ const PION_SHADER := "res://board/shaders/pion.gdshader"
 const GHOST_SHADER := "res://board/shaders/pion_ghost.gdshader"
 const OUTLINE_SHADER := "res://board/shaders/outline.gdshader"
 const FLAT_SHADER := "res://board/shaders/flat_mark.gdshader"
+const CROWN_SHADER := "res://board/shaders/crown.gdshader"
+## L'ordre de dessin de ce qui est posé à plat au même niveau : l'ombre d'un pion, puis
+## l'anneau de son statut, puis les marques des cases (ordre 0), toujours lisibles.
+const SHADOW_PRIORITY := -2
+const RING_PRIORITY := -1
 
 static var _pions := {}
 static var _ghosts := {}
+static var _rings := {}
+static var _pulses := {}
+static var _solids := {}
+static var _crown: ShaderMaterial
+static var _shot: SphereMesh
 
 
 ## Vrai si les pions de ce joueur sont des palets octogonaux (J2) plutôt que ronds.
@@ -112,11 +122,76 @@ static func dotted_mark(fill: Color, dot: Color, dot_size: float) -> ShaderMater
 	return material
 
 
+## L'anneau d'un statut sous un pion (`PionStatus.RING_ORDER`), partagé par tous les pions
+## qui l'ont : son milieu, son bord, et ses traits (`Look.STATUS_RINGS`).
+static func status_ring(kind: String) -> ShaderMaterial:
+	if not _rings.has(kind):
+		var look: Dictionary = Look.STATUS_RINGS[kind]
+		var material := _flat(Color.TRANSPARENT, look["band"])
+		material.set_shader_parameter(&"border", 0.0)
+		material.set_shader_parameter(&"ring", Look.STATUS_RING)
+		material.set_shader_parameter(&"ring_width", Look.STATUS_RING_WIDTH)
+		material.set_shader_parameter(&"ring_core", Look.STATUS_RING_CORE)
+		material.set_shader_parameter(&"ring_edge_color", look["edge"])
+		material.set_shader_parameter(&"ring_dash_color", look["dash"])
+		material.set_shader_parameter(&"ring_dashes", look["dashes"])
+		material.render_priority = RING_PRIORITY
+		_rings[kind] = material
+	return _rings[kind]
+
+
+## L'éclat d'un événement sur une case : un anneau seul, de cette couleur, sans voile.
+static func pulse(color: Color) -> ShaderMaterial:
+	if not _pulses.has(color):
+		var material := _flat(Color.TRANSPARENT, color)
+		material.set_shader_parameter(&"border", 0.0)
+		material.set_shader_parameter(&"ring", Look.PULSE_RING)
+		material.set_shader_parameter(&"ring_width", Look.PULSE_RING_WIDTH)
+		_pulses[color] = material
+	return _pulses[color]
+
+
+## Une matière d'une seule couleur, sans éclairage (la pierre d'une couronne, la balle d'un
+## tir).
+static func solid(color: Color) -> StandardMaterial3D:
+	if not _solids.has(color):
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = color
+		_solids[color] = material
+	return _solids[color]
+
+
+## La balle d'or que tire un garde de la reine.
+static func shot_mesh() -> SphereMesh:
+	if _shot == null:
+		_shot = SphereMesh.new()
+		_shot.radius = Look.SHOT_RADIUS
+		_shot.height = Look.SHOT_RADIUS * 2.0
+		_shot.material = solid(Look.GOLD)
+	return _shot
+
+
+## L'or des couronnes.
+static func crown() -> ShaderMaterial:
+	if _crown == null:
+		_crown = _material(CROWN_SHADER)
+		_crown.set_shader_parameter(&"gold", Look.GOLD)
+		_crown.set_shader_parameter(&"inside", Look.GOLD_DEEP)
+		_crown.set_shader_parameter(&"ink", Look.INK)
+		_crown.set_shader_parameter(&"ink_width", Look.CROWN_INK)
+		_crown.set_shader_parameter(&"light", Look.PION_LIGHT)
+		_crown.set_shader_parameter(&"shade_dark", Look.PION_SHADE_DARK)
+		_crown.set_shader_parameter(&"shade_light", Look.PION_SHADE_LIGHT)
+	return _crown
+
+
 ## L'ombre douce et ronde d'une pièce.
 static func shadow(color: Color) -> ShaderMaterial:
 	var material := _flat(color, color)
 	material.set_shader_parameter(&"round_shadow", true)
 	material.set_shader_parameter(&"softness", Look.PION_SHADOW_SOFTNESS)
+	material.render_priority = SHADOW_PRIORITY
 	return material
 
 
@@ -131,6 +206,10 @@ static func _flat(fill: Color, border: Color) -> ShaderMaterial:
 	material.set_shader_parameter(&"dot", 0.0)
 	material.set_shader_parameter(&"ring", 0.0)
 	material.set_shader_parameter(&"ring_width", 0.0)
+	material.set_shader_parameter(&"ring_core", 1.0)
+	material.set_shader_parameter(&"ring_edge_color", Color.TRANSPARENT)
+	material.set_shader_parameter(&"ring_dash_color", Color.TRANSPARENT)
+	material.set_shader_parameter(&"ring_dashes", 0.0)
 	material.set_shader_parameter(&"ink", Look.INK)
 	return material
 
