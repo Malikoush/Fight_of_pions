@@ -1,0 +1,15 @@
+Fight of Pions — éléments découpables (étape 1, piste Tournoi pop)
+
+Chaque élément existe en SVG (vectoriel) et en PNG @2x.
+
+Plateau, pions, effets, marques : tous sur la même toile de 128 x 144, ancre au centre
+du dessus de la case en (64, 90). Dans Godot : Sprite2D avec offset (0, -18) et centered = true,
+ou TileSet isométrique 2:1 de 120 x 60 (texture_origin = (0, 18)).
+Superposition, du bas vers le haut : case > marque > anneau > ombre + pion > couronne / chevron > badge.
+
+Enfant : utiliser pion-j1 / pion-j2 à l'échelle 0,68.
+Badges : 32 x 32, à placer à (+27, -46) du centre du pied, à l'échelle 4x.
+Icônes : 24 x 24, blanches, à recolorer avec modulate.
+Cartes : cadres sans texte, 220 x 306 (carte de 200 x 280 + débords de la couronne et des ailerons).
+  Le texte (nom, coût, recharge, rareté) est posé par le moteur, voir la fiche technique.
+Boutons primaires : NinePatchRect, marges gauche/droite 16, haut/bas 0.

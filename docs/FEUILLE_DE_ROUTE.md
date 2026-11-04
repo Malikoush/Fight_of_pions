@@ -1,6 +1,6 @@
 # Feuille de route
 
-Dernière mise à jour : 2026-11-03.
+Dernière mise à jour : 2026-11-04.
 
 ## Comment on avance
 
@@ -258,7 +258,27 @@ De la plus stable à la plus floue. Aucune famille « EN REFONTE » avant que sa
     - Après la relecture du gardien : un bot sans coup valable (aucun, refusé, panique) joue le premier coup permis ; les bots sont relancés après chaque message, même refusé ; `sync` redemande sa vue ; une connexion remplacée ne joue plus (`seat_taken`) ; chaque erreur a un `kind` stable pour Godot ; un aperçu vide hors de son tour est refusé.
     - Tests : 11 sur la salle et le hall (8 nouveaux, et l'aperçu réécrit pour suivre une carte entière : une pose s'arrête tout de suite, un coup de bot périmé, le coup de repli, une salle abandonnée fermée, une partie finie fermée, le plafond de salles, les bots arrêtés préviennent, une ancienne connexion qui ne débranche ni ne joue), 3 de bout en bout (`sync` en plus) ; 2 tests qui font jouer un bot en `#[ignore]`, donc la tâche des bots (`wake_bots` : sémaphore, `spawn_blocking`, une seule tâche par salle) n'a plus de test lancé, par choix (pas de test avec bot) ; 6 erreurs volontaires attrapées.
     - Connu, laissé pour plus tard : une course très improbable entre la fermeture d'une salle abandonnée et un `rejoin` au même instant.
-  - [ ] **E3 · Client Godot**.
+  - [ ] **E3 · Client Godot** (`client-godot/`, Godot 4.7, rendu Compatibilité, GDScript typé), découpé le 2026-11-04 : chaque étape donne un jeu qui tourne, du socle vers les détails. Architecture : [ARCHITECTURE.md](ARCHITECTURE.md), « Le client Godot ». Décisions de Martin du 2026-11-04 :
+    - plateau en **vraie 3D**, filmé en isométrique par une caméra orthographique, avec des formes simples pour commencer ; l'interface reste en 2D ;
+    - du mur, on ne voit que la première rangée, plus les cases creusées et leurs voisines ;
+    - la lisibilité d'abord : la loupe n'est pas prévue pour l'instant ; zoom à deux doigts si c'est simple ;
+    - aimantation sur les cases proposées pendant une carte (E3c) ;
+    - le pseudo attendra les comptes ;
+    - le nom affiché et le texte d'effet des cartes viendront d'un **catalogue structuré tenu par le serveur**, tiré des [fiches attaques](FICHES_ATTAQUES.md) : tâche à part, à faire avant E3c.
+
+    Pendant le développement, le client joue la variante « règles actuelles » (sans draft) contre le bot aléatoire, qui ne charge pas la machine ; la variante en ligne par défaut arrive avec le draft (E3f).
+    - [ ] **E3a · Socle** : réglages du projet (portrait d'abord, paysage sur PC), apparence (`look.gd`, `Look`) et thème construit à partir d'elle, polices, éléments SVG importés ; lien avec le serveur (`ServerLink` : connexion, création d'une salle, reprise de sa place avec la clé gardée, coups renvoyés tels quels) ; navigation entre écrans ; écran de démarrage ; plateau 3D construit depuis la vue (cases, mur, cases creusées, pions J1 ronds et J2 octogonaux, tombes), caméra cadrée sur la zone utile ; poser d'un toucher ou d'un clic, finir son tour ou passer. Résultat : une partie de pose complète contre le bot aléatoire. Codée et vérifiée en captures le 2026-11-04 ; reste la relecture du gardien, la validation de Martin, puis le commit.
+      - Fait : `ServerLink` (reprise de la place après une coupure ou au relancement, connexion neuve pour une nouvelle salle), `Wire`, `ViewData` ; thème construit à partir de `Look`, boutons hexagonaux dessinés (`StyleBoxHex`), polices Grenze Gotisch et Barlow (OFL) ; plateau 3D peint par shaders, sans éclairage (cases, mur visible, cases creusées, pions, tombes) ; marque de la case survolée ; mises en page portrait et paysage ; action principale (finir son tour, passer) recopiée de la vue ; « ACCUEIL » quand la partie est finie, en attendant les écrans de fin.
+      - Vérifié en jeu, en portrait (420 × 880) et en paysage (1280 × 720) : connexion, partie contre le bot aléatoire, poses, fins de tour, fenêtres de réaction passées, reprise de la place après relancement, retour à l'accueil puis nouvelle salle, case creusée par un Coup du taureau du bot. Aucune erreur ni aucun avertissement dans la sortie du jeu.
+      - À valider par Martin : la caméra choisit entre la plongée des maquettes (30°) et une plongée de 45°, selon celle qui donne les plus grandes cases. En portrait comme en paysage sur PC, c'est 45°. Pour garder l'isométrique 2:1 partout, il suffit de retirer 45° de `Look.CAMERA_PITCHES_DEGREES`.
+      - Vu pendant les essais, pour E3b : quand une case est creusée, la caméra se recadre d'un coup, ce qui peut faire rater un toucher ; le recadrage devra glisser.
+    - [ ] **E3b · Lisibilité et toucher** : retours au toucher et au survol, dernier coup marqué, animation de pose, qui doit jouer (bandeau, panneaux actif et en retrait, transition de tour, vibration), barre de jeu complète (réserve, points, banque), zoom à deux doigts si simple.
+    - [ ] **E3c · Cartes et choix** : composant carte (cadres, coût, recharge, cache), arsenal, choix d'une carte par aperçu (lanceur, cibles, aimantation), Annuler / Jouer la carte, plusieurs coups sur une case, gestes gratuits (reine, Lièvre, tir), viser les jetons.
+    - [ ] **E3d · Ce qui se passe** : animations tirées des événements (tuer, sauter, échanger, creuser), statuts et badges, couronne et gardes, jetons, infirmerie, cimetière, Terre brûlée, journal.
+    - [ ] **E3e · Le tour adverse** : fenêtre « Réagir ? », annonce de l'attaque adverse, cache révélée, « le bot réfléchit ».
+    - [ ] **E3f · Menus, salles et draft** : accueil, créer et rejoindre une salle, draft complet, variante en ligne par défaut.
+    - [ ] **E3g · Fin et coupures** : écrans de fin (ligne gagnante), connexion perdue, partie ouverte ailleurs, serveur complet, bot qui ne répond plus.
+    - [ ] **E3h · Annexes et finitions** : pages Cartes, Règles et Réglages, son, exports web et Android vérifiés.
   - [ ] **E4 · Mise en ligne**.
 - [ ] **Jalon v1.0 « version propre »** : tag Git, toute la doc à jour.
 

@@ -1,6 +1,6 @@
 # Architecture de Fight of Pions
 
-Dernière mise à jour : 2026-11-02.
+Dernière mise à jour : 2026-11-04.
 
 Ce document décrit comment le code est organisé et **pourquoi**. Il sert de référence pour toutes les tâches de la [feuille de route](FEUILLE_DE_ROUTE.md). Ce qui n'existe pas encore est marqué **(cible)**.
 
@@ -16,8 +16,9 @@ Un **moteur de règles indépendant**, sur lequel se branchent tous les clients 
                  ┌────────────┐
    terminal ───▶ │            │
    labo     ───▶ │   moteur   │  ◀── bots (aléatoire, glouton ; ML en cible)
-   Godot    ───▶ │ (sans dép.)│  ◀── py_bindings pour l'entraînement (cible)
-   (cible)       └────────────┘
+   serveur  ───▶ │ (sans dép.)│  ◀── py_bindings pour l'entraînement (cible)
+     ▲           └────────────┘
+   Godot (WebSocket)
 ```
 
 Le moteur ne sait pas qui l'utilise. Un client fait toujours la même chose :
@@ -53,6 +54,8 @@ Ils viennent de la conception initiale, et certains sont précisés par l'analys
 | `labo/` | Client de test eframe/egui, en deux écrans. **Partie** : panneau, damier cliquable avec cases jouables, journal, graine, annuler, coups au hasard, copier/charger une partie, chaque joueur humain ou bot, configuration de la prochaine partie réglable. **Arène** : simuler des parties entre bots sur une configuration réglable, et en revoir une. | `moteur` (avec `serde`), `bots`, `eframe`, `serde_json` |
 | `terminal/` | Client texte. | `moteur` |
 | `bots/` | Bots (aléatoire, glouton) et arène de parties automatiques. Bibliothèque ; l'arène est l'exemple `arene`. | `moteur` |
+| `serveur/` | Serveur WebSocket qui fait autorité sur les parties en ligne (principe 7). | `moteur`, `bots`, `axum`, `tokio` |
+| `client-godot/` | Le jeu : client Godot 4.7 (GDScript), branché sur le serveur. Hors du workspace Cargo. Voir « Le client Godot ». | Godot 4.7 (rendu Compatibilité) |
 | `py_bindings/` (cible) | Environnement Python pour l'entraînement ML. | `moteur`, `pyo3` |
 | `godot_bridge/` (cible) | Pont vers Godot. | `moteur`, `godot` |
 
@@ -201,3 +204,34 @@ Le labo réunit tout ce qu'on veut voir à l'écran, en deux écrans, sans conte
 - **Arène** : régler la configuration simulée, choisir des paires et un nombre de parties, lancer `bots::run_pairs` dans un fil à part (la fenêtre ne se fige pas) et lire les bilans, affichés comme par `cargo arene`. « Revoir » ouvre une partie précise dans l'écran Partie, avec sa graine et ses bots, pour la regarder se jouer.
 - **Réglage de partie** (`reglage.rs`) : un seul éditeur de configuration, utilisé par les deux écrans (la prochaine partie, la configuration simulée). On part d'une variante ou de la partie en cours, puis on retouche chaque réglage ; le labo ne vérifie rien lui-même, il affiche le verdict de `GameConfig::validate` et ne lance pas une configuration incohérente.
 - Le labo tourne en debug, mais le moteur et les bots sont optimisés dans le profil dev (`Cargo.toml`) : l'écran Arène simule à la vitesse de `cargo arene`. Chaque bilan affiche ses fourchettes à 95 % : deux bilans dont les fourchettes se chevauchent largement ne permettent pas de conclure.
+
+### Le client Godot
+
+Le jeu lui-même, dans `client-godot/` (Godot 4.7, GDScript typé, rendu Compatibilité pour le web et le mobile). Il joue en ligne par le serveur ([PROTOCOLE.md](PROTOCOLE.md)) et ne contient **aucune règle** : il affiche la vue que le serveur envoie et ne propose que les coups de `legal_actions`, renvoyés tels quels. Découpage en étapes : feuille de route, E3. Noms du code en anglais (sauf « Pion »), commentaires et texte affiché en français.
+
+```
+client-godot/
+  main.gd / main.tscn   la racine : le plateau 3D, la couche d'interface, l'écran affiché ;
+                        elle enchaîne les écrans selon ce que répond le serveur
+  net/server_link.gd    (autoload ServerLink) la WebSocket, la place gardée et sa reprise
+  net/wire.gd           le format du fil (JSON, nombres entiers remis en entiers)
+  game/view_data.gd     la vue du serveur, avec des lectures typées et les coups rangés par case
+  board/                le plateau 3D : grid_geometry.gd (la seule conversion case ↔ monde),
+                        board_3d.gd (cases, caméra, toucher), pion_3d.gd, tomb_3d.gd,
+                        board_materials.gd, shaders/
+  ui/                   ui.gd (les briques), components/ (panneau de joueur, losanges),
+                        screens/ (démarrage, accueil, partie)
+  theme/look.gd         l'apparence : couleurs, tailles, marges et durées (comme theme.rs)
+  theme/theme_builder.gd  le thème Godot, construit à partir de `Look`
+  text/labels.gd        tout le texte affiché
+  assets/               polices (licence OFL jointe) et SVG copiés de design/elements
+```
+
+- **Aucune règle.** La légalité vient de `legal_actions` : `ViewData` range les coups par case dans l'ordre du serveur, et l'écran de partie, seul endroit qui transforme un geste en coup, prend le coup tel quel dans cette liste. Ce qui est affiché vient de la vue (réserve, points, banque, poses), jamais d'un calcul.
+- **Un seul chemin vers le serveur** : `ServerLink`. Il garde la place (code, joueur, clé) dans `user://session.cfg` et la reprend toute seule après une coupure ou au lancement suivant (`rejoin`). Une salle par connexion : quitter sa salle ouvre une connexion neuve (`leave_room`). Les demandes faites hors connexion sont perdues, sauf créer et rejoindre : la vue reçue au retour fait foi.
+- **Le plateau est en vraie 3D** (décision du 2026-11-04), filmé par une caméra orthographique tournée d'un huitième de tour. Les cases sont des pavés, dessinés en un appel par sorte (`MultiMeshInstance3D`) ; J1 est un cylindre et J2 un prisme à 8 faces, la même primitive : la forme distingue les joueurs. Tout est peint sans éclairage, par des shaders qui donnent à chaque face sa couleur et à chaque arête son trait, comme les éléments fournis : net à tout zoom, léger sur téléphone. Un modèle plus riche pourra remplacer le corps d'un pion sans toucher au reste.
+- **Lisible sur un téléphone.** Du mur, on ne voit que les cases qui touchent le plateau. La caméra cadre les cases jouables, plus une demi-case, dans le rectangle que l'écran laisse au plateau, marges de la page comprises. Parmi deux plongées (l'isométrique 2:1 des maquettes, 30°, et 45°), elle prend celle qui donne les plus grandes cases à l'écran : en portrait, où la largeur manque, la plongée de 45° grandit les cases de 41 % en hauteur.
+- **Portrait d'abord, paysage sur PC.** En portrait : l'adversaire en haut, le tour, le plateau, sa barre, puis le bouton d'action sur toute la largeur, sous le pouce. En paysage : le plateau à gauche, une colonne à droite. Les mêmes éléments changent seulement de boîtes.
+- **Un système visuel unique.** Les couleurs et les tailles sont dans `look.gd` (`Look`), et nulle part ailleurs ; `ThemeBuilder` en fait le thème, et les composants choisissent un style par son nom de variante. Les boutons d'action sont dessinés (`StyleBoxHex`), pas étirés depuis une image, pour rester nets à toute taille. L'interface et le plateau sont construits dans le code, pour que tout parte de `Look` ; les scènes `.tscn` se limitent à la racine.
+- **Pendant le développement** (E3a à E3e), le client joue la variante « règles actuelles » contre le bot aléatoire, qui ne charge pas la machine.
+- **L'outil d'éditeur** `addons/godot_mcp_toolkit/` (greffon tiers, avec son autoload `MCPRuntimeServer`) permet à Claude de piloter l'éditeur et le jeu lancé depuis l'éditeur (captures, touchers simulés). Il ne fait pas partie du jeu : le code du client ne s'en sert jamais, et son serveur ne s'ouvre que lancé depuis l'éditeur (`OS.has_feature("editor")`), jamais dans un export. Il sera exclu des exports avec E3h.

@@ -1,0 +1,167 @@
+class_name ThemeBuilder
+extends RefCounted
+## Construit le thème de toute l'interface à partir de l'apparence (`Look`) : c'est le seul
+## endroit qui transforme les couleurs et les tailles en styles Godot. Les composants
+## choisissent un style par son nom de variante (`theme_type_variation`), jamais par une
+## couleur.
+
+const DISPLAY_FONT := "res://assets/fonts/GrenzeGotisch.ttf"
+const BODY_FONT := "res://assets/fonts/BarlowSemiCondensed-Medium.ttf"
+const STRONG_FONT := "res://assets/fonts/BarlowSemiCondensed-SemiBold.ttf"
+const CAPS_FONT := "res://assets/fonts/BarlowCondensed-Bold.ttf"
+
+## Les variantes proposées aux composants.
+const DISPLAY_LABEL := &"DisplayLabel"
+const NAME_LABEL := &"NameLabel"
+const STRONG_LABEL := &"StrongLabel"
+const MUTED_LABEL := &"MutedLabel"
+const NUMBER_LABEL := &"NumberLabel"
+const PILL_LABEL := &"PillLabel"
+const PRIMARY_BUTTON := &"PrimaryButton"
+const SECONDARY_BUTTON := &"SecondaryButton"
+const PANEL := &"GamePanel"
+const PANEL_ACTIVE := &"GamePanelActive"
+const PILL := &"Pill"
+
+
+static func build() -> Theme:
+	var theme := Theme.new()
+	var display := _display_font()
+	var body: FontFile = load(BODY_FONT)
+	var strong: FontFile = load(STRONG_FONT)
+	var caps := _caps_font()
+	theme.default_font = body
+	theme.default_font_size = Look.FONT_BODY
+	theme.set_color(&"font_color", &"Label", Look.CREAM)
+
+	_label(theme, DISPLAY_LABEL, display, Look.FONT_DISPLAY, Look.GOLD, true)
+	_label(theme, NAME_LABEL, display, Look.FONT_HEADING, Look.GOLD, false)
+	_label(theme, STRONG_LABEL, strong, Look.FONT_BODY, Look.CREAM, false)
+	_label(theme, MUTED_LABEL, body, Look.FONT_BODY, Look.MUTED, false)
+	_label(theme, NUMBER_LABEL, caps, Look.FONT_NUMBER, Look.CREAM, false)
+	_label(theme, PILL_LABEL, caps, Look.FONT_BODY, Look.CREAM, false)
+
+	_primary_button(theme, caps)
+	_secondary_button(theme, caps)
+	_panels(theme)
+	return theme
+
+
+static func _display_font() -> FontVariation:
+	var font := FontVariation.new()
+	font.base_font = load(DISPLAY_FONT)
+	font.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): Look.DISPLAY_WEIGHT}
+	return font
+
+
+static func _caps_font() -> FontVariation:
+	var font := FontVariation.new()
+	font.base_font = load(CAPS_FONT)
+	font.spacing_glyph = Look.CAPS_SPACING
+	return font
+
+
+static func _label(theme: Theme, variation: StringName, font: Font, size: int, color: Color, shadow: bool) -> void:
+	theme.set_type_variation(variation, &"Label")
+	theme.set_font(&"font", variation, font)
+	theme.set_font_size(&"font_size", variation, size)
+	theme.set_color(&"font_color", variation, color)
+	if shadow:
+		theme.set_color(&"font_shadow_color", variation, Look.INK)
+		theme.set_constant(&"shadow_offset_x", variation, int(Look.TITLE_SHADOW.x))
+		theme.set_constant(&"shadow_offset_y", variation, int(Look.TITLE_SHADOW.y))
+
+
+static func _primary_button(theme: Theme, font: Font) -> void:
+	var variation := PRIMARY_BUTTON
+	theme.set_type_variation(variation, &"Button")
+	theme.set_stylebox(&"normal", variation, _hex(Look.GOLD, Look.GOLD_SHADE, false))
+	theme.set_stylebox(&"hover", variation, _hex(Look.GOLD.lightened(Look.HOVER_LIGHTEN), Look.GOLD_SHADE, false))
+	theme.set_stylebox(&"pressed", variation, _hex(Look.GOLD_SHADE, Look.GOLD_DEEP, true))
+	theme.set_stylebox(&"hover_pressed", variation, _hex(Look.GOLD_SHADE, Look.GOLD_DEEP, true))
+	theme.set_stylebox(&"disabled", variation, _hex(Look.DISABLED_FILL, Look.DISABLED_FILL, false))
+	theme.set_stylebox(&"focus", variation, _focus())
+	_button_text(theme, variation, font, Look.INK)
+	theme.set_color(&"font_disabled_color", variation, Look.DISABLED_TEXT)
+
+
+static func _secondary_button(theme: Theme, font: Font) -> void:
+	var variation := SECONDARY_BUTTON
+	theme.set_type_variation(variation, &"Button")
+	theme.set_stylebox(&"normal", variation, _outlined(Look.FOREST_PANEL, Look.GOLD))
+	theme.set_stylebox(&"hover", variation, _outlined(Look.FOREST_RAISED, Look.GOLD))
+	theme.set_stylebox(&"pressed", variation, _outlined(Look.FOREST_DEEP, Look.GOLD_SHADE))
+	theme.set_stylebox(&"hover_pressed", variation, _outlined(Look.FOREST_DEEP, Look.GOLD_SHADE))
+	theme.set_stylebox(&"disabled", variation, _outlined(Look.FOREST_PANEL, Look.DISABLED_FILL))
+	theme.set_stylebox(&"focus", variation, _focus())
+	_button_text(theme, variation, font, Look.CREAM)
+	theme.set_color(&"font_disabled_color", variation, Look.DISABLED_TEXT)
+
+
+static func _button_text(theme: Theme, variation: StringName, font: Font, color: Color) -> void:
+	theme.set_font(&"font", variation, font)
+	theme.set_font_size(&"font_size", variation, Look.FONT_BUTTON)
+	for state in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_hover_pressed_color", &"font_focus_color"]:
+		theme.set_color(state, variation, color)
+
+
+static func _hex(fill: Color, shade: Color, sunk: bool) -> StyleBoxHex:
+	var style := StyleBoxHex.new()
+	style.fill = fill
+	style.shade = shade
+	style.point_width = Look.BUTTON_POINT
+	style.shade_height = Look.BUTTON_SHADE
+	style.sunk = sunk
+	style.content_margin_left = Look.BUTTON_PADDING
+	style.content_margin_right = Look.BUTTON_PADDING
+	# Le texte descend avec le dessus quand le bouton s'enfonce.
+	style.content_margin_top = Look.BUTTON_SHADE if sunk else 0.0
+	style.content_margin_bottom = 0.0 if sunk else Look.BUTTON_SHADE
+	return style
+
+
+static func _outlined(fill: Color, border: Color) -> StyleBoxFlat:
+	var style := _rounded(fill, Look.RADIUS_CONTROL)
+	style.set_border_width_all(Look.BORDER_STRONG)
+	style.border_color = border
+	style.content_margin_left = Look.BUTTON_PADDING
+	style.content_margin_right = Look.BUTTON_PADDING
+	return style
+
+
+## Le repère du clavier (PC) : un trait crème autour du bouton qui a le focus.
+static func _focus() -> StyleBoxFlat:
+	var style := _rounded(Color.TRANSPARENT, Look.RADIUS_CONTROL)
+	style.draw_center = false
+	style.set_border_width_all(Look.BORDER)
+	style.border_color = Look.CREAM
+	style.set_expand_margin_all(Look.GAP_XS)
+	return style
+
+
+static func _panels(theme: Theme) -> void:
+	for variation in [PANEL, PANEL_ACTIVE]:
+		theme.set_type_variation(variation, &"PanelContainer")
+		var style := _rounded(Look.FOREST_PANEL, Look.RADIUS_PANEL)
+		style.set_border_width_all(Look.BORDER_STRONG if variation == PANEL_ACTIVE else Look.BORDER)
+		style.border_color = Look.PANEL_BORDER_ACTIVE if variation == PANEL_ACTIVE else Look.PANEL_BORDER
+		style.set_content_margin_all(Look.GAP_L)
+		theme.set_stylebox(&"panel", variation, style)
+
+	theme.set_type_variation(PILL, &"PanelContainer")
+	var pill := _rounded(Look.FOREST_DEEP, Look.RADIUS_PILL)
+	pill.set_border_width_all(Look.BORDER)
+	pill.border_color = Look.PANEL_BORDER
+	pill.content_margin_left = Look.GAP_XL
+	pill.content_margin_right = Look.GAP_XL
+	pill.content_margin_top = Look.GAP_S
+	pill.content_margin_bottom = Look.GAP_S
+	theme.set_stylebox(&"panel", PILL, pill)
+
+
+static func _rounded(fill: Color, radius: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill
+	style.set_corner_radius_all(radius)
+	style.anti_aliasing = true
+	return style

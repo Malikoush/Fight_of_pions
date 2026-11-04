@@ -1,0 +1,5 @@
+# Cache de l'éditeur Godot : régénéré à l'ouverture du projet.
+.godot/
+
+# Exports (web, Android…) : produits à la demande, jamais commités.
+/export/

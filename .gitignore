@@ -3,3 +3,6 @@
 # Fichiers propres à Claude Code (instructions, agents) : non versionnés pour le moment.
 /CLAUDE.md
 /.claude/
+
+# Maquettes : seuls les fichiers décompressés sont versionnés, pas les archives.
+/design/**/*.zip

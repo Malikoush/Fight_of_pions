@@ -1,6 +1,6 @@
 # Glossaire
 
-Dernière mise à jour : 2026-11-02.
+Dernière mise à jour : 2026-11-04.
 
 Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de règles et dans le code.
 
@@ -195,6 +195,33 @@ Le serveur (`serveur/`) est en anglais dans le code, comme le moteur ; ses messa
 | Recherche de bot | `BotSearch`, `BotMove`, `Table::start_bots` | La copie de la partie sur laquelle un bot cherche son coup, hors du verrou de la salle ; le coup n'est joué que si la partie n'a pas changé |
 | Variante en ligne | `bots::ONLINE_VARIANT` | La configuration jouée quand le client n'en demande pas : les règles actuelles avec draft |
 | Limites | `serveur/src/limits.rs` | Taille des messages, file d'envoi, nombre de salles, inactivité, cœurs des bots |
+
+## Client Godot
+
+Le client (`client-godot/`) est en anglais dans le code, comme le moteur ; ses commentaires et son texte affiché sont en français.
+
+| Terme | Nom dans le code | Rôle |
+|---|---|---|
+| Lien avec le serveur | `ServerLink` (autoload) | La WebSocket : envoie les demandes, annonce les réponses, garde la place et la reprend |
+| Format du fil | `Wire` | Le JSON échangé ; remet en entiers les nombres que Godot lit en flottants |
+| Vue (côté client) | `ViewData` | La vue du serveur, avec des lectures typées ; une case s'y écrit `Vector2i(colonne, rangée)` |
+| Plateau 3D | `Board3D`, `GridGeometry` | Le plateau dessiné et filmé ; la seule conversion entre une case et le monde 3D |
+| Cadrage | `Board3D.frame` | Le rectangle de l'écran laissé au plateau, où la caméra cadre les cases jouables |
+| Sorte de case | `Board3D.Tile` : `CASE`, `CASE_ALT`, `WALL`, `DUG` | Ce qu'on dessine sur une case : une case du plateau (deux teintes en damier), le mur visible, une case creusée |
+| Marque de case | `Board3D.show_mark` | Le voile d'or posé sur une case (la case survolée où l'on peut poser) |
+| Pion 3D, tombe 3D | `Pion3D`, `Tomb3D` | Les pièces posées sur le plateau, suivies par l'identité du pion |
+| Palet | `Pion3D`, `Ui.chip`, `BoardMaterials.is_octagon` | Le dessin d'un pion : le palet rond rouge de J1, le palet octogonal blanc de J2. Jamais « jeton » : ce mot est au Massacre divin et au Lièvre. |
+| Matériaux du plateau | `BoardMaterials` | Les matériaux et mesures des pièces, partagés entre toutes les pièces d'un joueur |
+| Apparence | `Look` (`theme/look.gd`) | Toutes les couleurs, tailles, marges et durées du client, définies une seule fois |
+| Thème | `ThemeBuilder`, variantes (`PrimaryButton`, `GamePanel`, `Pill`…) | Les styles de l'interface, construits à partir de l'apparence |
+| Bouton d'action hexagonal | `StyleBoxHex` | Le fond dessiné des boutons d'action : un hexagone allongé et sa tranche, enfoncé au toucher |
+| Pastille du tour | `ThemeBuilder.PILL` | « TOUR 7 · À TOI », au-dessus du plateau |
+| Panneau de joueur | `PlayerPanel` | Ce qu'a un joueur : palet, nom, réserve, points du tour, banque, poses ; bordé d'or quand il décide |
+| Losanges | `DiamondStrip` | Le symbole des points d'action (grand losange) et de la banque (petits losanges, pleins pour un point gardé) |
+| Briques de l'interface | `Ui` | Libellés, boutons, icônes, boîtes, marges de la page |
+| Texte affiché | `Labels` | Tout le texte du client, en français |
+| Écran | `BootScreen`, `HomeScreen`, `GameScreen` | Démarrage, accueil, partie ; la racine (`main.gd`) les enchaîne |
+| Action principale | `GameScreen.MAIN_ACTIONS` | Le coup sans case permis maintenant (finir son tour, passer), recopié de la vue, sur le grand bouton |
 
 ## Conventions
 

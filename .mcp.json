@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "godot": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@coding-solo/godot-mcp"],
+      "env": {
+        "GODOT_PATH": "C:/Program Files/Godot/Godot_v4.7.2-stable_win64_console.exe"
+      }
+    },
+    "godot-mcp-toolkit": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@npgamedev/godot-mcp-server@1.1.2"],
+      "env": {
+        "GODOT_MCP_CONFIG_VERSION": "1",
+        "GODOT_MCP_PROJECT_PATH": "C:/Projets/Fight_of_pions/client-godot",
+        "npm_config_prefer_offline": "true"
+      }
+    }
+  }
+}

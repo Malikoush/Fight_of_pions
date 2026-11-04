@@ -5,8 +5,11 @@ Ce que doit savoir un client (Godot, sur le web, le PC ou le mobile) pour jouer 
 ## Connexion
 
 - Lancer le serveur en local : `cargo serveur` (port 3000, ou la variable `PORT`).
-- WebSocket : `ws://localhost:3000/ws` en local ; `wss://…/ws` une fois en ligne (obligatoire depuis une page en `https`).
+- WebSocket : `ws://127.0.0.1:3000/ws` en local ; `wss://…/ws` une fois en ligne (obligatoire depuis une page en `https`).
 - Un message JSON par trame texte, dans les deux sens.
+- Le serveur n'écoute qu'en IPv4 : un client local vise `127.0.0.1`, car `localhost` peut désigner l'IPv6 (`::1`) sous Windows.
+- Une vue complète (configuration et catalogue compris) peut approcher la mémoire de réception par défaut de Godot (64 Kio) : le client Godot en prend 1 Mio.
+- Les coups reçus se renvoient tels quels. Un client dont le JSON lit les nombres en flottants (Godot) doit les réécrire en entiers : le serveur refuse `{"row":3.0}`.
 - `GET /health` répond `ok` (pour l'hébergeur).
 
 ## Messages du client
