@@ -1,0 +1,231 @@
+{
+  "BeauteFatale": {
+    "summary": "Tu figes les pions adverses sous ton regard, puis tu les séduis.",
+    "rules": [
+      "Le regard porte sur un pion adverse en ligne droite (8 directions), à 1 ou 2 cases, sans pion entre vous.",
+      "Charme fatal : un pion visé par la Commune ou la Rare qui est déjà immobilisé, quelle que soit la carte qui l'a figé, est tué. S'il est protégé, il est seulement immobilisé à nouveau.",
+      "Séduire, c'est tuer le pion visé puis poser à sa place un pion de ta réserve : ce n'est pas un changement de camp. C'est impossible si ta réserve est vide ou si le pion est protégé, et si le pion esquive, rien n'est posé."
+    ],
+    "effects": {
+      "Common": "Immobilise 1 pion adverse dans ton regard pendant 2 tours.",
+      "Rare": "Immobilise 2 pions adverses différents dans ton regard pendant 2 tours.",
+      "Epic": "Séduit 1 pion adverse dans ton regard.",
+      "Legendary": "Séduit 1 pion adverse n'importe où sur le plateau ; le pion posé à sa place est protégé pendant 1 tour de l'adversaire."
+    }
+  },
+  "SautDuLoup": {
+    "summary": "Ton pion bondit par-dessus ce qui se trouve devant lui et frappe les pions adverses survolés.",
+    "rules": [
+      "Un saut fait toujours 2 cases en ligne droite (8 directions) et atterrit sur une case libre, par-dessus du vide, un de tes pions ou un pion adverse.",
+      "Chaque saut part de la case d'arrivée du précédent ; tu peux t'arrêter avant le maximum et repasser par une case déjà visitée, mais jamais survoler deux fois le même pion.",
+      "Un saut meurtrier tue tout de suite le pion adverse survolé. Un pion protégé peut être survolé, mais il n'est pas tué."
+    ],
+    "effects": {
+      "Common": "1 saut ; un pion adverse survolé est immobilisé pendant 2 tours.",
+      "Rare": "1 saut meurtrier.",
+      "Epic": "Jusqu'à 2 sauts meurtriers.",
+      "Legendary": "Jusqu'à 3 sauts meurtriers."
+    }
+  },
+  "Reine": {
+    "summary": "Tu protèges ton pion, ou tu poses une reine qui avance librement et que ses gardes défendent.",
+    "rules": [
+      "La reine est un pion de ta réserve posé n'importe où, en plus de ta pose normale. Elle porte une couronne et compte pour l'alignement.",
+      "Tu n'as qu'une reine à la fois : la carte n'est pas jouable tant que ta reine est en jeu, ni si ta réserve est vide.",
+      "Chaque tour, ta reine peut faire gratuitement 1 pas dans les 8 directions vers une case libre, à partir du tour qui suit sa pose, et pas quand elle est immobilisée.",
+      "Un garde, posé sur la reine, la sauve de la prochaine attaque qui la tuerait, ou bien il sert à tirer : une fois par tour, tu paies pour tuer le premier pion rencontré en ligne droite depuis la reine, s'il est adverse et non protégé.",
+      "Si la reine est tuée, elle part à l'infirmerie comme un pion normal et ses gardes disparaissent."
+    ],
+    "effects": {
+      "Common": "Garde royal : le pion lanceur est protégé pendant 2 tours.",
+      "Rare": "Pose une reine.",
+      "Epic": "Pose une reine avec 1 garde.",
+      "Legendary": "Pose une reine avec 2 gardes."
+    }
+  },
+  "Attila": {
+    "summary": "Tu fais disparaître les effets que ton adversaire a laissés en jeu.",
+    "rules": [
+      "Tu peux viser n'importe quel pion du plateau, le tien ou celui de l'adversaire ; tes propres effets ne sont jamais annulés.",
+      "Un effet annulé l'est en entier, sur tous les pions qu'il touche.",
+      "Les gardes d'une reine sont annulés, mais elle garde sa couronne. L'infirmerie et les tombes ne sont pas touchées."
+    ],
+    "effects": {
+      "Common": "Retire à 1 pion tous les statuts posés par l'adversaire (immobilisé, protégé).",
+      "Rare": "Annule en entier tous les effets adverses portés par 1 pion de ton choix, ainsi que les jetons adverses si tu les vises.",
+      "Epic": "Comme la Rare, sur 1 ou 2 pions différents ; le second doit porter un effet adverse que le premier n'annule pas déjà.",
+      "Legendary": "Terre brûlée : annule comme l'Épique, ou ne vise rien s'il n'y a rien à annuler. Ensuite, pendant le tour suivant de l'adversaire, il ne peut jouer aucun coup qui créerait un effet continu."
+    }
+  },
+  "Medecin": {
+    "summary": "Tu ramènes sur le plateau tes pions de l'infirmerie, là où ils sont tombés.",
+    "rules": [
+      "Un pion revient seulement sur sa propre tombe, jamais sur une tombe adverse.",
+      "Le pion ramené compte comme posé ce tour et n'utilise pas ta pose normale.",
+      "Une tombe occupée par un de tes pions, ou par un pion adverse protégé, ne permet pas de revenir.",
+      "Sans infirmerie, il n'y a pas de tombe : la carte n'est pas jouable."
+    ],
+    "effects": {
+      "Common": "Ramène 1 pion sur sa tombe, si elle est libre.",
+      "Rare": "Ramène jusqu'à 2 pions sur leurs tombes libres.",
+      "Epic": "Ramène 1 pion, même sur une tombe occupée par un pion adverse, qui est tué ; le pion ramené est protégé pendant 2 tours.",
+      "Legendary": "Ramène tous tes pions qui peuvent revenir, même sur des tombes occupées par un pion adverse ; il en faut au moins un."
+    }
+  },
+  "Interchange": {
+    "summary": "Tu échanges ton pion avec un pion adverse, ou tu le téléportes.",
+    "rules": [
+      "Le pion adverse échangé peut être protégé ou immobilisé.",
+      "Un pion qui attend son retour ne peut pas être téléporté de nouveau."
+    ],
+    "effects": {
+      "Common": "Ton pion est téléporté sur n'importe quelle case libre. Au début de ton tour suivant, il revient sur sa case d'origine, d'où qu'il soit, et tue le pion qui l'occupe, quel que soit son camp ; ce retour échoue si cet occupant est protégé ou si c'est une reine sauvée par un garde.",
+      "Rare": "Ton pion échange sa case avec un pion adverse à 1 ou 2 cases en ligne droite, même derrière un autre pion.",
+      "Epic": "Ton pion échange sa case avec n'importe quel pion adverse.",
+      "Legendary": "Double échange : ton pion prend la place d'un pion adverse, n'importe où, qui a un autre pion adverse collé ; puis un second de tes pions prêts prend la place d'un pion adverse collé au premier."
+    }
+  },
+  "CoupDuTaureau": {
+    "summary": "Ton pion charge en ligne droite, repousse ou écrase les pions adverses et perce le mur.",
+    "rules": [
+      "Tu choisis le pion lanceur, puis la direction en désignant la case collée à lui (8 directions, une case de mur comprise) ; la charge va aussi loin que sa rareté le permet.",
+      "Quand ton pion atteint le mur, il le creuse et continue dans la case creusée : une case creusée devient une case normale pour toujours. Un pion poussé ne creuse pas, le mur le bloque.",
+      "Tes propres pions arrêtent la charge ; une tombe non. Une reine sauvée par un garde l'arrête aussi.",
+      "La charge n'est proposée que dans les directions où elle avance d'au moins une case."
+    ],
+    "effects": {
+      "Common": "Charge d'1 case : le pion adverse qui s'y trouve recule d'1 case et ton pion prend sa place. S'il ne peut pas reculer, la charge est impossible ; un pion protégé est poussé aussi.",
+      "Rare": "Charge d'1 case : le pion adverse recule de 2 cases et ton pion prend sa place. S'il ne peut pas reculer de 2 cases, il est écrasé et tué. Un pion protégé recule aussi loin que possible sans jamais être tué, et s'il ne peut pas reculer du tout, la charge est impossible.",
+      "Epic": "Charge de 2 cases : chaque pion adverse sur le passage est tué. Un pion adverse protégé arrête la charge.",
+      "Legendary": "Charge de 3 cases : chaque pion adverse sur le passage est tué. Un pion adverse protégé arrête la charge."
+    }
+  },
+  "MassacreDivin": {
+    "summary": "Tu poses devant toi des jetons qui rendent tes prochains kills plus rentables ou définitifs.",
+    "rules": [
+      "La carte se lance depuis n'importe lequel de tes pions prêts, sans cible, et pose une pile de jetons devant toi.",
+      "Un kill est tout pion adverse tué, par n'importe quelle carte, par le tir de la reine ou par une vengeance, pendant ton tour comme pendant celui de l'adversaire. Un pion sauvé par un garde n'est pas tué : il n'use aucun jeton.",
+      "Tes piles s'additionnent : chaque kill use un jeton de chacune. Une pile vide disparaît.",
+      "Pendant ton tour, les points rendus s'ajoutent à tes points du tour ; pendant le tour adverse, ils vont dans ta banque, qui reste plafonnée.",
+      "Un pion envoyé au cimetière ne laisse pas de tombe et ne revient jamais. Un joueur qui a un pion au cimetière et moins de pions en vie qu'il n'en faut pour aligner (plateau, réserve et infirmerie) a perdu."
+    ],
+    "effects": {
+      "Common": "1 jeton : ton prochain kill te rend 2 points d'action.",
+      "Rare": "4 jetons : tes 4 prochains kills te rendent 1 point d'action chacun.",
+      "Epic": "2 jetons : tes 2 prochains kills envoient le pion au cimetière au lieu de l'infirmerie.",
+      "Legendary": "3 jetons : tes 3 prochains kills envoient le pion au cimetière."
+    }
+  },
+  "Ours": {
+    "summary": "Tu frappes ou tu immobilises les pions adverses collés à ton pion.",
+    "rules": [
+      "La portée est celle des 8 cases collées au lanceur, diagonales comprises.",
+      "Un pion protégé ne peut pas être choisi pour être tué, mais il est immobilisé comme les autres."
+    ],
+    "effects": {
+      "Common": "Grognement : les pions adverses collés au lanceur sont immobilisés pendant 1 tour. Il faut au moins un ennemi collé.",
+      "Rare": "Tue 1 pion adverse collé au lanceur.",
+      "Epic": "Tue jusqu'à 2 pions adverses différents collés au lanceur.",
+      "Legendary": "Rugissement : tue jusqu'à 2 pions adverses collés au lanceur, et les autres pions adverses collés à lui sont immobilisés pendant 2 tours."
+    }
+  },
+  "Lievre": {
+    "summary": "Tes pions avancent pas à pas sur le plateau.",
+    "rules": [
+      "Un pas va vers une case libre collée (8 directions) ; tu peux tourner en chemin, mais jamais passer par-dessus un pion.",
+      "Chaque pion avance de jusqu'à son nombre de pas et finit sur une autre case que sa case de départ.",
+      "Le premier pion est le lanceur ; les suivants doivent aussi pouvoir agir (posés avant ce tour, non immobilisés), être différents, et bougent l'un après l'autre."
+    ],
+    "effects": {
+      "Common": "1 de tes pions avance de jusqu'à 2 pas.",
+      "Rare": "Jusqu'à 2 de tes pions avancent de jusqu'à 2 pas chacun.",
+      "Epic": "Pose 3 jetons de pas sur le lanceur. À chacun de tes tours, il peut en dépenser un pour avancer gratuitement de jusqu'à 2 pas, à n'importe quel moment du tour, un jeton par tour. Immobilisé, il attend ; tué, il perd ses jetons.",
+      "Legendary": "Jusqu'à 3 de tes pions avancent de jusqu'à 3 pas chacun."
+    }
+  },
+  "Familia": {
+    "summary": "Tu entoures ton pion de sa famille : encadré, il devient un enfant protégé.",
+    "rules": [
+      "L'enfant est le pion lanceur, encadré de part et d'autre en ligne droite (8 directions) par deux de ses parents. Il est protégé tant que ces deux mêmes pions l'encadrent.",
+      "La protection tombe pour de bon dès que l'un des deux parents est tué, déplacé ou échangé, ou que l'enfant bouge : elle ne revient pas si les pions se remettent en place.",
+      "Un pion qui est déjà enfant ne peut pas le devenir de nouveau, mais il peut servir de parent à une autre famille.",
+      "Les parents posés viennent de ta réserve et comptent comme posés ce tour, sans utiliser ta pose normale. La carte pose tous ses parents ou aucun."
+    ],
+    "effects": {
+      "Common": "Ton pion, déjà encadré par deux de tes pions, devient enfant ; tu choisis la ligne en désignant un des deux pions qui l'encadrent.",
+      "Rare": "Tu choisis une case libre collée à ton pion, dont la case opposée porte un de tes pions : un parent y est posé et ton pion devient enfant.",
+      "Epic": "Tu choisis une case libre collée à ton pion, dont la case opposée est libre aussi : deux parents y sont posés et ton pion devient enfant.",
+      "Legendary": "Tu choisis un second enfant, un de tes pions collé au lanceur qui peut agir aussi : les deux parents se posent aux deux bouts de la ligne, et chaque enfant est encadré par un parent et par son frère."
+    }
+  },
+  "MeilleursAmis": {
+    "summary": "Tu poses deux pions liés par un pacte : si l'un meurt, l'autre se venge.",
+    "rules": [
+      "La carte pose 2 pions de ta réserve n'importe où ; elle est impossible avec moins de 2 pions en réserve.",
+      "Les deux pions comptent comme posés ce tour et n'utilisent pas ta pose normale.",
+      "Vengeance : à la fin d'une attaque, si un seul des deux amis a été tué, l'autre tue l'assassin, même s'il est immobilisé. Si les deux sont morts dans la même attaque, personne ne se venge ; si l'assassin est protégé ou déjà mort, la vengeance échoue.",
+      "Après la vengeance, réussie ou non, le pacte prend fin. Rejouer la carte crée un autre pacte, indépendant."
+    ],
+    "effects": {
+      "Epic": "Pose 2 pions de ta réserve n'importe où, liés par un pacte."
+    }
+  },
+  "Sentinelle": {
+    "summary": "Quand l'adversaire pose un pion, tu en poses un à côté du sien.",
+    "rules": [
+      "Se joue quand l'adversaire pose un pion, par sa pose normale ou par une carte, et se paie avec ta banque pendant son tour ; tu ne peux jouer qu'une réaction par tour adverse.",
+      "Tu poses un pion de ta réserve sur une case libre collée au sien ; c'est impossible si ta réserve est vide."
+    ],
+    "effects": {
+      "Common": "Tu poses 1 pion de ta réserve à côté du pion adverse posé.",
+      "Rare": "Tu poses 1 pion de ta réserve à côté du pion adverse posé, et ce pion est immobilisé pendant 2 tours."
+    }
+  },
+  "Hibou": {
+    "summary": "Quand l'adversaire déplace un pion, tes pions avancent d'un pas.",
+    "rules": [
+      "Se joue quand l'adversaire déplace un pion, le sien ou un des tiens, et se paie avec ta banque pendant son tour ; tu ne peux jouer qu'une réaction par tour adverse.",
+      "Un pas va vers une case libre collée (8 directions). Chaque pion qui avance doit être posé avant ce tour et non immobilisé."
+    ],
+    "effects": {
+      "Common": "1 de tes pions avance d'1 pas.",
+      "Rare": "Jusqu'à 2 de tes pions différents avancent d'1 pas chacun, l'un après l'autre."
+    }
+  },
+  "QueueDuLezard": {
+    "summary": "Quand un de tes pions meurt, tu poses un pion à côté de lui.",
+    "rules": [
+      "Se joue quand un de tes pions meurt pendant le tour adverse, à l'infirmerie ou au cimetière, quelle que soit la cause. Elle se paie avec ta banque, et tu ne peux jouer qu'une réaction par tour adverse.",
+      "Tu poses des pions de ta réserve sur des cases libres collées à la case du pion mort, jamais sur cette case. Si plusieurs de tes pions meurent dans le même coup, tu choisis autour duquel tu poses."
+    ],
+    "effects": {
+      "Common": "Tu poses 1 pion de ta réserve.",
+      "Rare": "Tu poses jusqu'à 2 pions de ta réserve ; si ta réserve n'en a qu'un, tu poses celui-là."
+    }
+  },
+  "Perroquet": {
+    "summary": "Quand l'adversaire joue une attaque, tu la rejoues aussitôt, avec tes pions.",
+    "rules": [
+      "Se joue quand l'adversaire joue une carte d'attaque (pas le tir d'un garde, pas une réaction) et se paie avec ta banque pendant son tour ; tu ne peux jouer qu'une réaction par tour adverse.",
+      "Une fois son attaque terminée, tu la rejoues dans la même rareté, comme si c'était ta carte : ton lanceur (posé avant ce tour, non immobilisé), tes cibles, ta réserve, tes effets.",
+      "C'est le Perroquet qui part en recharge, pas la carte copiée."
+    ],
+    "effects": {
+      "Common": "Copie une attaque adverse qui coûte 1 point.",
+      "Rare": "Copie une attaque adverse qui coûte 2 points ou moins."
+    }
+  },
+  "Feintaille": {
+    "summary": "Quand une attaque adverse vise un de tes pions, il esquive d'une case.",
+    "rules": [
+      "Se joue quand une carte d'attaque adverse choisit un de tes pions comme cible, avant que l'attaque ne s'applique. Elle se paie avec ta banque pendant son tour, et tu ne peux jouer qu'une réaction par tour adverse.",
+      "Ton pion visé doit pouvoir agir (non immobilisé, posé avant ce tour). Il esquive d'1 case vers une case libre collée, mais pas vers une case où l'attaque va arriver.",
+      "L'attaque s'applique ensuite sur les cases choisies : le pion n'y est plus, elle ne le touche pas, mais les autres pions visés sont touchés normalement. L'adversaire paie son attaque quand même.",
+      "Un pion survolé, chargé ou pris dans une zone n'est pas visé, et le tir d'un garde ne déclenche pas la Feintaille."
+    ],
+    "effects": {
+      "Common": "Esquive une attaque qui coûte 2 points ou moins.",
+      "Rare": "Esquive n'importe quelle attaque."
+    }
+  }
+}

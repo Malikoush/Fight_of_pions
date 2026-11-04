@@ -89,16 +89,49 @@ static func outline(half_extent: Vector3) -> ShaderMaterial:
 	return material
 
 
-## Une marque à plat : un voile et son bord (en pointillés si `dashes` > 0), ou une ombre
-## ronde.
-static func flat(fill: Color, border: Color, round_shadow: bool, dashes: float = 0.0) -> ShaderMaterial:
+## Une marque de case : un voile et son bord plein.
+static func mark(fill: Color, border: Color) -> ShaderMaterial:
+	return _flat(fill, border)
+
+
+## Un bord en pointillés, sans voile (le dernier coup adverse).
+static func dashed_mark(border: Color, dashes: float) -> ShaderMaterial:
+	var material := _flat(Color(border, 0.0), border)
+	material.set_shader_parameter(&"dashes", dashes)
+	return material
+
+
+## Un voile léger, un petit losange au centre et un anneau, sans bord (une case proposée) :
+## le losange marque une case vide, l'anneau un pion, qui cache le losange.
+static func dotted_mark(fill: Color, dot: Color, dot_size: float) -> ShaderMaterial:
+	var material := _flat(fill, dot)
+	material.set_shader_parameter(&"border", 0.0)
+	material.set_shader_parameter(&"dot", dot_size)
+	material.set_shader_parameter(&"ring", Look.CANDIDATE_RING)
+	material.set_shader_parameter(&"ring_width", Look.CANDIDATE_RING_WIDTH)
+	return material
+
+
+## L'ombre douce et ronde d'une pièce.
+static func shadow(color: Color) -> ShaderMaterial:
+	var material := _flat(color, color)
+	material.set_shader_parameter(&"round_shadow", true)
+	material.set_shader_parameter(&"softness", Look.PION_SHADOW_SOFTNESS)
+	return material
+
+
+static func _flat(fill: Color, border: Color) -> ShaderMaterial:
 	var material := _material(FLAT_SHADER)
 	material.set_shader_parameter(&"fill_color", fill)
 	material.set_shader_parameter(&"border_color", border)
 	material.set_shader_parameter(&"border", Look.MARK_BORDER_WIDTH)
-	material.set_shader_parameter(&"round_shadow", round_shadow)
-	material.set_shader_parameter(&"softness", Look.PION_SHADOW_SOFTNESS)
-	material.set_shader_parameter(&"dashes", dashes)
+	material.set_shader_parameter(&"round_shadow", false)
+	material.set_shader_parameter(&"softness", 0.0)
+	material.set_shader_parameter(&"dashes", 0.0)
+	material.set_shader_parameter(&"dot", 0.0)
+	material.set_shader_parameter(&"ring", 0.0)
+	material.set_shader_parameter(&"ring_width", 0.0)
+	material.set_shader_parameter(&"ink", Look.INK)
 	return material
 
 

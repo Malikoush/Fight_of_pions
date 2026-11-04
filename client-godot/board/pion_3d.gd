@@ -94,5 +94,5 @@ static func _shadow() -> PlaneMesh:
 	if _shadow_mesh == null:
 		_shadow_mesh = PlaneMesh.new()
 		_shadow_mesh.size = Vector2.ONE * Look.PION_SHADOW_SIZE
-		_shadow_material = BoardMaterials.flat(Color(Look.INK, Look.PION_SHADOW_ALPHA), Color.TRANSPARENT, true)
+		_shadow_material = BoardMaterials.shadow(Color(Look.INK, Look.PION_SHADOW_ALPHA))
 	return _shadow_mesh

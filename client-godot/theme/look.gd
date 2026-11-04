@@ -73,12 +73,25 @@ const PANEL_BORDER_ACTIVE := GOLD
 ## Le panneau du joueur qui attend passe en retrait.
 const PANEL_IDLE_ALPHA := 0.72
 
-## Le dernier coup adverse : un losange en pointillés (marques/dernier.svg), sans voile.
+## Le dernier coup adverse : un cadre en pointillés (marques/dernier.svg), sans voile.
 const LAST_MARK := Color(INK, 0.85)
-const LAST_MARK_FILL := Color(INK, 0.0)
 ## Une case touchée où rien n'est permis : un voile terne, bref.
 const REFUSAL_FILL := Color(MUTED, 0.28)
 const REFUSAL_BORDER := Color(MUTED, 0.7)
+## Une case proposée pendant le choix d'une carte (marques/permise.svg) : un voile d'or léger
+## et un petit losange au centre ; une case déjà choisie (marques/choisie.svg), plus dorée.
+const CANDIDATE_FILL := Color(GOLD, 0.16)
+const CANDIDATE_DOT := GOLD
+const CANDIDATE_DOT_SIZE := 0.18
+## L'anneau d'une case proposée, juste autour d'un palet (rayon et demi-épaisseur, en part
+## de la case).
+const CANDIDATE_RING := 0.44
+const CANDIDATE_RING_WIDTH := 0.035
+const CHOSEN_FILL := Color(GOLD, 0.34)
+const CHOSEN_BORDER := GOLD
+## Pendant un choix, un toucher s'aimante à la case proposée la plus proche, jusqu'à cette
+## distance (en cases).
+const MAGNET_RADIUS := 0.9
 ## Le palet fantôme (survol, coup envoyé en attente de réponse) : sa transparence.
 const GHOST_ALPHA := 0.55
 
@@ -139,6 +152,26 @@ const CHIP_REGION := Rect2(20, 58, 90, 62)
 const POINT_DIAMOND := 22.0
 const BANK_PIP := 12.0
 const DIAMOND_OUTLINE := 2.0
+
+## Les cartes : la toile des cadres fournis (design/elements/cartes), et où s'y trouvent le
+## ruban du nom, le losange du coût et la fenêtre du dessin.
+const CARD_CANVAS := Vector2(220, 306)
+const CARD_RIBBON := Rect2(10, 214, 200, 30)
+const CARD_COST_CENTER := Vector2(38, 68)
+const CARD_COST_SIZE := 44.0
+const CARD_WINDOW := Rect2(35, 51, 150, 155)
+## La largeur d'une carte de l'arsenal, et l'écart entre deux cartes.
+const CARD_WIDTH := 80.0
+const CARD_GAP := 8
+## Une carte qu'on ne peut pas jouer maintenant est assombrie ; une carte choisie se lève.
+const CARD_UNPLAYABLE := Color(0.55, 0.58, 0.56)
+const CARD_LIFT := 10.0
+const CARD_LIFT_TIME := 0.12
+## Le voile d'une carte en recharge, sous le sablier.
+const CARD_COOLDOWN_SHADE := Color(FOREST_DEEP, 0.78)
+const FONT_CARD_NAME := 12
+const FONT_CARD_COST := 17
+const FONT_CARD_TAG := 11
 
 ## La barre de chargement de l'écran de démarrage.
 const PROGRESS_SIZE := Vector2(210, 6)
@@ -220,15 +253,16 @@ const TOMB_SIZE := Vector3(0.3, 0.34, 0.11)
 const TOMB_OFFSET := Vector2(-0.22, -0.22)
 const TOMB_BAND := 0.07
 const TOMB_BAND_OVERHANG := 1.04
-## La marque de case survolée, et le losange en pointillés du dernier coup.
+## La marque de case survolée, et le cadre en pointillés du dernier coup.
 const MARK_SIZE := 0.94
 const MARK_BORDER_WIDTH := 0.07
 const LAST_MARK_SIZE := 0.84
 const LAST_MARK_DASHES := 16.0
-## La caméra, tournée d'un huitième de tour. Sa plongée : l'isométrique 2:1 des maquettes
-## (30°), ou plus forte (45°) quand elle donne de plus grandes cases (téléphone en portrait).
-const CAMERA_PITCHES_DEGREES: Array[float] = [-30.0, -45.0]
-const CAMERA_YAW_DEGREES := 45.0
+## La caméra filme le plateau droit, face à ses rangées (essai du 2026-11-04, demande de
+## Martin) : les cases sont deux fois plus grandes qu'en losange, et les lignes se lisent
+## comme sur un damier. Sa plongée est choisie parmi celles-ci, la plus lisible.
+const CAMERA_PITCHES_DEGREES: Array[float] = [-45.0, -55.0]
+const CAMERA_YAW_DEGREES := 0.0
 const CAMERA_DISTANCE := 30.0
 ## Ce que la caméra cadre au-delà des cases jouables, en cases, et la marge qu'elle ajoute.
 const FRAME_PADDING := 0.5

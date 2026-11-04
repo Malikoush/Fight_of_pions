@@ -4,6 +4,7 @@
 //! ces coups. Voir `docs/PROTOCOLE.md` pour des exemples.
 
 use crate::ServerError;
+use crate::cards::CardFamily;
 use fight_of_pions::{Action, Event, Player, PlayerView};
 use serde::{Deserialize, Serialize};
 
@@ -51,6 +52,9 @@ pub enum ClientMessage {
         /// Les coups, depuis la partie actuelle.
         actions: Vec<Action>,
     },
+    /// Demander le catalogue des cartes ([`ServerMessage::Cards`]) : leurs noms et leurs
+    /// textes, à afficher. Possible à tout moment, assis ou non.
+    Cards,
 }
 
 /// L'adversaire choisi en créant une salle.
@@ -92,6 +96,13 @@ pub enum ServerMessage {
         /// `None` (`null`) si le dernier coup finit ses choix : ces coups sont prêts à être
         /// joués avec `play`.
         view: Option<Box<PlayerView>>,
+    },
+    /// Le catalogue des cartes, en réponse à [`ClientMessage::Cards`] : toutes les familles,
+    /// dans l'ordre des fiches attaques. Le coût et la recharge de chaque carte sont dans la
+    /// configuration de la partie (`config.attack_catalog` de la vue).
+    Cards {
+        /// Les familles, avec leurs raretés jouables.
+        cards: Vec<CardFamily>,
     },
     /// Une demande refusée ; rien n'a changé. Arrive aussi sans demande si le bot du
     /// serveur ne peut plus jouer.

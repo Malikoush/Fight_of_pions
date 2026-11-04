@@ -7,11 +7,13 @@
 //! aperçu ne la sonde pas. Les règles restent dans le moteur, les bots dans `bots`.
 //!
 //! - `protocol` : les messages ;
+//! - `cards` : le catalogue des cartes à afficher (noms et textes, tirés de `data/cartes.json`) ;
 //! - `limits` : les limites du serveur (taille des messages, salles, bots) ;
 //! - `room` : une partie et ses places, sans réseau ;
 //! - `lobby` : les salles ouvertes, et la diffusion des vues ;
 //! - `connection` : une WebSocket.
 
+mod cards;
 mod connection;
 mod error;
 mod limits;
@@ -19,6 +21,7 @@ mod lobby;
 mod protocol;
 mod room;
 
+pub use cards::{CardFamily, CardRarity};
 pub use error::ServerError;
 pub use protocol::{ClientMessage, Opponent, ServerMessage};
 

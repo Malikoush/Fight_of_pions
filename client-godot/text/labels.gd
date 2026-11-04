@@ -34,6 +34,27 @@ const PLACEMENTS := "%d poses disponibles"
 const NO_PLACEMENT := "Plus de pose ce tour"
 const GAME_OVER := "Partie finie"
 
+## Les cartes et leur choix.
+const SECRET_TAG := "CACHE"
+const STEP_LAUNCHER := "LANCEUR"
+const STEP_TARGETS := "CIBLES"
+const CHOOSE_LAUNCHER := "Choisis le lanceur"
+const CHOOSE_TARGET := "Choisis une cible"
+const READY_TO_PLAY := "Prête à jouer"
+const TARGETS_CHOSEN := "%d cible(s) choisie(s)"
+const CANCEL := "ANNULER"
+const PLAY_CARD := "JOUER LA CARTE"
+const AIM_TOKENS := "VISER LES JETONS"
+const HARE_DESTINATION := "Touche la case où va ton pion."
+
+## Le libellé de chaque coup proposé dans le menu d'une case.
+const CELL_ACTIONS := {
+	"Place": "POSER ICI",
+	"StepQueen": "PAS DE LA REINE",
+	"Shoot": "TIR DE LA REINE",
+	"HareStep": "PAS DU LIÈVRE",
+}
+
 ## Le libellé des coups sans case, sur le bouton d'action.
 const ACTION_LABELS := {
 	"EndTurn": "FINIR LE TOUR",

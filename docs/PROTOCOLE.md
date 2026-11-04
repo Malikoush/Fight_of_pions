@@ -23,6 +23,7 @@ Chaque message a un champ `type`.
 | Reprendre sa place | `{"type":"rejoin","code":"K7QXM","player":"One","key":"…"}` | Après une déconnexion, avec la clé reçue en s'asseyant. |
 | Jouer | `{"type":"play","action":…}` | Un coup de `legal_actions` de sa dernière vue, **recopié tel quel**. |
 | Se remettre à jour | `{"type":"sync"}` | Redemande la vue actuelle (`state`, avec `events` vide). À envoyer si le client pense avoir manqué une vue. |
+| Catalogue des cartes | `{"type":"cards"}` | Demande le nom et les textes de toutes les cartes (réponse `cards`). Possible à tout moment, assis ou non. |
 | Aperçu | `{"type":"preview","actions":[{"UseAttack":0},{"Choose":{"row":4,"col":4}}]}` | Essaie les choix d'une carte sur une copie, sans rien jouer : la réponse `preview` donne les choix suivants. L'aperçu s'arrête au coup qui finit ces choix (voir « Le déroulé »). |
 
 Les coups (`action`) ont la forme du moteur. Le client n'a pas à les construire : il les reprend dans `legal_actions`. Pour les afficher :
@@ -50,6 +51,7 @@ Les coups (`action`) ont la forme du moteur. Le client n'a pas à les construire
 | Place | `{"type":"seated","code":"K7QXM","player":"One","key":"…"}` | Après `create`, `join` ou `rejoin`. Garder `code` (à donner à l'ami) et `key` (secrète, pour revenir). |
 | Vue | `{"type":"state","view":{…},"events":[…]}` | Juste après s'être assis, puis à chaque coup de n'importe qui. |
 | Aperçu | `{"type":"preview","view":{…}}` ou `{"type":"preview","view":null}` | Réponse à un `preview` : la vue après ces coups, ou `null` si le dernier coup finit les choix de la carte (la suite est prête à être jouée). Rien n'est joué, l'adversaire ne voit rien. |
+| Catalogue | `{"type":"cards","cards":[{"kind":"Ours","name":"Ours","reaction":false,"summary":"…","rules":["…"],"rarities":[{"rarity":"Rare","name":"Rare","effect":"…"}]}]}` | Réponse à `cards` : toutes les familles, dans l'ordre des fiches attaques, avec leurs raretés jouables. Les textes viennent de `serveur/data/cartes.json`, les noms du moteur. Le coût et la recharge sont dans la configuration de la partie (`config.attack_catalog` de la vue). |
 | Erreur | `{"type":"error","kind":"not_your_turn","message":"ce n'est pas à toi de jouer"}` | Demande refusée, rien n'a changé. `message` est en français, à afficher ; `kind` est stable, pour réagir sans lire le texte (voir « Les erreurs »). Arrive aussi sans demande, `bot_failed`, si le bot du serveur ne peut plus jouer du tout : la partie attend, et le prochain message du client relance le bot. |
 
 ### La vue (`view`)
@@ -100,6 +102,7 @@ En cas de coupure, le client rouvre une WebSocket et envoie `rejoin` : il retrou
 | `server_full` | Le serveur a son nombre maximal de salles | Réessayer plus tard |
 | `bot_failed` | Le bot du serveur ne peut plus jouer | Afficher le message ; la partie attend |
 | `refused_move` | Le moteur refuse ce coup | Envoyer `sync` |
+| `cards_unavailable` | Le fichier des textes des cartes est mal écrit (un bug du serveur) | Afficher les cartes sans texte |
 
 ## Limites actuelles
 

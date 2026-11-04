@@ -3,7 +3,8 @@
 // reste celui de l'illustration, net, et ne coûte presque rien. Sert aux cases, au mur et
 // aux tombes. Les réglages viennent de `Look` (par `BoardMaterials.prism`).
 //
-// La caméra regarde depuis +x +z : la tranche +z est à gauche de l'écran, la +x à droite.
+// La tranche +z (ou -z) a la couleur A, la tranche +x (ou -x) la couleur B. La caméra
+// regarde depuis +z : on voit surtout la tranche A, face à soi.
 shader_type spatial;
 render_mode unshaded;
 

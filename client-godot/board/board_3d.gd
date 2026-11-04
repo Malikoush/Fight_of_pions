@@ -1,6 +1,6 @@
 class_name Board3D
 extends Node3D
-## Le plateau en 3D, filmé en isométrique par une caméra orthographique. Il dessine la vue
+## Le plateau en 3D, filmé de face et en plongée par une caméra orthographique. Il dessine la vue
 ## que lui donne l'écran de partie, anime ce que celui-ci lui demande, et annonce la case
 ## survolée ou touchée ; il ne sait pas ce qui est permis : l'écran de partie le lui dit
 ## (`show_mark`, `show_ghost`, `flash_refusal`).
@@ -8,15 +8,19 @@ extends Node3D
 ## Du mur, on ne voit que les cases qui touchent le plateau (la première rangée, et les
 ## voisines des cases creusées). La caméra cadre les cases jouables, plus une demi-case,
 ## dans le rectangle que l'écran lui laisse (`frame`) : sur un téléphone, c'est la largeur
-## qui manque, et le mur peut déborder aux pointes du losange plutôt que de rétrécir les
-## cases.
+## qui manque, et le mur peut déborder sur les côtés plutôt que de rétrécir les cases.
 
 ## Une case touchée ou cliquée (un toucher qui n'a presque pas bougé).
 signal cell_clicked(cell: Vector2i)
 ## La case sous la souris a changé (`ViewData.NO_CELL` hors du plateau).
 signal cell_hovered(cell: Vector2i)
+## Un toucher qui ne désigne aucune case (hors du plateau, ou loin des cases proposées).
+signal empty_tapped
 
 enum Tile { CASE, CASE_ALT, WALL, DUG }
+## Les marques posées sur des cases, par sorte : le dernier coup adverse, les cases
+## proposées pendant le choix d'une carte, les cases déjà choisies.
+enum Marks { LAST, CANDIDATE, CHOSEN }
 
 ## Les huit voisines d'une case.
 const NEIGHBORS: Array[Vector2i] = [
@@ -42,9 +46,13 @@ var _pieces: Node3D
 var _mark: MeshInstance3D
 var _refusal: MeshInstance3D
 var _refusal_fade: Tween
-## Les losanges en pointillés du dernier coup adverse, et les pions qu'ils entourent.
-var _last_marks: Array[MeshInstance3D] = []
+## Les marques de chaque sorte (réutilisées d'une vue à l'autre), et leur matériau.
+var _marks: Dictionary[Marks, Array] = {}
+var _mark_materials: Dictionary[Marks, ShaderMaterial] = {}
+## Les pions du dernier coup adverse : leur marque les suit s'ils bougent.
 var _last_ids: Array[int] = []
+## Les cases vers lesquelles un toucher s'aimante (les cases proposées d'un choix).
+var _magnet: Array[Vector2i] = []
 var _ghost: Pion3D
 var _ghost_player := ""
 var _ghost_cell := ViewData.NO_CELL
@@ -73,8 +81,15 @@ func _ready() -> void:
 
 	_pieces = Node3D.new()
 	add_child(_pieces)
-	_mark = _flat_mark(Look.MARK_SIZE, BoardMaterials.flat(Look.MARK_FILL, Look.MARK_BORDER, false))
-	_refusal = _flat_mark(Look.MARK_SIZE, BoardMaterials.flat(Look.REFUSAL_FILL, Look.REFUSAL_BORDER, false))
+	_mark = _flat_mark(Look.MARK_SIZE, BoardMaterials.mark(Look.MARK_FILL, Look.MARK_BORDER))
+	_refusal = _flat_mark(Look.MARK_SIZE, BoardMaterials.mark(Look.REFUSAL_FILL, Look.REFUSAL_BORDER))
+	_mark_materials = {
+		Marks.LAST: BoardMaterials.dashed_mark(Look.LAST_MARK, Look.LAST_MARK_DASHES),
+		Marks.CANDIDATE: BoardMaterials.dotted_mark(Look.CANDIDATE_FILL, Look.CANDIDATE_DOT, Look.CANDIDATE_DOT_SIZE),
+		Marks.CHOSEN: BoardMaterials.mark(Look.CHOSEN_FILL, Look.CHOSEN_BORDER),
+	}
+	for kind: Marks in Marks.values():
+		_marks[kind] = []
 	get_viewport().size_changed.connect(_update_camera.bind(false))
 
 
@@ -147,6 +162,22 @@ func flash_refusal(cell: Vector2i) -> void:
 func show_last(ids: Array[int]) -> void:
 	_last_ids = ids
 	_update_last_marks()
+
+
+## Le point de l'écran où se trouve le centre de cette case.
+func screen_point(cell: Vector2i) -> Vector2:
+	return _camera.unproject_position(_ground(cell))
+
+
+## Marque ces cases proposées (le choix d'une carte) ; un toucher proche s'y aimante.
+func show_candidates(cells: Array[Vector2i]) -> void:
+	_magnet = cells
+	_show_marks(Marks.CANDIDATE, cells)
+
+
+## Marque ces cases déjà choisies (le lanceur et les cibles d'une carte en cours).
+func show_chosen(cells: Array[Vector2i]) -> void:
+	_show_marks(Marks.CHOSEN, cells)
 
 
 func _update_tiles(view: ViewData) -> void:
@@ -248,11 +279,17 @@ func _update_last_marks() -> void:
 	for id in _last_ids:
 		if _pion_cells.has(id):
 			cells.append(_pion_cells[id])
-	while _last_marks.size() < cells.size():
-		var dashed := BoardMaterials.flat(Look.LAST_MARK_FILL, Look.LAST_MARK, false, Look.LAST_MARK_DASHES)
-		_last_marks.append(_flat_mark(Look.LAST_MARK_SIZE, dashed))
-	for index in _last_marks.size():
-		_place_flat(_last_marks[index], cells[index] if index < cells.size() else ViewData.NO_CELL)
+	_show_marks(Marks.LAST, cells)
+
+
+## Pose une marque de cette sorte sur chacune de ces cases, et cache les autres.
+func _show_marks(kind: Marks, cells: Array[Vector2i]) -> void:
+	var pool: Array = _marks[kind]
+	var size := Look.LAST_MARK_SIZE if kind == Marks.LAST else Look.MARK_SIZE
+	while pool.size() < cells.size():
+		pool.append(_flat_mark(size, _mark_materials[kind]))
+	for index in pool.size():
+		_place_flat(pool[index], cells[index] if index < cells.size() else ViewData.NO_CELL)
 
 
 ## Le sol d'une case : le dessus de la case, là où se posent les pièces.
@@ -367,17 +404,35 @@ func _unhandled_input(event: InputEvent) -> void:
 				var cell := _pick(event.position)
 				if cell != ViewData.NO_CELL:
 					cell_clicked.emit(cell)
+				else:
+					empty_tapped.emit()
 
 
-## La case dessinée sous ce point de l'écran, lue sur le plan du dessus des cases.
+## La case dessinée sous ce point de l'écran, lue sur le plan du dessus des cases. Pendant
+## un choix, la case proposée la plus proche, si elle est assez près : viser juste une
+## petite case au doigt est difficile, et seules ces cases comptent alors.
 func _pick(screen_position: Vector2) -> Vector2i:
 	var origin := _camera.project_ray_origin(screen_position)
 	var direction := _camera.project_ray_normal(screen_position)
 	if is_zero_approx(direction.y):
 		return ViewData.NO_CELL
 	var hit := origin + direction * ((Look.CASE_HEIGHT - origin.y) / direction.y)
+	if not _magnet.is_empty():
+		return _nearest_candidate(hit)
 	var cell := _geometry.cell_at(hit)
 	return cell if _drawn.has(cell) else ViewData.NO_CELL
+
+
+func _nearest_candidate(hit: Vector3) -> Vector2i:
+	var best := ViewData.NO_CELL
+	var best_distance := Look.MAGNET_RADIUS * GridGeometry.CELL_SIZE
+	for cell in _magnet:
+		var offset := _ground(cell) - hit
+		var distance := Vector2(offset.x, offset.z).length()
+		if distance <= best_distance:
+			best = cell
+			best_distance = distance
+	return best
 
 
 static func _tile_height(tile: Tile) -> float:

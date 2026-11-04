@@ -194,6 +194,7 @@ Le serveur (`serveur/`) est en anglais dans le code, comme le moteur ; ses messa
 | Aperçu | `ClientMessage::Preview`, `ServerMessage::Preview`, `Room::preview` | Les choix d'une carte essayés sur une copie, sans rien jouer ; il s'arrête au coup qui finit ces choix (réponse `null`) |
 | Recherche de bot | `BotSearch`, `BotMove`, `Table::start_bots` | La copie de la partie sur laquelle un bot cherche son coup, hors du verrou de la salle ; le coup n'est joué que si la partie n'a pas changé |
 | Variante en ligne | `bots::ONLINE_VARIANT` | La configuration jouée quand le client n'en demande pas : les règles actuelles avec draft |
+| Catalogue des cartes | `ClientMessage::Cards`, `ServerMessage::Cards`, `CardFamily`, `CardRarity`, `serveur/data/cartes.json` | Le nom, le résumé, les règles et l'effet de chaque rareté de chaque famille, à afficher ; demandé par le client, sans place nécessaire |
 | Limites | `serveur/src/limits.rs` | Taille des messages, file d'envoi, nombre de salles, inactivité, cœurs des bots |
 
 ## Client Godot
@@ -226,6 +227,13 @@ Le client (`client-godot/`) est en anglais dans le code, comme le moteur ; ses c
 | Dernier coup adverse | `Board3D.show_last` | Les pions que l'adversaire vient de poser, entourés de pointillés |
 | Bandeau du tour | `ThemeBuilder.BANNER` | « À toi ! », au milieu du plateau, au début de son tour |
 | Cadre d'attente | `ThemeBuilder.WAITING_PANEL`, `StyleBoxDashed` | À la place du bouton d'action quand on attend l'adversaire : « ⧗ EN ATTENTE » en pointillés |
+| Catalogue (côté client) | `CardCatalog` | Les noms et les textes des cartes, reçus du serveur à chaque connexion |
+| Carte (affichée) | `CardView` | Une carte de l'arsenal : cadre, nom, coût, recharge, cache ; vive seulement si son coup est permis |
+| Arsenal (affiché) | `ArsenalBar` | La rangée des cartes du joueur, sous le plateau ; elle défile au doigt si elle déborde |
+| Choix d'une carte | `ChoiceSession`, `ChoicePanel` | Les coups choisis d'une carte en cours (lanceur, cibles) et l'aperçu du serveur qui donne les suivants ; le panneau qui les montre, avec Annuler et Jouer la carte |
+| Case proposée, case choisie | `Board3D.show_candidates`, `Board3D.show_chosen`, `Board3D.Marks` | Pendant un choix : les cases des coups proposés (anneau d'or et petit losange) et celles déjà choisies (dorées) |
+| Aimantation | `Look.MAGNET_RADIUS` | Pendant un choix, un toucher désigne la case proposée la plus proche, jusqu'à cette distance |
+| Menu de case | `ActionMenu` | Le petit menu d'une case qui porte autre chose qu'une pose, ou plusieurs coups |
 | Écran | `BootScreen`, `HomeScreen`, `GameScreen` | Démarrage, accueil, partie ; la racine (`main.gd`) les enchaîne |
 | Action principale | `GameScreen.MAIN_ACTIONS` | Le coup sans case permis maintenant (finir son tour, passer), recopié de la vue, sur le grand bouton |
 

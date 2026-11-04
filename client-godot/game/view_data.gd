@@ -43,6 +43,21 @@ static func side_index(player: String) -> int:
 	return 0 if player == PLAYER_ONE else 1
 
 
+## L'arsenal de ce joueur, emplacement par emplacement : `{"attack": {"kind", "rarity"},
+## "cooldown_left", "secret"}`, ou `null` pour une carte cachée qu'on ne peut pas voir.
+func arsenal(player: String) -> Array:
+	return side(player).get("arsenal", [])
+
+
+## Le coût et la recharge de cette carte (`{"kind", "rarity"}`), lus dans le catalogue de
+## la configuration : `{"cost", "cooldown"}`, vide si elle n'y est pas.
+func stats_of(attack: Dictionary) -> Dictionary:
+	for entry: Variant in config().get("attack_catalog", []):
+		if entry is Dictionary and entry.get("attack") == attack:
+			return entry.get("stats", {})
+	return {}
+
+
 ## Ce qu'a ce joueur : réserve, banque, actions et poses du tour, arsenal…
 func side(player: String) -> Dictionary:
 	var sides: Array = raw.get("sides", [])
@@ -75,6 +90,13 @@ func is_over() -> bool:
 ## La décision attendue, par exemple `{"MainAction": {"player": "One"}}`, ou `null`.
 func decision() -> Variant:
 	return raw.get("decision")
+
+
+## Le nom de la décision attendue (`MainAction`, `ChooseLauncher`, `ChooseTarget`, `React`,
+## `Draft`), vide si aucune.
+func decision_kind() -> String:
+	var pending: Variant = decision()
+	return pending.keys()[0] if pending is Dictionary and not pending.is_empty() else ""
 
 
 ## Le joueur qui doit décider, vide si personne. Le draft dit son joueur dans son étape.
@@ -131,15 +153,42 @@ static func action_kind(action: Variant) -> String:
 	return ""
 
 
-## La case que désigne un coup qui en désigne une seule (`Place`, `Choose`, `StepQueen`,
-## `Shoot`), ou `NO_CELL`. Le pas du Lièvre, qui en désigne deux, viendra avec les cartes.
+## La case que désigne un coup (`Place`, `Choose`, `StepQueen`, `Shoot`), ou `NO_CELL`. Le
+## pas du Lièvre est rangé sous sa case de départ : on touche d'abord le pion.
 static func action_cell(action: Variant) -> Vector2i:
 	if not (action is Dictionary) or action.is_empty():
 		return NO_CELL
 	var payload: Variant = action.values()[0]
+	if payload is Dictionary and payload.has("from") and payload["from"] is Dictionary:
+		return to_cell(payload["from"])
 	if payload is Dictionary and payload.has("row") and payload.has("col"):
 		return to_cell(payload)
 	return NO_CELL
+
+
+## La case d'arrivée d'un pas du Lièvre, ou `NO_CELL` pour un autre coup.
+static func step_destination(action: Variant) -> Vector2i:
+	if action is Dictionary and action.get("HareStep") is Dictionary:
+		var to: Variant = action["HareStep"].get("to")
+		return to_cell(to) if to is Dictionary else NO_CELL
+	return NO_CELL
+
+
+## Les cases désignées par les coups permis de cette sorte.
+func cells_of(kind: String) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for cell: Vector2i in _actions_by_cell:
+		if action_at(cell, kind) != null:
+			cells.append(cell)
+	return cells
+
+
+## Le coup permis qui lance la carte de cet emplacement de l'arsenal, ou `null`.
+func use_attack(slot: int) -> Variant:
+	for action: Variant in legal_actions():
+		if action is Dictionary and action.get("UseAttack") == slot:
+			return action
+	return null
 
 
 static func to_cell(position: Dictionary) -> Vector2i:

@@ -1,6 +1,7 @@
 //! Une connexion WebSocket : elle lit les messages du client, les traduit en demandes au
 //! hall ou à sa salle, et écrit les réponses. Aucune règle ici.
 
+use crate::cards;
 use crate::limits::OUTBOX_CAPACITY;
 use crate::lobby::{Lobby, Outbox, Seating, SharedTable, lock};
 use crate::{ClientMessage, ServerError, ServerMessage};
@@ -75,6 +76,10 @@ async fn handle(
             let state = lock(table).state(player);
             let _ = outbox.send(state).await;
         }
+        ClientMessage::Cards => {
+            let cards = cards::catalog()?.to_vec();
+            let _ = outbox.send(ServerMessage::Cards { cards }).await;
+        }
         seat_request => {
             if place.is_some() {
                 return Err(ServerError::AlreadySeated);
@@ -87,7 +92,8 @@ async fn handle(
                 ClientMessage::Rejoin { code, player, key } => lobby.rejoin(&code, player, &key)?,
                 ClientMessage::Play { .. }
                 | ClientMessage::Preview { .. }
-                | ClientMessage::Sync => return Err(ServerError::NotSeated),
+                | ClientMessage::Sync
+                | ClientMessage::Cards => return Err(ServerError::NotSeated),
             };
             *place = Some(sit(seating, outbox).await);
         }

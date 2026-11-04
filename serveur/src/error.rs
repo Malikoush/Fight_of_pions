@@ -31,6 +31,8 @@ pub enum ServerError {
     BotFailed(String),
     /// Le moteur refuse ce coup, ou cette configuration.
     Game(GameError),
+    /// Le fichier des textes des cartes est mal écrit (un bug, que les tests empêchent).
+    CardsUnavailable(String),
 }
 
 impl fmt::Display for ServerError {
@@ -61,6 +63,9 @@ impl fmt::Display for ServerError {
                 )
             }
             ServerError::Game(error) => write!(f, "coup refusé : {error}"),
+            ServerError::CardsUnavailable(why) => {
+                write!(f, "les textes des cartes sont illisibles ({why})")
+            }
         }
     }
 }
@@ -84,6 +89,7 @@ impl ServerError {
             ServerError::ServerFull => "server_full",
             ServerError::BotFailed(_) => "bot_failed",
             ServerError::Game(_) => "refused_move",
+            ServerError::CardsUnavailable(_) => "cards_unavailable",
         }
     }
 }

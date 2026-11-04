@@ -3,9 +3,9 @@ extends Node
 ## (docs/PROTOCOLE.md). Il ne connaît aucune règle : il envoie les demandes du client et
 ## annonce ce que le serveur répond. Il garde la place (code, joueur, clé) sur le disque et
 ## la reprend tout seul après une coupure, ou au lancement suivant.
+## À chaque ouverture, il demande le catalogue des cartes (noms et textes à afficher).
 ##
-## Rejoindre une salle par son code et l'aperçu d'une carte arriveront avec les étapes qui
-## s'en servent (E3f, E3c).
+## Rejoindre une salle par son code arrivera avec l'étape qui s'en sert (E3f).
 
 ## L'état de la connexion.
 enum Status { OFFLINE, CONNECTING, ONLINE, RECONNECTING }
@@ -13,6 +13,10 @@ enum Status { OFFLINE, CONNECTING, ONLINE, RECONNECTING }
 signal status_changed(status: Status)
 ## La partie a changé : la vue entière, et ce qui s'est passé depuis la précédente.
 signal state_received(view: ViewData, events: Array)
+## La réponse à un aperçu : la vue après ces coups, ou `null` si la carte est complète.
+signal preview_received(view: ViewData)
+## Le catalogue des cartes : les familles, leurs noms et leurs textes.
+signal cards_received(cards: CardCatalog)
 ## Une demande refusée (`kind` est stable, `message` est en français).
 signal server_error(kind: String, message: String)
 
@@ -111,6 +115,12 @@ func sync() -> void:
 	_send({"type": "sync"})
 
 
+## Essayer ces coups sur une copie, sans rien jouer : la réponse donne les choix suivants
+## d'une carte (`preview_received`).
+func preview(actions: Array) -> void:
+	_send({"type": "preview", "actions": actions})
+
+
 func _process(delta: float) -> void:
 	if _socket == null:
 		if _wants_connection:
@@ -142,6 +152,7 @@ func _open() -> void:
 func _on_opened() -> void:
 	failed_attempts = 0
 	_set_status(Status.ONLINE)
+	_write({"type": "cards"})
 	if has_session():
 		_rejoining = true
 		_write({"type": "rejoin", "code": _session["code"], "player": _session["player"], "key": _session["key"]})
@@ -194,6 +205,11 @@ func _receive(text: String) -> void:
 			_save_session(message)
 		"state":
 			state_received.emit(ViewData.new(message["view"]), message.get("events", []))
+		"preview":
+			var view: Variant = message["view"]
+			preview_received.emit(ViewData.new(view) if view is Dictionary else null)
+		"cards":
+			cards_received.emit(CardCatalog.new(message["cards"]))
 		"error":
 			_on_error(message["kind"], message["message"])
 
@@ -206,6 +222,10 @@ static func _is_well_formed(message: Dictionary) -> bool:
 			return message.get("view") is Dictionary and message.get("events", []) is Array
 		"error":
 			return message.get("kind") is String and message.get("message") is String
+		"preview":
+			return message.has("view") and (message["view"] == null or message["view"] is Dictionary)
+		"cards":
+			return message.get("cards") is Array
 	return false
 
 

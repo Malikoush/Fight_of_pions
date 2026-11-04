@@ -22,6 +22,12 @@ const WAITING_PANEL := &"WaitingPanel"
 const WAITING_LABEL := &"WaitingLabel"
 const BANNER := &"Banner"
 const BANNER_LABEL := &"BannerLabel"
+const CARD_BUTTON := &"CardButton"
+const CARD_NAME_LABEL := &"CardNameLabel"
+const CARD_COST_LABEL := &"CardCostLabel"
+const TAG := &"Tag"
+const TAG_LABEL := &"TagLabel"
+const CAPS_LABEL := &"CapsLabel"
 const SECONDARY_BUTTON := &"SecondaryButton"
 const PANEL := &"GamePanel"
 const PANEL_ACTIVE := &"GamePanelActive"
@@ -46,12 +52,17 @@ static func build() -> Theme:
 	_label(theme, NUMBER_LABEL, caps, Look.FONT_NUMBER, Look.CREAM, false)
 	_label(theme, PILL_LABEL, caps, Look.FONT_BODY, Look.CREAM, false)
 	_label(theme, WAITING_LABEL, caps, Look.FONT_BUTTON, Look.MUTED, false)
+	_label(theme, CARD_NAME_LABEL, caps, Look.FONT_CARD_NAME, Look.INK, false)
+	_label(theme, CARD_COST_LABEL, caps, Look.FONT_CARD_COST, Look.INK, false)
+	_label(theme, TAG_LABEL, caps, Look.FONT_CARD_TAG, Look.GOLD, false)
+	_label(theme, CAPS_LABEL, caps, Look.FONT_BODY, Look.MUTED, false)
 
 	_primary_button(theme, caps)
 	_secondary_button(theme, caps)
 	_waiting_panel(theme)
 	_panels(theme)
 	_banner(theme)
+	_cards(theme)
 	return theme
 
 
@@ -179,6 +190,23 @@ static func _panels(theme: Theme) -> void:
 	pill.content_margin_top = Look.GAP_S
 	pill.content_margin_bottom = Look.GAP_S
 	theme.set_stylebox(&"panel", PILL, pill)
+
+
+## Une carte est un bouton sans fond : son cadre est son dessin. L'étiquette « CACHE » est
+## une petite plaque sombre bordée d'or (maquettes).
+static func _cards(theme: Theme) -> void:
+	theme.set_type_variation(CARD_BUTTON, &"Button")
+	for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
+		theme.set_stylebox(state, CARD_BUTTON, StyleBoxEmpty.new())
+	theme.set_stylebox(&"focus", CARD_BUTTON, _focus())
+	theme.set_type_variation(TAG, &"PanelContainer")
+	var tag := StyleBoxFlat.new()
+	tag.bg_color = Look.FOREST_DEEP
+	tag.set_border_width_all(Look.BORDER)
+	tag.border_color = Look.GOLD
+	tag.content_margin_left = Look.GAP_XS
+	tag.content_margin_right = Look.GAP_XS
+	theme.set_stylebox(&"panel", TAG, tag)
 
 
 ## Le bandeau qui annonce ton tour : un hexagone d'or, comme les boutons d'action.

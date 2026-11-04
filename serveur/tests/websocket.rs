@@ -222,3 +222,36 @@ async fn a_player_gets_its_seat_back_with_its_key() {
     back.send(ClientMessage::Sync).await;
     assert_eq!(back.state().await, (before, Vec::new()));
 }
+
+#[tokio::test]
+async fn the_card_catalog_is_sent_on_request_even_without_a_seat() {
+    let url = start_server().await;
+    let mut client = Client::connect(&url).await;
+    client.send(ClientMessage::Cards).await;
+    let cards = match client.receive().await {
+        ServerMessage::Cards { cards } => cards,
+        other => panic!("le catalogue était attendu, reçu : {other:?}"),
+    };
+    let bear = cards
+        .iter()
+        .find(|family| family.kind == fight_of_pions::AttackKind::Ours)
+        .expect("l'Ours est au catalogue");
+    assert_eq!(bear.name, "Ours");
+    assert!(!bear.rarities.is_empty());
+    assert!(cards.iter().any(|family| family.reaction));
+    // Le catalogue ne demande pas de place : on peut encore créer une salle ensuite, puis le
+    // redemander une fois assis.
+    client
+        .send(ClientMessage::Create {
+            opponent: Opponent::Human,
+            variant: None,
+        })
+        .await;
+    client.seated().await;
+    client.state().await;
+    client.send(ClientMessage::Cards).await;
+    assert!(matches!(
+        client.receive().await,
+        ServerMessage::Cards { cards: again } if again == cards
+    ));
+}

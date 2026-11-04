@@ -2,8 +2,8 @@ class_name GridGeometry
 extends RefCounted
 ## La seule conversion entre une case de la grille et le monde 3D. Une case fait
 ## `CELL_SIZE` de côté, posée sur le plan y = 0 ; la colonne avance vers +x, la rangée vers
-## +z, et la grille est centrée sur l'origine. La caméra regarde depuis +x +z : A1 est le
-## coin du haut.
+## +z, et la grille est centrée sur l'origine. La caméra regarde le plateau depuis +z, face
+## à ses rangées : A1 est le coin en haut à gauche, comme sur un damier.
 
 const CELL_SIZE := 1.0
 

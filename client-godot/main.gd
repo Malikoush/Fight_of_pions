@@ -16,6 +16,8 @@ var _board: Board3D
 var _ui: Control
 var _screen: Control
 var _opponent_name := Labels.OPPONENT
+## Le catalogue des cartes (noms et textes), reçu à chaque connexion.
+var _catalog: CardCatalog
 
 
 func _ready() -> void:
@@ -37,6 +39,8 @@ func _ready() -> void:
 	ServerLink.status_changed.connect(_on_status_changed)
 	ServerLink.state_received.connect(_on_state_received)
 	ServerLink.server_error.connect(_on_server_error)
+	ServerLink.preview_received.connect(_on_preview_received)
+	ServerLink.cards_received.connect(_on_cards_received)
 	_show_boot()
 	ServerLink.connect_to_server()
 
@@ -56,6 +60,7 @@ func _show_home() -> void:
 func _show_game() -> GameScreen:
 	var game := GameScreen.new(_board)
 	game.opponent_name = _opponent_name
+	game.catalog = _catalog
 	game.play_requested.connect(ServerLink.play)
 	game.home_requested.connect(_on_home_requested)
 	_show(game)
@@ -87,7 +92,10 @@ func _on_status_changed(status: ServerLink.Status) -> void:
 			var lost := ServerLink.failed_attempts >= FAILURES_BEFORE_WARNING
 			(_screen as BootScreen).set_status(Labels.UNREACHABLE if lost else Labels.CONNECTING, lost)
 	elif _screen is GameScreen:
-		(_screen as GameScreen).set_notice("" if online else Labels.RECONNECTING)
+		var game := _screen as GameScreen
+		game.set_notice("" if online else Labels.RECONNECTING)
+		if not online:
+			game.on_connection_lost()
 	elif _screen is HomeScreen and status == ServerLink.Status.RECONNECTING:
 		# Une coupure a pu perdre la demande de partie : on peut la refaire.
 		(_screen as HomeScreen).reset()
@@ -101,16 +109,30 @@ func _on_state_received(view: ViewData, events: Array) -> void:
 		ServerLink.forget_session()
 
 
+## La réponse à un aperçu : elle sert au choix de la carte en cours, sur l'écran de partie.
+func _on_preview_received(view: ViewData) -> void:
+	if _screen is GameScreen:
+		(_screen as GameScreen).on_preview(view)
+
+
+## Le catalogue des cartes, reçu à chaque connexion : gardé pour les écrans à venir.
+func _on_cards_received(cards: CardCatalog) -> void:
+	_catalog = cards
+	if _screen is GameScreen:
+		(_screen as GameScreen).catalog = cards
+
+
 ## Un refus du serveur. L'affichage de son message viendra avec les fenêtres d'erreur (E3g) ;
 ## d'ici là, il est noté dans le journal (un refus est une réponse normale du serveur, pas
-## un défaut du client) et l'écran redevient jouable.
+## un défaut du client) et l'écran redevient jouable. Quand la vue peut être en retard (un
+## refus qui le dit, ou une carte refusée en cours d'envoi), on la redemande.
 func _on_server_error(kind: String, message: String) -> void:
 	print("Refus du serveur (%s) : %s" % [kind, message])
 	if kind in ServerLink.LOST_SEAT_ERRORS and not (_screen is HomeScreen):
 		_show_home()
 	elif _screen is GameScreen:
-		(_screen as GameScreen).on_refused()
-		if kind in STALE_VIEW_ERRORS:
+		var was_sending := (_screen as GameScreen).on_refused()
+		if was_sending or kind in STALE_VIEW_ERRORS:
 			ServerLink.sync()
 	elif _screen is HomeScreen:
 		(_screen as HomeScreen).reset()
