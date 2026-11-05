@@ -310,3 +310,12 @@ func starting_attacks(player: String) -> Array:
 	var starting: Array = config().get("starting_attacks", [[], []])
 	var index := side_index(player)
 	return starting[index] if index < starting.size() else []
+
+
+## Les cases de la ligne gagnante (une victoire par alignement), vide sinon.
+func winning_line() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for position: Variant in raw.get("winning_line", []):
+		if position is Dictionary:
+			cells.append(to_cell(position))
+	return cells

@@ -70,6 +70,7 @@ Tout ce qu'il faut afficher. Le client redessine tout à partir d'elle.
 | `token_piles`, `infirmary`, `graveyard` | Jetons du Massacre divin, pions à l'infirmerie, pions au cimetière |
 | `draft_pool` | Pendant le draft : les cartes tirées qui restent, à partir du premier ban ou pick (vide pendant le choix des caches) |
 | `turn`, `current_player`, `end` | Le tour, à qui c'est le tour, la fin (gagnant et raison) |
+| `winning_line` | Les cases de la ligne gagnante (`[{"row":…,"col":…}]`), si la partie est gagnée par alignement ; vide sinon |
 | `config` | Les réglages : taille, mur, catalogue et coûts des cartes |
 
 ### Les événements (`events`)

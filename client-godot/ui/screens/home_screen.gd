@@ -9,6 +9,7 @@ signal create_room_requested
 signal join_requested
 
 var _buttons: Array[Button] = []
+var _error: Label
 
 
 func _ready() -> void:
@@ -18,6 +19,9 @@ func _ready() -> void:
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
 	column.add_child(Ui.centered_label(Labels.GAME_NAME, ThemeBuilder.DISPLAY_LABEL))
 	column.add_child(Ui.centered_label(Labels.TAGLINE, ThemeBuilder.MUTED_LABEL))
+	_error = Ui.centered_label("", ThemeBuilder.THREAT_LABEL)
+	_error.visible = false
+	column.add_child(_error)
 	column.add_child(Ui.gap(Vector2(0, Look.GAP_XL)))
 	column.add_child(_button(Labels.PLAY_BOT, ThemeBuilder.PRIMARY_BUTTON, play_bot_requested))
 	column.add_child(Ui.centered_label(Labels.PLAY_BOT_DETAIL, ThemeBuilder.MUTED_LABEL))
@@ -34,6 +38,12 @@ func _ready() -> void:
 func reset() -> void:
 	for button in _buttons:
 		button.disabled = false
+
+
+## Un refus du serveur (serveur complet…) : son message, en braise, sous le titre.
+func show_error(message: String) -> void:
+	_error.text = message
+	_error.visible = true
 
 
 ## Un choix de la partie entre amis : le bouton, et ce qu'il fait, dessous.

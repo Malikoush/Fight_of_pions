@@ -47,6 +47,15 @@ pub fn has_line(board: &Board, player: Player, target: usize) -> bool {
         .any(|pos| complete_line(board, pos, target))
 }
 
+/// Les pions de ce joueur qui font partie d'une ligne d'au moins `target` pions : les cases
+/// de ses lignes gagnantes, dans l'ordre du plateau (rangée par rangée).
+pub fn line_cells(board: &Board, player: Player, target: usize) -> Vec<Position> {
+    board
+        .positions()
+        .filter(|&pos| board.owner(pos) == Some(player) && complete_line(board, pos, target))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,6 +100,24 @@ mod tests {
         }
 
         assert_eq!(longest_line(&board, Position { row: 4, col: 2 }), 3);
+    }
+
+    #[test]
+    fn line_cells_are_the_pions_of_the_winning_lines_only() {
+        let mut board = Board::new(10);
+        for col in 1..7 {
+            put_pion(&mut board, 4, col, Player::One);
+        }
+        put_pion(&mut board, 5, 1, Player::One);
+        put_pion(&mut board, 2, 2, Player::Two);
+        let cells = line_cells(&board, Player::One, 6);
+        assert_eq!(
+            cells,
+            (1..7)
+                .map(|col| Position { row: 4, col })
+                .collect::<Vec<_>>()
+        );
+        assert!(line_cells(&board, Player::Two, 6).is_empty());
     }
 
     #[test]

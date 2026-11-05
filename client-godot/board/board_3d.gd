@@ -27,8 +27,8 @@ signal empty_tapped
 
 enum Tile { CASE, CASE_ALT, WALL, DUG }
 ## Les marques posées sur des cases, par sorte : le dernier coup adverse, les cases
-## proposées pendant le choix d'une carte, les cases déjà choisies.
-enum Marks { LAST, CANDIDATE, CHOSEN }
+## proposées pendant le choix d'une carte, les cases déjà choisies, la ligne gagnante.
+enum Marks { LAST, CANDIDATE, CHOSEN, WIN }
 
 ## Les huit voisines d'une case.
 const NEIGHBORS: Array[Vector2i] = [
@@ -103,6 +103,7 @@ func _ready() -> void:
 		Marks.LAST: BoardMaterials.dashed_mark(Look.LAST_MARK, Look.LAST_MARK_DASHES),
 		Marks.CANDIDATE: BoardMaterials.dotted_mark(Look.CANDIDATE_FILL, Look.CANDIDATE_DOT, Look.CANDIDATE_DOT_SIZE),
 		Marks.CHOSEN: BoardMaterials.mark(Look.CHOSEN_FILL, Look.CHOSEN_BORDER),
+		Marks.WIN: BoardMaterials.mark(Look.WIN_FILL, Look.WIN_BORDER),
 	}
 	for kind: Marks in Marks.values():
 		_marks[kind] = []
@@ -195,6 +196,11 @@ func screen_point(cell: Vector2i) -> Vector2:
 func show_candidates(cells: Array[Vector2i]) -> void:
 	_magnet = cells
 	_show_marks(Marks.CANDIDATE, cells)
+
+
+## Allume ces cases : la ligne gagnante, que donne la vue (rien n'est calculé ici).
+func show_winning_line(cells: Array[Vector2i]) -> void:
+	_show_marks(Marks.WIN, cells)
 
 
 ## Marque ces cases déjà choisies (le lanceur et les cibles d'une carte en cours).

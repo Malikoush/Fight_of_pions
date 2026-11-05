@@ -33,9 +33,11 @@ extends Control
 
 ## Le joueur demande ce coup, recopié de la vue.
 signal play_requested(action: Variant)
-## Le joueur revient à l'accueil : la flèche en haut à gauche, ou la fin de la partie (les
-## écrans de fin viendront en E3g).
+## Le joueur revient à l'accueil : la flèche en haut à gauche (confirmée pendant la partie),
+## ou le panneau de fin.
 signal home_requested
+## La partie est finie et le joueur en veut une autre.
+signal replay_requested
 
 ## Les coups sans case qui deviennent l'action principale quand ils sont permis.
 const MAIN_ACTIONS: Array[String] = ["EndTurn", "Pass"]
@@ -104,6 +106,10 @@ var _reveal: RevealOverlay
 var _reaction: ReactionPanel
 var _thinking: PanelContainer
 var _thinking_label: Label
+var _end_panel: EndPanel
+## Vrai quand le panneau de fin est montré (après la dernière animation).
+var _end_shown := false
+var _quit_dialog: ConfirmDialog
 var _journal_panel: JournalPanel
 var _journal_button: Button
 var _back_button: Button
@@ -139,6 +145,12 @@ func _ready() -> void:
 	_action_menu.option_chosen.connect(_on_menu_option)
 	_build_journal()
 	_build_opponent_turn()
+	_end_panel = EndPanel.new()
+	_end_panel.home_requested.connect(home_requested.emit)
+	_end_panel.replay_requested.connect(replay_requested.emit)
+	_quit_dialog = ConfirmDialog.new(Labels.QUIT_TITLE, Labels.QUIT_TEXT, Labels.STAY, Labels.QUIT)
+	_quit_dialog.confirmed.connect(home_requested.emit)
+	add_child(_quit_dialog)
 
 	_board.cell_clicked.connect(_on_cell_clicked)
 	_board.cell_hovered.connect(_on_cell_hovered)
@@ -224,6 +236,13 @@ func _apply_view(view: ViewData, events: Array) -> float:
 	_on_cell_hovered(_hovered)
 	if _is_reacting():
 		_reaction.show_window(view, opponent_act, catalog)
+	if view.is_over() and not _end_shown:
+		# La fin se montre une fois la dernière animation jouée : la ligne gagnante s'allume,
+		# puis le panneau de fin prend la place de l'arsenal.
+		_end_panel.show_end(view)
+		var reveal := create_tween()
+		reveal.tween_interval(duration + Look.END_PANEL_DELAY)
+		reveal.tween_callback(_show_end.bind(view))
 	_apply_mode()
 	_refresh_thinking()
 
@@ -255,6 +274,20 @@ func _announce_opponent_cards(view: ViewData, events: Array) -> void:
 				_attack_banner.announce(attack, opponent_name, cell, catalog, cost)
 			"CardRevealed":
 				_reveal.reveal(attack, opponent_name, catalog, cost)
+
+
+func _show_end(view: ViewData) -> void:
+	_end_shown = true
+	_board.show_winning_line(view.winning_line())
+	_apply_mode()
+
+
+## La flèche : pendant la partie, on confirme avant de la quitter.
+func _on_back() -> void:
+	if _view != null and _view.is_over():
+		home_requested.emit()
+	else:
+		_quit_dialog.ask()
 
 
 ## La cache révélée est fermée : la file des vues reprend.
@@ -320,12 +353,15 @@ func on_connection_lost() -> void:
 	_leave_hare_step()
 	_action_menu.close()
 	_board.show_ghost(ViewData.NO_CELL, "", false)
+	_thinking.visible = false
 	_refresh_main_button()
 
 
-## Un message discret sous le tour (reconnexion…), ou rien.
-func set_notice(text: String) -> void:
+## Un message sous le tour, ou rien : discret (le pas du Lièvre), ou en braise pour un
+## avertissement (`warning` : reconnexion, ami parti, bot qui ne répond plus).
+func set_notice(text: String, warning: bool = false) -> void:
 	_notice.text = text
+	_notice.theme_type_variation = ThemeBuilder.THREAT_LABEL if warning else ThemeBuilder.MUTED_LABEL
 	_notice.visible = text != ""
 
 
@@ -630,7 +666,7 @@ func _build_journal() -> void:
 	_journal_button.pressed.connect(_show_journal_page.bind(true))
 	_back_button = Ui.icon_button("retour", Labels.BACK)
 	_back_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_back_button.pressed.connect(home_requested.emit)
+	_back_button.pressed.connect(_on_back)
 	_top_row = Ui.hbox(0)
 	_journal_page = PanelContainer.new()
 	_journal_page.theme_type_variation = ThemeBuilder.OVERLAY
@@ -702,7 +738,7 @@ func _on_resized() -> void:
 ## leurs boîtes changent.
 func _arrange(landscape: bool) -> void:
 	_landscape = landscape
-	for item: Control in [_opponent_panel, _my_panel, _pill, _thinking, _notice, _action_slot, _board_area, _arsenal, _choice_panel, _reaction, _journal_panel, _journal_button, _back_button]:
+	for item: Control in [_opponent_panel, _my_panel, _pill, _thinking, _notice, _action_slot, _board_area, _arsenal, _choice_panel, _reaction, _end_panel, _journal_panel, _journal_button, _back_button]:
 		if item.get_parent() != null:
 			item.get_parent().remove_child(item)
 	if _top_row.get_parent() != null:
@@ -723,6 +759,7 @@ func _arrange(landscape: bool) -> void:
 		left.add_child(_arsenal)
 		left.add_child(_choice_panel)
 		left.add_child(_reaction)
+		left.add_child(_end_panel)
 		row.add_child(left)
 		var column := Ui.vbox(Look.GAP_M)
 		column.custom_minimum_size.x = Look.SIDE_COLUMN_WIDTH
@@ -760,6 +797,7 @@ func _arrange(landscape: bool) -> void:
 		column.add_child(_action_slot)
 		column.add_child(_choice_panel)
 		column.add_child(_reaction)
+		column.add_child(_end_panel)
 		_my_panel.set_identity_visible(false)
 		_journal_panel.custom_minimum_size.x = 0.0
 		_journal_page_column.add_child(_journal_panel)
@@ -775,6 +813,7 @@ func _arrange(landscape: bool) -> void:
 	move_child(_journal_page, -1)
 	move_child(_attack_banner, -1)
 	move_child(_reveal, -1)
+	move_child(_quit_dialog, -1)
 
 
 ## Montre l'arsenal et la barre ; à leur place, pendant le choix d'une carte, le panneau de
@@ -782,11 +821,14 @@ func _arrange(landscape: bool) -> void:
 func _apply_mode() -> void:
 	var choosing := _session != null
 	var reacting := _is_reacting()
-	_choice_panel.visible = choosing
-	_reaction.visible = reacting
-	_arsenal.visible = not (choosing or reacting)
-	_action_slot.visible = not (choosing or reacting)
-	_my_panel.visible = _landscape or not (choosing or reacting)
+	var ending := _end_shown
+	_choice_panel.visible = choosing and not ending
+	_reaction.visible = reacting and not ending
+	_end_panel.visible = ending
+	var busy := choosing or reacting or ending
+	_arsenal.visible = not busy
+	_action_slot.visible = not busy
+	_my_panel.visible = _landscape or not busy
 
 
 func _frame_board() -> void:

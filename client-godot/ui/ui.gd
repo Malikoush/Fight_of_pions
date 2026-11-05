@@ -100,21 +100,6 @@ static func limit_width(child: Control, max_width: float) -> CenterContainer:
 	return center
 
 
-## Centre ce contrôle dans la largeur, sans dépasser `max_width`, en lui laissant toute la
-## hauteur (un écran qui défile, comme le draft) : `limit_width`, lui, le réduit à sa taille
-## minimale. Les marges se calculent sur la place donnée, jamais sur le contenu : rien ne
-## peut élargir l'écran en boucle.
-static func limit_width_full_height(child: Control, max_width: float) -> MarginContainer:
-	var margin := MarginContainer.new()
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(child)
-	margin.resized.connect(func() -> void:
-		var side := int(maxf(0.0, (margin.size.x - max_width) / 2.0))
-		margin.add_theme_constant_override(&"margin_left", side)
-		margin.add_theme_constant_override(&"margin_right", side))
-	return margin
-
-
 ## Un vide qui prend toute la place libre de sa boîte.
 static func spacer() -> Control:
 	var item := Control.new()

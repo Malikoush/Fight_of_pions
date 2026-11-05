@@ -40,6 +40,9 @@ var _filters: HFlowContainer
 var _grid: GridContainer
 var _my_cards: HBoxContainer
 var _play: Button
+var _quit_dialog: ConfirmDialog
+## La largeur de l'écran, limitée sur un PC par des marges calculées sur la place de la page.
+var _width_limit: MarginContainer
 
 
 func _ready() -> void:
@@ -48,7 +51,7 @@ func _ready() -> void:
 	var column := Ui.vbox(Look.GAP_M)
 	var header := Ui.hbox(Look.GAP_M)
 	var back := Ui.icon_button("retour", Labels.BACK)
-	back.pressed.connect(home_requested.emit)
+	back.pressed.connect(func() -> void: _quit_dialog.ask())
 	header.add_child(back)
 	_steps = Ui.hbox(Look.GAP_L)
 	_steps.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -80,7 +83,13 @@ func _ready() -> void:
 	_play = Ui.button(Labels.DRAFT_CHOOSE, ThemeBuilder.PRIMARY_BUTTON)
 	_play.pressed.connect(_on_play)
 	column.add_child(_play)
-	add_child(Ui.page(Ui.limit_width_full_height(column, Look.DRAFT_MAX_WIDTH)))
+	_width_limit = MarginContainer.new()
+	_width_limit.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_width_limit.add_child(column)
+	add_child(Ui.page(_width_limit))
+	_quit_dialog = ConfirmDialog.new(Labels.QUIT_TITLE, Labels.QUIT_TEXT, Labels.STAY, Labels.QUIT)
+	_quit_dialog.confirmed.connect(home_requested.emit)
+	add_child(_quit_dialog)
 	resized.connect(_fit_columns)
 	_fit_columns()
 
@@ -289,10 +298,14 @@ func _on_play() -> void:
 			return
 
 
-## Autant de colonnes que la largeur de la page en laisse tenir.
+## La largeur de l'écran, d'après la place de la page (jamais d'après le contenu : rien
+## ne s'élargit en boucle), et autant de colonnes de cartes qu'elle en laisse tenir.
 func _fit_columns() -> void:
 	var insets := Ui.safe_insets()
 	var page := size.x - 2 * Look.PAGE_MARGIN - insets.position.x - insets.size.x
 	var width := minf(page, Look.DRAFT_MAX_WIDTH)
+	var side := int(maxf(0.0, (page - width) / 2.0))
+	_width_limit.add_theme_constant_override(&"margin_left", side)
+	_width_limit.add_theme_constant_override(&"margin_right", side)
 	var cell := CardView.footprint(Look.DRAFT_CARD_WIDTH).x + Look.CARD_GAP
 	_grid.columns = maxi(1, int((width + Look.CARD_GAP) / cell))

@@ -12,6 +12,8 @@ const BOT_OPPONENT := "random"
 const FRIEND_OPPONENT := "human"
 ## Les refus qui concernent un code tapé : la page « Rejoindre » les affiche.
 const JOIN_ERRORS := ["unknown_room", "room_full"]
+## Le bot du serveur ne peut plus jouer.
+const BOT_FAILED := "bot_failed"
 ## Après autant d'essais ratés, l'écran de démarrage dit que le serveur ne répond pas.
 const FAILURES_BEFORE_WARNING := 3
 ## Les refus qui veulent dire « ta vue est en retard » : on la redemande.
@@ -28,6 +30,8 @@ var _hosting := false
 var _held: Array = []
 ## Vrai quand l'adversaire humain est branché sur sa place (message du serveur).
 var _opponent_present := false
+## Vrai depuis que le bot du serveur a cessé de jouer, jusqu'à la vue suivante.
+var _bot_failed := false
 ## Le catalogue des cartes (noms et textes), reçu à chaque connexion.
 var _catalog: CardCatalog
 
@@ -105,6 +109,7 @@ func _show_game() -> GameScreen:
 	game.catalog = _catalog
 	game.play_requested.connect(ServerLink.play)
 	game.home_requested.connect(_on_home_requested)
+	game.replay_requested.connect(_on_replay)
 	_show(game)
 	return game
 
@@ -134,10 +139,9 @@ func _on_status_changed(status: ServerLink.Status) -> void:
 			var lost := ServerLink.failed_attempts >= FAILURES_BEFORE_WARNING
 			(_screen as BootScreen).set_status(Labels.UNREACHABLE if lost else Labels.CONNECTING, lost)
 	elif _screen is GameScreen:
-		var game := _screen as GameScreen
-		game.set_notice("" if online else Labels.RECONNECTING)
 		if not online:
-			game.on_connection_lost()
+			(_screen as GameScreen).on_connection_lost()
+		_refresh_notice()
 	elif _screen is HomeScreen and status == ServerLink.Status.RECONNECTING:
 		# Une coupure a pu perdre la demande de partie : on peut la refaire.
 		(_screen as HomeScreen).reset()
@@ -156,6 +160,8 @@ func _on_state_received(view: ViewData, events: Array) -> void:
 		return
 	var game: GameScreen = _screen if _screen is GameScreen else _show_game()
 	game.show_view(view, events)
+	_bot_failed = false
+	_refresh_notice()
 	if view.is_over():
 		# La salle fermera : il n'y aura plus de place à reprendre.
 		ServerLink.forget_session()
@@ -182,7 +188,14 @@ func _on_cards_received(cards: CardCatalog) -> void:
 ## refus qui le dit, ou une carte refusée en cours d'envoi), on la redemande.
 func _on_server_error(kind: String, message: String) -> void:
 	print("Refus du serveur (%s) : %s" % [kind, message])
-	if _screen is JoinScreen and kind in JOIN_ERRORS:
+	if kind == ServerLink.SEAT_TAKEN:
+		_show_seat_taken()
+	elif kind == BOT_FAILED:
+		# Le prochain message relance le bot (protocole) : on le redemande après un temps.
+		_bot_failed = true
+		_refresh_notice()
+		get_tree().create_timer(Look.BOT_RETRY_DELAY).timeout.connect(ServerLink.sync)
+	elif _screen is JoinScreen and kind in JOIN_ERRORS:
 		(_screen as JoinScreen).show_error(message)
 	elif kind in ServerLink.LOST_SEAT_ERRORS and not (_screen is HomeScreen):
 		_show_home()
@@ -195,13 +208,51 @@ func _on_server_error(kind: String, message: String) -> void:
 		ServerLink.sync()
 	elif _screen is HomeScreen:
 		(_screen as HomeScreen).reset()
+		(_screen as HomeScreen).show_error(message)
 
 
-## L'adversaire est arrivé, ou parti : la salle d'attente le montre.
+## L'adversaire est arrivé, ou parti : la salle d'attente le montre, la partie aussi.
 func _on_opponent_presence(connected: bool) -> void:
 	_opponent_present = connected
 	if _screen is LobbyScreen:
 		(_screen as LobbyScreen).set_opponent_present(connected)
+	_refresh_notice()
+
+
+## L'avertissement de la partie, sous le tour : la connexion d'abord, puis le bot qui ne
+## répond plus, puis l'ami parti ; rien si tout va bien.
+func _refresh_notice() -> void:
+	if not (_screen is GameScreen):
+		return
+	var text := ""
+	if ServerLink.status != ServerLink.Status.ONLINE:
+		text = Labels.RECONNECTING
+	elif _bot_failed:
+		text = Labels.BOT_FAILED
+	elif not _opponent_is_bot and not _opponent_present:
+		text = Labels.FRIEND_LEFT
+	(_screen as GameScreen).set_notice(text, text != "")
+
+
+## Une autre connexion a repris la place : reprendre ici (la place gardée), ou revenir à
+## l'accueil en l'oubliant.
+func _show_seat_taken() -> void:
+	var page := MessageScreen.new(Labels.SEAT_TAKEN_TITLE, Labels.SEAT_TAKEN_TEXT, Labels.RESUME_HERE, Labels.HOME)
+	page.primary_pressed.connect(ServerLink.connect_to_server)
+	page.secondary_pressed.connect(func() -> void:
+		ServerLink.forget_session()
+		ServerLink.connect_to_server()
+		_on_home_requested())
+	_show(page)
+
+
+## Une autre partie, contre le même adversaire : le bot tout de suite ; entre amis, retour à
+## l'accueil pour recréer ou rejoindre une salle.
+func _on_replay() -> void:
+	var against_bot := _opponent_is_bot
+	_on_home_requested()
+	if against_bot:
+		_on_play_bot()
 
 
 ## Le créateur de la salle la lance : la vue gardée s'affiche (le draft commence).

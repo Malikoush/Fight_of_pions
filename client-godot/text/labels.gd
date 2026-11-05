@@ -100,6 +100,28 @@ const FACT_INFIRMARY := "Infirmerie %d"
 const FACT_GRAVEYARD := "Cimetière %d"
 const FACT_GUARDS := "Gardes %d"
 
+## La fin de partie, les coupures et les départs (E3g).
+const RESULT_WIN := "Victoire !"
+const RESULT_LOSS := "Défaite"
+const RESULT_DRAW := "Match nul"
+## La raison de la fin, par raison du moteur (`EndReason`) ; `%d` : les pions à aligner.
+const END_REASONS := {
+	"Alignment": "%d pions alignés.",
+	"Frozen": "Plus personne ne pouvait jouer.",
+	"TurnLimit": "Limite de tours atteinte.",
+	"TooFewPions": "Plus assez de pions pour aligner.",
+}
+const REPLAY := "REJOUER"
+const SEAT_TAKEN_TITLE := "Partie ouverte ailleurs"
+const SEAT_TAKEN_TEXT := "Cette partie a été reprise sur un autre appareil ou dans une autre fenêtre."
+const RESUME_HERE := "REPRENDRE ICI"
+const BOT_FAILED := "Le bot ne répond plus, nouvel essai…"
+const FRIEND_LEFT := "Ton ami s'est déconnecté : la partie attend son retour."
+const QUIT_TITLE := "Quitter la partie ?"
+const QUIT_TEXT := "Ta place sera libérée : tu ne pourras plus revenir dans cette partie."
+const STAY := "RESTER"
+const QUIT := "QUITTER"
+
 ## Le tour adverse : l'annonce d'une carte adverse, sa cache révélée, la fenêtre de réaction.
 const ATTACK_TAG := "ATTAQUE"
 const REACTION_TAG := "RÉACTION"

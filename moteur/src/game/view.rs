@@ -11,8 +11,8 @@
 
 use super::state::Game;
 use crate::{
-    Action, ActiveEffect, ArsenalSlot, Attack, Cell, Decision, DraftStep, Event, GameConfig,
-    GameEnd, Patient, Pion, Player, Position, TokenPile,
+    Action, ActiveEffect, ArsenalSlot, Attack, Cell, Decision, DraftStep, EndReason, Event,
+    GameConfig, GameEnd, Outcome, Patient, Pion, Player, Position, TokenPile, rules,
 };
 
 /// Ce qu'un joueur voit de la partie, à un instant.
@@ -49,6 +49,10 @@ pub struct PlayerView {
     pub draft_pool: Vec<Attack>,
     /// La fin de la partie, si elle est finie.
     pub end: Option<GameEnd>,
+    /// Les cases de la ligne gagnante (toutes les lignes d'assez de pions du gagnant), si la
+    /// partie est gagnée par alignement ; vide sinon. Le client l'allume sans rien calculer.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub winning_line: Vec<Position>,
 }
 
 /// Le plateau tel qu'on le voit : toute la grille, mur compris.
@@ -120,6 +124,18 @@ impl Game {
             graveyard: self.graveyard().to_vec(),
             draft_pool: self.visible_draft_pool().to_vec(),
             end: self.end,
+            winning_line: self.winning_line(),
+        }
+    }
+
+    /// Les cases de la ligne gagnante, si la partie est gagnée par alignement.
+    pub fn winning_line(&self) -> Vec<Position> {
+        match self.end {
+            Some(GameEnd {
+                outcome: Outcome::Won(winner),
+                reason: EndReason::Alignment,
+            }) => rules::line_cells(&self.board, winner, self.config.align_to_win),
+            _ => Vec::new(),
         }
     }
 

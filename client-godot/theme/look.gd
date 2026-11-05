@@ -234,6 +234,15 @@ const FILTER_HEIGHT := 40
 ## Le code d'une salle : sa taille de police, et la largeur du champ où on le tape.
 const FONT_CODE := 34
 const CODE_INPUT_WIDTH := 260
+## La fin de partie : la ligne gagnante sur le plateau (voile et bord d'or), et le temps
+## laissé à la dernière animation avant le panneau de fin. Le bot qui ne répond plus est
+## relancé après ce délai (secondes).
+const WIN_FILL := Color(GOLD, 0.45)
+const WIN_BORDER := GOLD
+const END_PANEL_DELAY := 0.6
+const BOT_RETRY_DELAY := 3.0
+## Le voile derrière une question (« Quitter la partie ? »).
+const DIALOG_DIM := Color(FOREST_DEEP, 0.8)
 ## Le journal des coups : les lignes affichées (les plus anciennes s'en vont), la largeur de
 ## sa colonne en paysage, celle de la colonne des tours, et le palet de chaque ligne.
 const JOURNAL_SHOWN := 80
