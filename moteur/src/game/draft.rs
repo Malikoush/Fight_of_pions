@@ -67,8 +67,9 @@ impl Game {
     }
 
     /// Les cartes tirées telles que les joueurs les voient : aucune tant qu'aucune étape ne
-    /// les a utilisées, puisque la cache se choisit sans les connaître (carnet,
-    /// 2026-11-03).
+    /// les a utilisées. Un format qui fait choisir la cache d'abord la fait choisir sans les
+    /// connaître (carnet, 2026-11-03) ; le format standard commence par les bans, et les
+    /// montre dès le début (2026-11-05).
     pub fn visible_draft_pool(&self) -> &[Attack] {
         let shown = match (&self.draft, &self.config.draft) {
             (Some(draft), Some(rules)) => rules

@@ -33,7 +33,8 @@ extends Control
 
 ## Le joueur demande ce coup, recopié de la vue.
 signal play_requested(action: Variant)
-## La partie est finie et le joueur revient à l'accueil (les écrans de fin viendront en E3g).
+## Le joueur revient à l'accueil : la flèche en haut à gauche, ou la fin de la partie (les
+## écrans de fin viendront en E3g).
 signal home_requested
 
 ## Les coups sans case qui deviennent l'action principale quand ils sont permis.
@@ -105,6 +106,7 @@ var _thinking: PanelContainer
 var _thinking_label: Label
 var _journal_panel: JournalPanel
 var _journal_button: Button
+var _back_button: Button
 ## En portrait, la page du journal, par-dessus tout ; et la ligne du tour qui porte son bouton.
 var _journal_page: PanelContainer
 var _journal_page_column: VBoxContainer
@@ -626,6 +628,9 @@ func _build_journal() -> void:
 	_journal_panel = JournalPanel.new()
 	_journal_button = Ui.icon_button("journal", Labels.JOURNAL_TITLE)
 	_journal_button.pressed.connect(_show_journal_page.bind(true))
+	_back_button = Ui.icon_button("retour", Labels.BACK)
+	_back_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_back_button.pressed.connect(home_requested.emit)
 	_top_row = Ui.hbox(0)
 	_journal_page = PanelContainer.new()
 	_journal_page.theme_type_variation = ThemeBuilder.OVERLAY
@@ -697,7 +702,7 @@ func _on_resized() -> void:
 ## leurs boîtes changent.
 func _arrange(landscape: bool) -> void:
 	_landscape = landscape
-	for item: Control in [_opponent_panel, _my_panel, _pill, _thinking, _notice, _action_slot, _board_area, _arsenal, _choice_panel, _reaction, _journal_panel, _journal_button]:
+	for item: Control in [_opponent_panel, _my_panel, _pill, _thinking, _notice, _action_slot, _board_area, _arsenal, _choice_panel, _reaction, _journal_panel, _journal_button, _back_button]:
 		if item.get_parent() != null:
 			item.get_parent().remove_child(item)
 	if _top_row.get_parent() != null:
@@ -721,6 +726,7 @@ func _arrange(landscape: bool) -> void:
 		row.add_child(left)
 		var column := Ui.vbox(Look.GAP_M)
 		column.custom_minimum_size.x = Look.SIDE_COLUMN_WIDTH
+		column.add_child(_back_button)
 		column.add_child(_pill)
 		column.add_child(_thinking)
 		column.add_child(_notice)
@@ -739,8 +745,9 @@ func _arrange(landscape: bool) -> void:
 		right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		right.alignment = BoxContainer.ALIGNMENT_END
 		right.add_child(_journal_button)
-		var left := Ui.gap(Vector2.ZERO)
+		var left := Ui.hbox(0)
 		left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		left.add_child(_back_button)
 		_top_row.add_child(left)
 		_top_row.add_child(_pill)
 		_top_row.add_child(right)

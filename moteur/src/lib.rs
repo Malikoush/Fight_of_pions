@@ -40,7 +40,7 @@ pub mod rules;
 pub use attacks::{Attack, AttackKind, AttackStats, CatalogEntry, Rarity};
 pub use board::{Board, Cell, Pion, PionId};
 pub use common::{Direction, Player, Position};
-pub use config::{ConfigError, DraftRules, DraftStep, GameConfig};
+pub use config::{ConfigError, DraftPhase, DraftRules, DraftStep, GameConfig};
 pub use error::GameError;
 pub use game::{
     Action, ActiveEffect, ArsenalSlot, BoardView, Decision, EffectEnd, EffectId, EffectKind,

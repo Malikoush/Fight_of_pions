@@ -53,11 +53,16 @@ impl Table {
     }
 
     /// Branche ce client sur cette place, et lui envoie où il en est. Un client déjà
-    /// branché à cette place (une ancienne connexion) ne reçoit plus rien.
+    /// branché à cette place (une ancienne connexion) ne reçoit plus rien. Les deux
+    /// joueurs apprennent qu'ils sont là l'un et l'autre (la salle d'attente du client).
     pub fn connect(&mut self, player: Player, outbox: Outbox) {
         self.outboxes[player.index()] = Some(outbox);
         self.last_seen = Instant::now();
         self.send_state(player, &[]);
+        if self.outboxes[player.opponent().index()].is_some() {
+            self.send_presence(player, true);
+            self.send_presence(player.opponent(), true);
+        }
     }
 
     /// Débranche ce client de cette place, s'il y est encore branché (une reconnexion a
@@ -67,6 +72,7 @@ impl Table {
         if slot.as_ref().is_some_and(|own| own.same_channel(outbox)) {
             *slot = None;
             self.last_seen = Instant::now();
+            self.send_presence(player.opponent(), false);
         }
     }
 
@@ -156,6 +162,13 @@ impl Table {
     fn broadcast(&self, events: &[Event]) {
         for player in [Player::One, Player::Two] {
             self.send_state(player, events);
+        }
+    }
+
+    /// Dit à ce joueur, s'il est branché, si son adversaire l'est.
+    fn send_presence(&self, player: Player, connected: bool) {
+        if let Some(outbox) = &self.outboxes[player.index()] {
+            let _ = outbox.try_send(ServerMessage::Opponent { connected });
         }
     }
 

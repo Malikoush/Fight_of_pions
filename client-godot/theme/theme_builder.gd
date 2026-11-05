@@ -45,6 +45,8 @@ const THREAT_LABEL := &"ThreatLabel"
 const HEADING_LABEL := &"HeadingLabel"
 const CAPTION_LABEL := &"CaptionLabel"
 const GOLD_CAPS_LABEL := &"GoldCapsLabel"
+const CODE_INPUT := &"CodeInput"
+const CODE_LABEL := &"CodeLabel"
 const OVERLAY := &"Overlay"
 
 static var _shared: Theme
@@ -88,6 +90,8 @@ static func build() -> Theme:
 	_label(theme, HEADING_LABEL, display, Look.FONT_HEADING, Look.CREAM, false)
 	_label(theme, CAPTION_LABEL, body, Look.FONT_FACT, Look.MUTED, false)
 	_label(theme, GOLD_CAPS_LABEL, caps, Look.FONT_BODY, Look.GOLD, false)
+	_label(theme, CODE_LABEL, caps, Look.FONT_CODE, Look.GOLD, false)
+	_code_input(theme, caps)
 	_journal(theme, strong)
 	_icon_button(theme)
 
@@ -274,6 +278,23 @@ static func _journal(theme: Theme, font: Font) -> void:
 	var overlay := StyleBoxFlat.new()
 	overlay.bg_color = Look.OVERLAY_FILL
 	theme.set_stylebox(&"panel", OVERLAY, overlay)
+
+
+## Le champ du code d'une salle : une plaque crème, lettres d'encre en capitales, bord d'or
+## quand on tape (maquettes).
+static func _code_input(theme: Theme, font: Font) -> void:
+	theme.set_type_variation(CODE_INPUT, &"LineEdit")
+	for state in [&"normal", &"focus", &"read_only"]:
+		var style := _rounded(Look.CREAM, Look.RADIUS_CONTROL)
+		style.set_border_width_all(Look.BORDER_STRONG)
+		style.border_color = Look.GOLD if state == &"focus" else Look.CASE_SIDE_A
+		style.set_content_margin_all(Look.GAP_M)
+		theme.set_stylebox(state, CODE_INPUT, style)
+	theme.set_font(&"font", CODE_INPUT, font)
+	theme.set_font_size(&"font_size", CODE_INPUT, Look.FONT_CODE)
+	theme.set_color(&"font_color", CODE_INPUT, Look.INK)
+	theme.set_color(&"caret_color", CODE_INPUT, Look.INK)
+	theme.set_color(&"font_placeholder_color", CODE_INPUT, Look.CASE_SIDE_A)
 
 
 ## Un bouton carré à icône (le journal, en portrait) : fond sombre bordé d'or, icône d'or.

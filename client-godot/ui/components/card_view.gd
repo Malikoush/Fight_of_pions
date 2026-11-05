@@ -103,8 +103,8 @@ func show_attack(attack: Dictionary, catalog: CardCatalog, cost: int) -> void:
 
 ## Montre la carte de cet emplacement de l'arsenal de ce joueur, telle que la vue la décrit :
 ## son coût lu dans la configuration, son nom dans le catalogue, vive si son `UseAttack` est
-## permis.
-func show_slot(view: ViewData, player: String, index: int, catalog: CardCatalog) -> void:
+## permis, ou toujours vive (`vivid` : hors de la partie, comme au draft).
+func show_slot(view: ViewData, player: String, index: int, catalog: CardCatalog, vivid: bool = false) -> void:
 	var entry: Variant = view.arsenal(player)[index]
 	if not (entry is Dictionary):
 		show_card(null, "", 0, false, 0, false, false)
@@ -118,7 +118,7 @@ func show_slot(view: ViewData, player: String, index: int, catalog: CardCatalog)
 		catalog != null and catalog.is_reaction(kind),
 		entry.get("cooldown_left", 0),
 		entry.get("secret", false),
-		view.use_attack(index) != null,
+		vivid or view.use_attack(index) != null,
 	)
 
 

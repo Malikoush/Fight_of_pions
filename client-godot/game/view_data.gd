@@ -283,3 +283,30 @@ static func _owned_by(items: Array, player: String, field: String) -> Array[Dict
 		if item is Dictionary and item.get(field) == player:
 			found.append(item)
 	return found
+
+
+# --- Draft ---
+
+## Les cartes tirées qui restent à bannir ou à prendre (`{"kind", "rarity"}`), quand on peut
+## les voir.
+func draft_pool() -> Array:
+	return raw.get("draft_pool", [])
+
+
+## L'étape du draft en cours (`{"Ban": "One"}`), ou `null` hors du draft.
+func draft_step() -> Variant:
+	var details: Variant = Wire.content(decision()) if decision_kind() == "Draft" else null
+	return details.get("step") if details is Dictionary else null
+
+
+## Les étapes du format de draft de la partie, dans l'ordre (`[{"Ban": "One"}, …]`).
+func draft_steps() -> Array:
+	var rules: Variant = config().get("draft")
+	return rules.get("steps", []) if rules is Dictionary else []
+
+
+## Les cartes de départ de ce joueur, avant le draft.
+func starting_attacks(player: String) -> Array:
+	var starting: Array = config().get("starting_attacks", [[], []])
+	var index := side_index(player)
+	return starting[index] if index < starting.size() else []

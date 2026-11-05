@@ -1,13 +1,13 @@
-//! Le draft (B9a, carnet « Draft et cache secrète », 2026-11-03) : la cache choisie dans
-//! tout le catalogue, puis des bans et des picks en serpent parmi des cartes tirées avec la
-//! graine.
+//! Le draft (B9a, carnet « Draft et cache secrète », 2026-11-03 ; la cache en dernier,
+//! 2026-11-05) : des bans et des picks en serpent parmi des cartes tirées avec la graine,
+//! puis la cache choisie dans tout le catalogue. Le format est une suite de phases.
 
 mod common;
 
 use common::{choose, game_with, place, play};
 use fight_of_pions::{
-    Action, Attack, AttackKind, ConfigError, Decision, DraftRules, DraftStep, Event, Game,
-    GameConfig, GameError, Player, Rarity,
+    Action, Attack, AttackKind, ConfigError, Decision, DraftPhase, DraftRules, DraftStep, Event,
+    Game, GameConfig, GameError, Player, Rarity,
 };
 
 /// Les règles actuelles avec le draft standard, sans carte de départ.
@@ -26,8 +26,25 @@ fn first_choice(game: &Game) -> Attack {
     }
 }
 
+/// Joue la première carte permise à chaque étape, jusqu'à la première cache ; rend les
+/// cartes prises par chaque joueur.
+fn draft_until_the_caches(game: &mut Game) -> [Vec<Attack>; 2] {
+    let mut picked = [Vec::new(), Vec::new()];
+    while let Some(Decision::Draft { step }) = game.pending_decision() {
+        if matches!(step, DraftStep::Cache(_)) {
+            break;
+        }
+        let card = first_choice(game);
+        if matches!(step, DraftStep::Pick(_)) {
+            picked[step.player().index()].push(card);
+        }
+        play(game, &[Action::Draft(card)]);
+    }
+    picked
+}
+
 #[test]
-fn the_standard_draft_is_one_cached_card_one_ban_each_then_three_snake_picks() {
+fn the_standard_draft_is_one_ban_each_three_snake_picks_then_one_cached_card() {
     use DraftStep::{Ban, Cache, Pick};
     use Player::{One, Two};
     let rules = DraftRules::standard();
@@ -35,8 +52,6 @@ fn the_standard_draft_is_one_cached_card_one_ban_each_then_three_snake_picks() {
     assert_eq!(
         rules.steps,
         [
-            Cache(One),
-            Cache(Two),
             Ban(One),
             Ban(Two),
             Pick(Two),
@@ -45,14 +60,45 @@ fn the_standard_draft_is_one_cached_card_one_ban_each_then_three_snake_picks() {
             Pick(Two),
             Pick(Two),
             Pick(One),
+            Cache(One),
+            Cache(Two),
         ]
     );
 }
 
 #[test]
-fn the_cache_is_chosen_in_the_whole_catalog_legendaries_included() {
+fn a_format_is_its_phases_in_the_chosen_order() {
+    use DraftStep::{Ban, Cache, Pick};
+    use Player::{One, Two};
+    let rules = DraftRules::new(
+        4,
+        &[
+            DraftPhase::Caches(2),
+            DraftPhase::Picks(1),
+            DraftPhase::Bans(1),
+        ],
+    );
+    assert_eq!(
+        rules.steps,
+        [
+            Cache(One),
+            Cache(One),
+            Cache(Two),
+            Cache(Two),
+            Pick(Two),
+            Pick(One),
+            Ban(One),
+            Ban(Two),
+        ]
+    );
+    assert!(DraftRules::new(0, &[]).steps.is_empty());
+}
+
+#[test]
+fn the_cache_is_chosen_last_in_the_whole_catalog_legendaries_included() {
     let config = drafted();
-    let game = game_with(config.clone());
+    let mut game = game_with(config.clone());
+    draft_until_the_caches(&mut game);
     assert_eq!(
         game.pending_decision(),
         Some(Decision::Draft {
@@ -71,8 +117,21 @@ fn the_cache_is_chosen_in_the_whole_catalog_legendaries_included() {
 }
 
 #[test]
-fn the_drawn_cards_are_hidden_until_the_caches_are_chosen() {
-    let mut game = game_with(drafted());
+fn the_drawn_cards_show_from_the_first_ban() {
+    let game = game_with(drafted());
+    assert_eq!(game.draft_pool().len(), 10);
+    assert_eq!(game.visible_draft_pool(), game.draft_pool());
+}
+
+#[test]
+fn a_cache_chosen_first_is_chosen_without_seeing_the_drawn_cards() {
+    let mut game = game_with(GameConfig {
+        draft: Some(DraftRules::new(
+            10,
+            &[DraftPhase::Caches(1), DraftPhase::Bans(1)],
+        )),
+        ..GameConfig::default()
+    });
     assert_eq!(game.draft_pool().len(), 10);
     assert!(game.visible_draft_pool().is_empty());
     assert!(game.view(Player::One).draft_pool.is_empty());
@@ -105,8 +164,6 @@ fn bans_and_picks_come_from_the_drawn_cards_and_fill_the_arsenals() {
         kind: AttackKind::Ours,
         rarity: Rarity::Legendary,
     };
-    // Les deux joueurs peuvent cacher la même carte, tirée ou non.
-    play(&mut game, &[Action::Draft(ours), Action::Draft(ours)]);
     assert_eq!(game.draft_pool().len(), 10);
 
     let banned = first_choice(&game);
@@ -125,14 +182,10 @@ fn bans_and_picks_come_from_the_drawn_cards_and_fill_the_arsenals() {
         game.apply(Action::Draft(banned)),
         Err(GameError::NotInDraft(banned))
     );
-    let mut picked = [Vec::new(), Vec::new()];
-    while let Some(Decision::Draft { step }) = game.pending_decision() {
-        let card = first_choice(&game);
-        picked[step.player().index()].push(card);
-        play(&mut game, &[Action::Draft(card)]);
-    }
-
+    let picked = draft_until_the_caches(&mut game);
     assert_eq!(picked.iter().map(Vec::len).sum::<usize>(), 6);
+    // Les deux joueurs peuvent cacher la même carte, tirée ou non, prise ou non.
+    play(&mut game, &[Action::Draft(ours), Action::Draft(ours)]);
     assert!(
         game.draft_pool().is_empty(),
         "les 2 cartes ni bannies ni prises partent avec le draft"
@@ -149,9 +202,9 @@ fn bans_and_picks_come_from_the_drawn_cards_and_fill_the_arsenals() {
             .iter()
             .map(|slot| slot.attack())
             .collect();
-        let mut expected = vec![ours];
-        expected.extend(&picked[player.index()]);
-        assert_eq!(arsenal, expected, "{player:?} : la cache, puis ses picks");
+        let mut expected = picked[player.index()].clone();
+        expected.push(ours);
+        assert_eq!(arsenal, expected, "{player:?} : ses picks, puis la cache");
     }
     // La partie commence normalement.
     play(&mut game, &[place(4, 4)]);
@@ -178,7 +231,14 @@ fn nothing_but_draft_choices_before_the_game() {
 #[test]
 fn the_draft_format_is_checked_against_the_catalog() {
     let with_draft = |pool_size, bans, picks| GameConfig {
-        draft: Some(DraftRules::new(1, pool_size, bans, picks)),
+        draft: Some(DraftRules::new(
+            pool_size,
+            &[
+                DraftPhase::Bans(bans),
+                DraftPhase::Picks(picks),
+                DraftPhase::Caches(1),
+            ],
+        )),
         ..GameConfig::default()
     };
     let catalog = GameConfig::default().attack_catalog.len();
@@ -197,7 +257,7 @@ fn the_draft_format_is_checked_against_the_catalog() {
 fn hares_in_cache() -> Game {
     let config = GameConfig {
         wall_thickness: 0,
-        draft: Some(DraftRules::new(1, 0, 0, 0)),
+        draft: Some(DraftRules::new(0, &[DraftPhase::Caches(1)])),
         ..GameConfig::default()
     };
     let mut game = game_with(config);

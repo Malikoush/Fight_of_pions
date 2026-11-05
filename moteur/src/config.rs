@@ -68,8 +68,8 @@ pub struct GameConfig {
     /// Les attaques de chaque joueur au début de la partie (indice : `Player::index`).
     /// Avec un draft, les cartes choisies s'y ajoutent.
     pub starting_attacks: [Vec<Attack>; 2],
-    /// Le draft joué avant la partie, s'il y en a un : la cache secrète, puis les bans et
-    /// les picks. Absent d'une partie enregistrée avant le draft : pas de draft.
+    /// Le draft joué avant la partie, s'il y en a un : les bans, les picks et la cache
+    /// secrète. Absent d'une partie enregistrée avant le draft : pas de draft.
     #[cfg_attr(feature = "serde", serde(default))]
     pub draft: Option<DraftRules>,
 }
@@ -80,7 +80,8 @@ pub struct GameConfig {
 /// cartes mises en cache et prises s'ajoutent à l'arsenal de départ, dans l'ordre.
 ///
 /// Tout le format est dans ces données : [`DraftRules::new`] en fabrique un à partir de
-/// quelques nombres, mais n'importe quelle suite de choix est permise.
+/// phases dans l'ordre voulu ([`DraftPhase`]), mais n'importe quelle suite de choix est
+/// permise.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
@@ -118,37 +119,69 @@ impl DraftStep {
     }
 }
 
+/// Une phase du draft : des choix d'une même sorte, dans l'ordre où les joueurs les font.
+/// Un format est une suite de phases ([`DraftRules::new`]) : l'ordre est une donnée.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DraftPhase {
+    /// Ce nombre de cartes en cache chacun : toutes celles de J1, puis celles de J2. Elles
+    /// sont secrètes : l'ordre ne donne rien à l'autre joueur.
+    Caches(usize),
+    /// Ce nombre de bans chacun, J1 et J2 en alternance.
+    Bans(usize),
+    /// Ce nombre de picks chacun, en serpent : J2 prend en premier, puisque J1 joue en
+    /// premier (J2, J1, J1, J2, J2, J1…).
+    Picks(usize),
+}
+
+impl DraftPhase {
+    /// Les choix de cette phase, dans l'ordre.
+    pub fn steps(self) -> Vec<DraftStep> {
+        let both = [Player::One, Player::Two];
+        match self {
+            DraftPhase::Caches(count) => both
+                .into_iter()
+                .flat_map(|player| std::iter::repeat_n(DraftStep::Cache(player), count))
+                .collect(),
+            DraftPhase::Bans(count) => (0..count).flat_map(|_| both.map(DraftStep::Ban)).collect(),
+            DraftPhase::Picks(count) => (0..count * 2)
+                .map(|index| {
+                    // Par paires : J2 puis J1, J1 puis J2, et ainsi de suite.
+                    let first = if (index / 2) % 2 == 0 {
+                        Player::Two
+                    } else {
+                        Player::One
+                    };
+                    DraftStep::Pick(if index % 2 == 0 {
+                        first
+                    } else {
+                        first.opponent()
+                    })
+                })
+                .collect(),
+        }
+    }
+}
+
 impl DraftRules {
-    /// Le format décidé le 2026-11-03 : 1 carte en cache chacun, 10 cartes tirées, 1 ban
-    /// chacun, puis 3 picks chacun en serpent.
+    /// Le format décidé : 10 cartes tirées, 1 ban chacun, 3 picks chacun en serpent, puis 1
+    /// carte en cache chacun, choisie en dernier, en connaissant tout le draft (carnet,
+    /// 2026-11-05 ; la cache venait d'abord depuis le 2026-11-03).
     pub fn standard() -> DraftRules {
-        DraftRules::new(1, 10, 1, 3)
+        DraftRules::new(
+            10,
+            &[
+                DraftPhase::Bans(1),
+                DraftPhase::Picks(3),
+                DraftPhase::Caches(1),
+            ],
+        )
     }
 
-    /// Un draft de `cache` cartes en cache chacun (J1, puis J2), `pool_size` cartes tirées,
-    /// `bans` bans chacun (J1 et J2 en alternance), puis `picks` picks chacun en serpent :
-    /// J2 prend en premier, puisque J1 joue en premier (J2, J1, J1, J2, J2, J1…).
-    pub fn new(cache: usize, pool_size: usize, bans: usize, picks: usize) -> DraftRules {
-        let both = [Player::One, Player::Two];
-        let caches = both
-            .into_iter()
-            .flat_map(|player| std::iter::repeat_n(DraftStep::Cache(player), cache));
-        let bans = (0..bans).flat_map(|_| both.map(DraftStep::Ban));
-        let picks = (0..picks * 2).map(|index| {
-            let first = if (index / 2) % 2 == 0 {
-                Player::Two
-            } else {
-                Player::One
-            };
-            DraftStep::Pick(if index % 2 == 0 {
-                first
-            } else {
-                first.opponent()
-            })
-        });
+    /// Un draft de `pool_size` cartes tirées, fait de ces phases, dans cet ordre.
+    pub fn new(pool_size: usize, phases: &[DraftPhase]) -> DraftRules {
         DraftRules {
             pool_size,
-            steps: caches.chain(bans).chain(picks).collect(),
+            steps: phases.iter().flat_map(|phase| phase.steps()).collect(),
         }
     }
 

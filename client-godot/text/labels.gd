@@ -13,8 +13,51 @@ const UNREACHABLE := "Serveur injoignable, nouvel essai…"
 const RETRY := "RÉESSAYER"
 
 const PLAY_BOT := "JOUER CONTRE LE BOT"
-## Le temps des essais (E3a à E3e), le client joue contre le bot aléatoire.
-const PLAY_BOT_DETAIL := "Bot aléatoire, le temps des essais"
+## Le temps des essais, le client joue contre le bot aléatoire, qui ne charge pas la machine.
+const PLAY_BOT_DETAIL := "Bot aléatoire · draft, puis partie"
+const FRIENDS_SECTION := "PARTIE ENTRE AMIS"
+const CREATE_ROOM := "CRÉER UNE SALLE"
+const CREATE_ROOM_DETAIL := "Un code à envoyer"
+const JOIN := "REJOINDRE"
+const JOIN_DETAIL := "Avec un code de 5 lettres"
+const JOIN_TITLE := "Rejoindre une salle"
+const JOIN_HELP := "Entre le code à 5 caractères que ton ami t'a envoyé."
+const BACK := "RETOUR"
+const FRIEND := "Ton ami"
+## La salle d'attente d'une partie entre amis.
+const LOBBY_TITLE := "Créer une salle"
+const LOBBY_WAITING := "Envoie ce code à ton ami. Tu lanceras la partie quand il sera là."
+const LOBBY_READY := "Ton ami est là : tu peux lancer la partie."
+const PLAYER_READY := "PRÊT"
+const PLAYER_WAITING := "EN ATTENTE"
+const VERSUS := "contre"
+const LAUNCH := "LANCER LA PARTIE"
+const CLOSE_ROOM := "FERMER LA SALLE"
+
+## Le draft.
+const ROOM_CODE := "CODE DE LA SALLE"
+const COPY := "COPIER"
+const ROOM_WAITING := "Envoie ce code à ton ami : il rejoint la salle avec lui."
+const LEAVE_ROOM := "QUITTER LA SALLE"
+const MY_ARSENAL := "MON ARSENAL"
+const DRAFT_CHOOSE := "CHOISIS UNE CARTE"
+const DRAFT_WAIT := "%s choisit…"
+const ALL_RARITIES := "TOUTES"
+## Le nom de chaque phase du draft, dans la barre des étapes.
+const DRAFT_PHASES := {"Ban": "BANS", "Pick": "PICKS", "Cache": "CACHE"}
+## Ce qu'on fait à chaque étape : le titre, l'aide, le bouton (avec le nom de la carte).
+const DRAFT_TITLES := {"Ban": "Bannis une carte", "Pick": "À toi de prendre", "Cache": "Choisis ta carte cachée"}
+const DRAFT_HELP := {
+	"Ban": "Les cartes tirées. Une carte bannie ne sera prise par personne.",
+	"Pick": "Une carte tirée rejoint ton arsenal. Les picks sont publics.",
+	"Cache": "Dans tout le catalogue. L'adversaire ne la verra qu'au moment où tu la lanceras.",
+}
+const DRAFT_ACTIONS := {"Ban": "BANNIR %s", "Pick": "PRENDRE %s", "Cache": "CACHER %s"}
+## Ce que vient de faire l'adversaire, au draft.
+const DRAFT_DONE := {"Ban": "a banni %s", "Pick": "a pris %s"}
+const DRAFT_CACHED := "a mis une carte en cache"
+## Les raretés, pour filtrer le catalogue pendant le choix de la cache.
+const RARITY_FILTERS := {"Common": "COMMUNE", "Rare": "RARE", "Epic": "ÉPIQUE", "Legendary": "LÉGENDAIRE"}
 
 const YOU := "Toi"
 const BOT := "Bot"

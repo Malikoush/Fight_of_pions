@@ -17,6 +17,8 @@ signal state_received(view: ViewData, events: Array)
 signal preview_received(view: ViewData)
 ## Le catalogue des cartes : les familles, leurs noms et leurs textes.
 signal cards_received(cards: CardCatalog)
+## L'adversaire humain s'est branché sur sa place, ou s'en est débranché.
+signal opponent_presence(connected: bool)
 ## Une demande refusée (`kind` est stable, `message` est en français).
 signal server_error(kind: String, message: String)
 
@@ -36,7 +38,7 @@ const LOST_SEAT_ERRORS := ["unknown_room", "bad_key", "room_full"]
 const SEAT_TAKEN := "seat_taken"
 ## Les demandes qui peuvent attendre l'ouverture de la connexion. Un coup préparé avant une
 ## coupure, lui, est perdu : la vue reçue au retour fait foi.
-const QUEUED_REQUESTS := ["create"]
+const QUEUED_REQUESTS := ["create", "join"]
 ## La longueur d'un message illisible recopiée dans le journal.
 const LOGGED_CHARACTERS := 200
 
@@ -103,6 +105,16 @@ func create_room(opponent: String, variant: String = "") -> void:
 	if variant != "":
 		message["variant"] = variant
 	_send(message)
+
+
+## Rejoindre la salle de ce code (5 caractères, la casse ne compte pas) en joueur 2.
+func join_room(code: String) -> void:
+	_send({"type": "join", "code": code})
+
+
+## Le code de la salle où l'on est assis, ou vide.
+func room_code() -> String:
+	return _session.get("code", "")
 
 
 ## Jouer un coup de `legal_actions`, recopié tel quel.
@@ -210,6 +222,8 @@ func _receive(text: String) -> void:
 			preview_received.emit(ViewData.new(view) if view is Dictionary else null)
 		"cards":
 			cards_received.emit(CardCatalog.new(message["cards"]))
+		"opponent":
+			opponent_presence.emit(message["connected"])
 		"error":
 			_on_error(message["kind"], message["message"])
 
@@ -226,6 +240,8 @@ static func _is_well_formed(message: Dictionary) -> bool:
 			return message.has("view") and (message["view"] == null or message["view"] is Dictionary)
 		"cards":
 			return message.get("cards") is Array
+		"opponent":
+			return message.get("connected") is bool
 	return false
 
 

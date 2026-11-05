@@ -104,6 +104,13 @@ pub enum ServerMessage {
         /// Les familles, avec leurs raretés jouables.
         cards: Vec<CardFamily>,
     },
+    /// L'adversaire humain vient de se brancher sur sa place, ou de s'en débrancher (fermé,
+    /// coupé). Envoyé aussi à celui qui s'assoit, juste après sa vue, s'il trouve son
+    /// adversaire déjà là. Jamais pour un bot, toujours là.
+    Opponent {
+        /// Vrai s'il est branché.
+        connected: bool,
+    },
     /// Une demande refusée ; rien n'a changé. Arrive aussi sans demande si le bot du
     /// serveur ne peut plus jouer.
     Error {

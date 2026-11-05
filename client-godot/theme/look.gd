@@ -225,6 +225,15 @@ const REACTION_CARD_WIDTH := 92.0
 const CAPTION_LINES := 3
 ## Le bouton qui joue la réaction, plus large que « PASSER » : il porte le nom de la carte.
 const PLAY_BUTTON_STRETCH := 2.0
+## Le draft : la largeur des cartes de la grille, celle des petites cartes des arsenaux, et
+## la largeur maximale de l'écran sur un PC ; la hauteur des boutons de filtre.
+const DRAFT_CARD_WIDTH := 84.0
+const DRAFT_MINI_CARD := 34.0
+const DRAFT_MAX_WIDTH := 760
+const FILTER_HEIGHT := 40
+## Le code d'une salle : sa taille de police, et la largeur du champ où on le tape.
+const FONT_CODE := 34
+const CODE_INPUT_WIDTH := 260
 ## Le journal des coups : les lignes affichées (les plus anciennes s'en vont), la largeur de
 ## sa colonne en paysage, celle de la colonne des tours, et le palet de chaque ligne.
 const JOURNAL_SHOWN := 80

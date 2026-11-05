@@ -31,7 +31,18 @@ impl Client {
         self.socket.send(Message::Text(text.into())).await.unwrap();
     }
 
+    /// Le prochain message, sauf les nouvelles de la présence de l'adversaire, que seuls les
+    /// tests de la salle d'attente regardent (`receive_any`).
     async fn receive(&mut self) -> ServerMessage {
+        loop {
+            match self.receive_any().await {
+                ServerMessage::Opponent { .. } => continue,
+                message => return message,
+            }
+        }
+    }
+
+    async fn receive_any(&mut self) -> ServerMessage {
         loop {
             match self.socket.next().await.unwrap().unwrap() {
                 Message::Text(text) => return serde_json::from_str(text.as_str()).unwrap(),
@@ -90,11 +101,11 @@ async fn two_humans_play_and_each_sees_only_its_own_cache() {
     .await;
     let (code, player, _) = one.seated().await;
     assert_eq!(player, Player::One);
-    let (view_of_one, _) = one.state().await;
+    let (mut view_of_one, _) = one.state().await;
     assert_eq!(
         view_of_one.decision,
         Some(Decision::Draft {
-            step: DraftStep::Cache(Player::One)
+            step: DraftStep::Ban(Player::One)
         })
     );
 
@@ -104,8 +115,26 @@ async fn two_humans_play_and_each_sees_only_its_own_cache() {
     })
     .await;
     assert_eq!(two.seated().await.1, Player::Two);
-    let (view, _) = two.state().await;
-    assert!(view.legal_actions.is_empty(), "ce n'est pas à J2");
+    let (mut view_of_two, _) = two.state().await;
+    assert!(view_of_two.legal_actions.is_empty(), "ce n'est pas à J2");
+
+    // Les bans et les picks, publics, jusqu'à la cache de J1 (choisie en dernier).
+    loop {
+        let step = match view_of_one.decision {
+            Some(Decision::Draft {
+                step: DraftStep::Cache(_),
+            }) => break,
+            Some(Decision::Draft { step }) => step,
+            other => panic!("un choix de draft était attendu, reçu : {other:?}"),
+        };
+        if step.player() == Player::One {
+            one.play(simple_choice(&view_of_one)).await;
+        } else {
+            two.play(simple_choice(&view_of_two)).await;
+        }
+        view_of_one = one.state().await.0;
+        view_of_two = two.state().await.0;
+    }
 
     // J1 met une carte en cache : J2 voit qu'il y a une carte, pas laquelle.
     let cache = match simple_choice(&view_of_one) {
@@ -121,9 +150,10 @@ async fn two_humans_play_and_each_sees_only_its_own_cache() {
     one.play(Action::Draft(cache)).await;
     let (seen_by_one, events_one) = one.state().await;
     let (seen_by_two, events_two) = two.state().await;
-    assert_eq!(seen_by_one.sides[0].arsenal.len(), 1);
-    assert_eq!(seen_by_one.sides[0].arsenal[0].unwrap().attack(), cache);
-    assert_eq!(seen_by_two.sides[0].arsenal, [None]);
+    // La cache est la dernière carte de l'arsenal, après les picks.
+    let cached_slot = seen_by_one.sides[0].arsenal.last().copied().flatten();
+    assert_eq!(cached_slot.map(|slot| slot.attack()), Some(cache));
+    assert_eq!(seen_by_two.sides[0].arsenal.last(), Some(&None));
     assert_eq!(events_one.len(), 1);
     // J2 apprend qu'une carte est en cache, sans la carte.
     assert_eq!(
@@ -254,4 +284,39 @@ async fn the_card_catalog_is_sent_on_request_even_without_a_seat() {
         client.receive().await,
         ServerMessage::Cards { cards: again } if again == cards
     ));
+}
+
+#[tokio::test]
+async fn each_player_learns_when_the_other_arrives_and_leaves() {
+    let url = start_server().await;
+    let mut one = Client::connect(&url).await;
+    one.send(ClientMessage::Create {
+        opponent: Opponent::Human,
+        variant: None,
+    })
+    .await;
+    let (code, _, _) = one.seated().await;
+    one.state().await;
+
+    let mut two = Client::connect(&url).await;
+    two.send(ClientMessage::Join { code }).await;
+    two.seated().await;
+    assert!(matches!(
+        two.receive_any().await,
+        ServerMessage::State { .. }
+    ));
+    assert_eq!(
+        two.receive_any().await,
+        ServerMessage::Opponent { connected: true }
+    );
+    assert_eq!(
+        one.receive_any().await,
+        ServerMessage::Opponent { connected: true }
+    );
+
+    drop(two);
+    assert_eq!(
+        one.receive_any().await,
+        ServerMessage::Opponent { connected: false }
+    );
 }

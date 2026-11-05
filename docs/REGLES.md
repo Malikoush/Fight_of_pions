@@ -297,15 +297,15 @@ La carte de B8c :
 
 Avant la partie, si la configuration a un draft (`draft`, absent par défaut ; variante « règles actuelles avec draft » au labo) :
 
-- **Le format** est une suite de choix dans la configuration (`DraftRules::steps`) : rien n'est écrit en dur. Le format décidé (`DraftRules::standard`) :
-  1. chaque joueur met **1 carte en cache**, choisie dans **tout le catalogue**, Légendaires comprises (J1, puis J2) ; les deux peuvent choisir la même ;
-  2. **10 cartes** sont tirées avec la graine, toutes différentes, dans tout le catalogue, Légendaires et réactions comprises ;
-  3. **1 ban** chacun (J1, puis J2) : la carte bannie n'est plus prenable ;
-  4. **3 picks** chacun **en serpent**, J2 d'abord puisque J1 joue en premier : J2, J1, J1, J2, J2, J1.
-- Les cartes mises en cache et prises s'ajoutent à l'arsenal de départ, dans l'ordre (la cache d'abord). Les cartes tirées ni bannies ni prises sont écartées.
+- **Le format** est une suite de choix dans la configuration (`DraftRules::steps`) : rien n'est écrit en dur. `DraftRules::new` le fabrique à partir de **phases dans l'ordre voulu** (`DraftPhase` : caches, bans, picks). Le format décidé (`DraftRules::standard`, la cache en dernier depuis le 2026-11-05) :
+  1. **10 cartes** sont tirées avec la graine, toutes différentes, dans tout le catalogue, Légendaires et réactions comprises ;
+  2. **1 ban** chacun (J1, puis J2) : la carte bannie n'est plus prenable ;
+  3. **3 picks** chacun **en serpent**, J2 d'abord puisque J1 joue en premier : J2, J1, J1, J2, J2, J1 ;
+  4. chaque joueur met **1 carte en cache**, choisie dans **tout le catalogue**, Légendaires comprises (J1, puis J2), **en connaissant tout le draft** (bans et picks publics) ; les deux peuvent choisir la même.
+- Les cartes prises et mises en cache s'ajoutent à l'arsenal de départ, dans l'ordre des choix (les picks, puis la cache). Les cartes tirées ni bannies ni prises sont écartées.
 - Pendant le draft, seul le choix d'une carte est permis ; la partie commence ensuite normalement (J1, tour 1).
 - **La cache est secrète** (B9b) : l'adversaire ne la voit pas, ni au labo, ni au terminal, ni dans le journal (« met une carte en cache »). Elle est **révélée dès qu'elle est lancée pour la première fois** (attaque ou réaction : `UseAttack`, avant ses choix, puisqu'une attaque commencée va au bout ; 2026-11-03), et reste visible ensuite. Le joueur visé par une Feintaille connaît donc l'attaque qui le menace. Les picks sont publics. La fenêtre de réaction reste un indice pour l'adversaire : c'est voulu.
-- **Les cartes tirées** ne se voient qu'à partir du premier ban ou pick : la cache se choisit sans les connaître (2026-11-03).
+- **Les cartes tirées** ne se voient qu'à partir du premier ban ou pick. Dans le format standard, c'est dès le début ; un format qui ferait choisir la cache d'abord la ferait choisir sans les connaître (2026-11-03).
 - Une même carte peut être deux fois dans un arsenal (la cache identique à un pick ou à une carte de départ) : deux emplacements, deux recharges séparées (2026-11-03).
 
 ### Fin de partie (2026-10-26)
@@ -478,6 +478,7 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B8c | Séduction esquivée (Beauté fatale Épique et Légendaire : tuer le pion visé, puis poser le tien sur sa case) : si le pion visé esquive, le kill rate ; le pion de l'attaquant est-il quand même posé sur la case libérée ? Aujourd'hui oui : l'attaquant gagne une pose. | Non : la séduction remplace le pion visé, rien n'est posé | **2026-11-03** : non, la séduction remplace le pion visé (Martin accepte aussi une séduction qu'on ne peut pas esquiver ; on garde la Feintaille utile). `Effect::Seduce`. |
 | B8c | Médecin Épique sur une tombe occupée par un pion adverse : ce pion est-il « visé » (fenêtre de Feintaille) ? S'il esquive, la résurrection a lieu sur la case libérée. Aujourd'hui oui aux deux. | Oui, il est visé, et la résurrection a lieu | **2026-11-03** : oui. |
 | B9 | Une même carte peut-elle être deux fois dans un arsenal (la cache identique à un pick ou à une carte de départ) ? | Oui, deux emplacements et deux recharges | **2026-11-03** : oui (réponse par défaut). |
+| B9 | La cache se choisit-elle avant le tirage, ou en dernier ? Et plus tard, avec les collections ? | En dernier, en connaissant tout le draft ; plus tard, parmi 3 cartes préparées avant la partie | **2026-11-05** : en dernier (Martin), dans tout le catalogue tant qu'il n'y a pas de collection. Avec les comptes : chaque joueur prépare 3 cartes de cache avant la partie et en garde 1 au draft (à coder avec les comptes). |
 | E3e | Pendant la fenêtre de la Feintaille, la vue doit-elle dire l'attaque qui menace (la carte, son lanceur, les pions visés) ? Le carnet dit que le joueur visé la connaît (B9, 2026-11-03), mais la vue ne la donne que si c'est une carte de la cache (`CardRevealed`) : l'attaque n'est annoncée (`AttackUsed`) qu'une fois résolue. Le client ne peut donc pas afficher « L'adversaire attaque ton pion en H8 » (maquettes). | Oui : un champ de la vue, rempli seulement pendant cette fenêtre (moteur, puis client) | En attente. D'ici là, le client dit le dernier coup adverse raconté, et les pions visés apparaissent quand on choisit la Feintaille (ses lanceurs proposés). |
 
 ## Historique

@@ -5,8 +5,8 @@ mod common;
 
 use common::{game_with, random_config};
 use fight_of_pions::{
-    Action, Attack, AttackKind, Decision, DraftRules, DraftStep, Event, Game, GameConfig, Player,
-    PlayerView, Position, Rarity, Rng,
+    Action, Attack, AttackKind, Decision, DraftPhase, DraftRules, DraftStep, Event, Game,
+    GameConfig, Player, PlayerView, Position, Rarity, Rng,
 };
 
 fn hare() -> Attack {
@@ -20,7 +20,7 @@ fn hare() -> Attack {
 fn hares_in_cache() -> Game {
     let config = GameConfig {
         wall_thickness: 0,
-        draft: Some(DraftRules::new(1, 0, 0, 0)),
+        draft: Some(DraftRules::new(0, &[DraftPhase::Caches(1)])),
         ..GameConfig::default()
     };
     let mut game = game_with(config);
@@ -95,7 +95,7 @@ fn only_the_player_who_decides_gets_the_legal_actions() {
 #[test]
 fn the_opponent_cache_choice_is_masked_in_the_events() {
     let config = GameConfig {
-        draft: Some(DraftRules::new(1, 0, 0, 0)),
+        draft: Some(DraftRules::new(0, &[DraftPhase::Caches(1)])),
         ..GameConfig::default()
     };
     let mut game = game_with(config);
