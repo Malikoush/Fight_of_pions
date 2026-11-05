@@ -96,17 +96,9 @@ static func _about(player: String, text: String) -> Dictionary:
 	return {"player": player, "acts": false, "text": text}
 
 
-## Le nom d'une carte (`{"kind", "rarity"}`) : « Ours Rare ». Il vient du catalogue du
-## serveur : un crochet y est échappé, pour ne pas passer pour une balise du journal.
+## Le nom d'une carte (`{"kind", "rarity"}`) : « Ours Rare ».
 func _card(attack: Variant) -> String:
-	if not (attack is Dictionary):
-		return "?"
-	var kind: String = attack.get("kind", "")
-	var rarity: String = attack.get("rarity", "")
-	var card := "%s %s" % [kind, rarity]
-	if _catalog != null:
-		card = "%s %s" % [_catalog.family_name(kind), _catalog.rarity_name(kind, rarity)]
-	return card.replace("[", "[lb]")
+	return CardCatalog.card_name(_catalog, attack)
 
 
 static func _cell(data: Dictionary, field: String) -> String:

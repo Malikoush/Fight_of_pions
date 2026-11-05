@@ -40,6 +40,11 @@ const PANEL_SCORCHED := &"GamePanelScorched"
 const JOURNAL_LINE := &"JournalLine"
 const JOURNAL_TURN_LABEL := &"JournalTurnLabel"
 const ICON_BUTTON := &"IconButton"
+const PANEL_THREAT := &"GamePanelThreat"
+const THREAT_LABEL := &"ThreatLabel"
+const HEADING_LABEL := &"HeadingLabel"
+const CAPTION_LABEL := &"CaptionLabel"
+const GOLD_CAPS_LABEL := &"GoldCapsLabel"
 const OVERLAY := &"Overlay"
 
 static var _shared: Theme
@@ -79,6 +84,10 @@ static func build() -> Theme:
 	_label(theme, FACT_LABEL, strong, Look.FONT_FACT, Look.CREAM, false)
 	_label(theme, SCORCHED_LABEL, strong, Look.FONT_FACT, Look.SCORCHED, false)
 	_label(theme, JOURNAL_TURN_LABEL, caps, Look.FONT_FACT, Look.MUTED, false)
+	_label(theme, THREAT_LABEL, caps, Look.FONT_BODY, Look.THREAT, false)
+	_label(theme, HEADING_LABEL, display, Look.FONT_HEADING, Look.CREAM, false)
+	_label(theme, CAPTION_LABEL, body, Look.FONT_FACT, Look.MUTED, false)
+	_label(theme, GOLD_CAPS_LABEL, caps, Look.FONT_BODY, Look.GOLD, false)
 	_journal(theme, strong)
 	_icon_button(theme)
 
@@ -210,6 +219,13 @@ static func _panels(theme: Theme) -> void:
 		style.border_color = Look.PANEL_BORDER_ACTIVE if variation == PANEL_ACTIVE else Look.PANEL_BORDER
 		style.set_content_margin_all(Look.GAP_L)
 		theme.set_stylebox(&"panel", variation, style)
+	# La menace adverse (l'annonce d'une carte, la fenêtre de réaction) : un bord de braise.
+	theme.set_type_variation(PANEL_THREAT, &"PanelContainer")
+	var threat := _rounded(Look.FOREST_DEEP, Look.RADIUS_PANEL)
+	threat.set_border_width_all(Look.BORDER_STRONG)
+	threat.border_color = Look.THREAT
+	threat.set_content_margin_all(Look.GAP_L)
+	theme.set_stylebox(&"panel", PANEL_THREAT, threat)
 	# Sous Terre brûlée, le panneau du joueur qui attend a un bord de braise en pointillés
 	# (maquettes) ; celui qui joue garde son bord d'or.
 	theme.set_type_variation(PANEL_SCORCHED, &"PanelContainer")

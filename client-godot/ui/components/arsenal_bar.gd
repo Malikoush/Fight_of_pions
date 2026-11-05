@@ -36,23 +36,8 @@ func show_arsenal(view: ViewData, player: String, catalog: CardCatalog) -> void:
 	for index in _cards.size():
 		var card := _cards[index]
 		card.visible = index < slots.size()
-		if not card.visible:
-			continue
-		var slot: Variant = slots[index]
-		if not (slot is Dictionary):
-			card.show_card(null, "", 0, false, 0, false, false)
-			continue
-		var attack: Dictionary = slot.get("attack", {})
-		var kind: String = attack.get("kind", "")
-		card.show_card(
-			attack,
-			catalog.family_name(kind) if catalog != null else kind,
-			view.stats_of(attack).get("cost", 0),
-			catalog != null and catalog.is_reaction(kind),
-			slot.get("cooldown_left", 0),
-			slot.get("secret", false),
-			view.use_attack(index) != null,
-		)
+		if card.visible:
+			card.show_slot(view, player, index, catalog)
 
 
 ## Lève la carte de cet emplacement (une carte en cours de choix), ou aucune (-1).

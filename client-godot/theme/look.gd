@@ -106,8 +106,10 @@ const STATUS_RINGS := {
 const ATTACK_PULSE := GOLD
 const KILL_PULSE := Color("ff5a3c")
 const DIG_PULSE := Color("c9a96b")
-## Terre brûlée : la braise du panneau du joueur visé.
-const SCORCHED := Color("f0866a")
+## La menace adverse (maquettes) : l'annonce d'une attaque, la fenêtre de réaction ; et
+## Terre brûlée, la même braise sur le panneau du joueur visé.
+const THREAT := Color("f0866a")
+const SCORCHED := THREAT
 ## Le palet fantôme (survol, coup envoyé en attente de réponse) : sa transparence.
 const GHOST_ALPHA := 0.55
 
@@ -203,6 +205,26 @@ const BADGE_GAP := 2
 const BADGE_CANVAS_LAYER := 0
 ## Les badges se posent au bord droit du dessus d'un pion (en part de son rayon).
 const BADGE_ANCHOR_SIDE := 0.35
+## Le tour adverse :
+## - l'annonce d'une carte adverse, en haut de l'écran : la largeur de sa carte, son temps à
+##   l'écran, son entrée et sa sortie ;
+const ANNOUNCE_CARD_WIDTH := 52.0
+const ANNOUNCE_HOLD := 2.4
+const ANNOUNCE_FADE := 0.25
+## - la cache révélée : le voile, la carte en grand, les rayons derrière elle (nombre, couleur,
+##   longueur en part de l'écran, vitesse de rotation en tours par seconde), son entrée ;
+const REVEAL_DIM := Color(FOREST_DEEP, 0.93)
+const REVEAL_CARD_WIDTH := 180.0
+const REVEAL_RAYS := 16
+const REVEAL_RAY_COLOR := Color(GOLD, 0.13)
+const REVEAL_RAY_LENGTH := 0.75
+const REVEAL_RAY_SPEED := 0.02
+const REVEAL_IN := 0.3
+## - la fenêtre de réaction : la largeur de ses cartes, et les lignes de leur légende.
+const REACTION_CARD_WIDTH := 92.0
+const CAPTION_LINES := 3
+## Le bouton qui joue la réaction, plus large que « PASSER » : il porte le nom de la carte.
+const PLAY_BUTTON_STRETCH := 2.0
 ## Le journal des coups : les lignes affichées (les plus anciennes s'en vont), la largeur de
 ## sa colonne en paysage, celle de la colonne des tours, et le palet de chaque ligne.
 const JOURNAL_SHOWN := 80

@@ -61,8 +61,9 @@ func _init() -> void:
 	column.add_child(_facts)
 
 
-## Montre ce joueur, tel que la vue le décrit.
-func show_side(view: ViewData, player: String, display_name: String) -> void:
+## Montre ce joueur, tel que la vue le décrit. `deciding_text` dit ce qu'il fait quand c'est
+## à l'adversaire de décider (« joue », ou « réfléchit… » pour un bot).
+func show_side(view: ViewData, player: String, display_name: String, deciding_text: String = Labels.PLAYS) -> void:
 	if player != _chip_player:
 		_chip_player = player
 		for old in _chip_slot.get_children():
@@ -76,7 +77,7 @@ func show_side(view: ViewData, player: String, display_name: String) -> void:
 	if mine:
 		_status.text = Labels.YOUR_TURN if deciding else ""
 	else:
-		_status.text = Labels.PLAYS if deciding else Labels.WAITS
+		_status.text = deciding_text if deciding else Labels.WAITS
 	_reserve.text = str(side.get("reserve", 0))
 	_reserve_total.text = "/%d" % config.get("pions_per_player", 0)
 	var points: int = side.get("actions_left", 0)

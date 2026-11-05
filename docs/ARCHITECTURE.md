@@ -229,7 +229,8 @@ client-godot/
                         badge_layer.gd (les badges, en 2D par-dessus), board_materials.gd,
                         shaders/
   ui/                   ui.gd (les briques), components/ (panneau de joueur, losanges,
-                        cartes, arsenal, choix, menu de case, journal),
+                        cartes, arsenal, choix, menu de case, journal, annonce d'une
+                        carte adverse, cache révélée, fenêtre de réaction),
                         screens/ (démarrage, accueil, partie)
   theme/look.gd         l'apparence : couleurs, tailles, marges et durées (comme theme.rs)
   theme/theme_builder.gd  le thème Godot, construit à partir de `Look`
@@ -253,6 +254,7 @@ client-godot/
   - le déroulé (`BoardTimeline`) date chaque animation dans l'ordre des événements : éclat d'or de l'attaque lancée, tir de la reine (une balle en cloche), pions tués (ils gonflent, puis se ratatinent en s'élevant, dans un anneau rouge), tombes qui sortent du sol, sauts en arc et échanges, mur creusé, poses. Des événements de même sorte qui se suivent jouent ensemble ; une autre sorte attend la fin de la précédente. Les statuts changent à la fin du déroulé ;
   - l'écran de partie fait passer les vues par une file : chacune attend que la précédente ait fini de s'animer, car le bot joue sans pause. Tant que des vues attendent, aucun geste n'est pris : la vue affichée est périmée ;
   - une carte envoyée coup par coup ne montre que sa dernière vue, avec les événements de toutes.
+- **Le tour adverse** (E3e) : une carte lancée par l'adversaire est annoncée en haut de l'écran (`AttackBanner`) ; sa cache, quand il la lance, est révélée en grand jusqu'à un toucher (`RevealOverlay`, la file des vues attend) ; quand on peut réagir (décision `React`), la fenêtre de réaction (`ReactionPanel`) remplace l'arsenal : le dernier coup adverse, ses réactions, « PASSER » ou « JOUER … » ; pendant que l'adversaire décide, une pastille le dit (« Le bot réfléchit… »). Tout vient des événements et des coups permis.
 - **Le journal des coups** (E3d3) raconte la partie à partir des seuls événements (`GameJournal`) : qui pose, qui lance quelle carte et depuis où, les pions tués et déplacés, les statuts posés, le mur creusé, les jetons, Terre brûlée. Les cases s'écrivent comme le moteur les nomme (« C5 », sur toute la grille, mur compris) et les cartes avec les noms du catalogue. En paysage, il occupe une colonne à gauche du plateau ; en portrait, un bouton à côté du tour l'ouvre en page. Il commence avec la connexion : à la reprise d'une partie, le serveur n'envoie pas les coups passés.
 - **Ce qui dure se voit** (E3d1), tout lu dans la vue :
   - sur un pion, d'après les effets continus qui le visent (`PionStatus`) : un anneau à ses pieds pour son statut le plus fort (immobilisé : chaîne grise ; protégé : or ; pacte : tirets magenta), la taille d'un enfant (Familia), une couronne en 3D pour une reine ;

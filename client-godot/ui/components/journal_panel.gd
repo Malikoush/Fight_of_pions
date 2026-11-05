@@ -80,13 +80,17 @@ func _row(entry: Dictionary) -> HBoxContainer:
 
 
 ## Le texte d'une ligne : le nom coloré de son joueur puis l'action, ou la conséquence en
-## plus discret. Le texte vient de `Labels` et du catalogue, crochets échappés
-## (`GameJournal`).
+## plus discret. Un nom de carte (catalogue) ou de joueur (les pseudos viendront) ne doit
+## pas passer pour une balise : ses crochets sont échappés.
 func _line_text(entry: Dictionary, player: String) -> String:
-	var text: String = entry.get("text", "")
+	var text := _plain(entry.get("text", ""))
 	if not entry.get("acts", false):
 		return "[color=#%s]%s[/color]" % [Look.MUTED.to_html(false), text]
 	var color := Look.GOLD if player == _viewer else Look.CREAM
-	# Un nom choisi par un joueur (les pseudos viendront) ne doit pas passer pour une balise.
-	var who: String = str(_names.get(player, "")).replace("[", "[lb]")
+	var who := _plain(_names.get(player, ""))
 	return "[color=#%s][b]%s[/b][/color] %s" % [color.to_html(false), who, text]
+
+
+## Ce texte, lu tel quel par le texte riche : ses crochets ne sont pas des balises.
+static func _plain(text: Variant) -> String:
+	return str(text).replace("[", "[lb]")

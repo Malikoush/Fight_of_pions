@@ -22,6 +22,10 @@ const OPPONENT := "Adversaire"
 const YOUR_TURN := "à toi de jouer"
 const WAITS := "attend"
 const PLAYS := "joue"
+const THINKS := "réfléchit…"
+## Sous le tour, pendant que l'adversaire décide.
+const BOT_THINKING := "Le bot réfléchit…"
+const OPPONENT_PLAYING := "L'adversaire joue…"
 
 const WAITING := "EN ATTENTE"
 ## Le bandeau du début de ton tour.
@@ -52,6 +56,20 @@ const FACT_SCORCHED := "Terre brûlée · jusqu'au tour %d"
 const FACT_INFIRMARY := "Infirmerie %d"
 const FACT_GRAVEYARD := "Cimetière %d"
 const FACT_GUARDS := "Gardes %d"
+
+## Le tour adverse : l'annonce d'une carte adverse, sa cache révélée, la fenêtre de réaction.
+const ATTACK_TAG := "ATTAQUE"
+const REACTION_TAG := "RÉACTION"
+const ANNOUNCE_TITLE := "%s lance %s"
+const ANNOUNCE_FROM := "depuis son pion en %s"
+const REVEAL_TAG := "CACHE RÉVÉLÉE"
+const REVEAL_TITLE := "%s lance sa carte cachée"
+const REVEAL_DETAIL := "%s · coût %d"
+const TAP_TO_CONTINUE := "Toucher pour continuer"
+const REACT_QUESTION := "Réagir ?"
+const REACT_DEFAULT_TITLE := "L'adversaire vient de jouer"
+const PLAY_REACTION := "JOUER %s"
+const NOT_PLAYABLE_NOW := "pas jouable maintenant"
 
 ## Le journal des coups.
 const JOURNAL_TITLE := "JOURNAL DES COUPS"

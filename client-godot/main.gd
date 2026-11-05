@@ -16,6 +16,7 @@ var _board: Board3D
 var _ui: Control
 var _screen: Control
 var _opponent_name := Labels.OPPONENT
+var _opponent_is_bot := false
 ## Le catalogue des cartes (noms et textes), reçu à chaque connexion.
 var _catalog: CardCatalog
 
@@ -60,6 +61,7 @@ func _show_home() -> void:
 func _show_game() -> GameScreen:
 	var game := GameScreen.new(_board)
 	game.opponent_name = _opponent_name
+	game.opponent_is_bot = _opponent_is_bot
 	game.catalog = _catalog
 	game.play_requested.connect(ServerLink.play)
 	game.home_requested.connect(_on_home_requested)
@@ -140,10 +142,12 @@ func _on_server_error(kind: String, message: String) -> void:
 
 func _on_play_bot() -> void:
 	_opponent_name = Labels.BOT
+	_opponent_is_bot = true
 	ServerLink.create_room(DEV_OPPONENT, DEV_VARIANT)
 
 
 func _on_home_requested() -> void:
 	ServerLink.leave_room()
 	_opponent_name = Labels.OPPONENT
+	_opponent_is_bot = false
 	_show_home()

@@ -63,9 +63,7 @@ func _init() -> void:
 func show_choice(session: ChoiceSession, attack: Dictionary, catalog: CardCatalog, cost: int) -> void:
 	var kind: String = attack.get("kind", "")
 	var rarity: String = attack.get("rarity", "")
-	var reaction := catalog != null and catalog.is_reaction(kind)
-	var card_name := catalog.family_name(kind) if catalog != null else kind
-	_card.show_card(attack, card_name, cost, reaction, 0, false, true)
+	_card.show_attack(attack, catalog, cost)
 	_effect.text = catalog.effect(kind, rarity) if catalog != null else ""
 	_effect.visible = _effect.text != ""
 

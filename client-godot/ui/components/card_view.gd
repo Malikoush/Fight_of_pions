@@ -93,6 +93,35 @@ func show_card(attack: Variant, display_name: String, cost: int, reaction: bool,
 	tooltip_text = display_name
 
 
+## Montre cette carte (`{"kind", "rarity"}`) face visible, hors de l'arsenal (un choix, une
+## annonce) : son nom dans le catalogue, et ce coût.
+func show_attack(attack: Dictionary, catalog: CardCatalog, cost: int) -> void:
+	var kind: String = attack.get("kind", "")
+	var reaction := catalog != null and catalog.is_reaction(kind)
+	show_card(attack, catalog.family_name(kind) if catalog != null else kind, cost, reaction, 0, false, true)
+
+
+## Montre la carte de cet emplacement de l'arsenal de ce joueur, telle que la vue la décrit :
+## son coût lu dans la configuration, son nom dans le catalogue, vive si son `UseAttack` est
+## permis.
+func show_slot(view: ViewData, player: String, index: int, catalog: CardCatalog) -> void:
+	var entry: Variant = view.arsenal(player)[index]
+	if not (entry is Dictionary):
+		show_card(null, "", 0, false, 0, false, false)
+		return
+	var attack: Dictionary = entry.get("attack", {})
+	var kind: String = attack.get("kind", "")
+	show_card(
+		attack,
+		catalog.family_name(kind) if catalog != null else kind,
+		view.stats_of(attack).get("cost", 0),
+		catalog != null and catalog.is_reaction(kind),
+		entry.get("cooldown_left", 0),
+		entry.get("secret", false),
+		view.use_attack(index) != null,
+	)
+
+
 ## Lève la carte choisie au-dessus des autres.
 func set_selected(selected: bool) -> void:
 	_selected = selected

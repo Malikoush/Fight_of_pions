@@ -19,6 +19,23 @@ func family_name(kind: String) -> String:
 	return _families.get(kind, {}).get("name", kind)
 
 
+## Le nom complet d'une carte (`{"kind", "rarity"}`) : « Ours Rare ». Sans catalogue (pas
+## encore reçu), ses identifiants.
+static func card_name(catalog: CardCatalog, attack: Variant) -> String:
+	if not (attack is Dictionary):
+		return "?"
+	var kind: String = attack.get("kind", "")
+	var rarity: String = attack.get("rarity", "")
+	if catalog == null:
+		return "%s %s" % [kind, rarity]
+	return "%s %s" % [catalog.family_name(kind), catalog.rarity_name(kind, rarity)]
+
+
+## Ce que fait une famille, en une phrase ; vide si le catalogue ne la connaît pas.
+func summary(kind: String) -> String:
+	return _families.get(kind, {}).get("summary", "")
+
+
 ## Le nom affiché d'une rareté (« Épique »).
 func rarity_name(kind: String, rarity: String) -> String:
 	return _rarity(kind, rarity).get("name", rarity)

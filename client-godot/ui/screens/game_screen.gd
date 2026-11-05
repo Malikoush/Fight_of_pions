@@ -19,6 +19,11 @@ extends Control
 ##   aperçu du serveur ; une fois complète, la carte part coup par coup ;
 ## - une case où rien n'est permis : un refus (le pion tremble, la case se voile).
 ##
+## Le tour adverse : une carte adverse est annoncée en haut de l'écran ; sa cache révélée
+## couvre l'écran jusqu'à un toucher (la file des vues attend) ; une fenêtre de réaction
+## remplace l'arsenal (« Réagir ? ») ; pendant que l'adversaire décide, une pastille le dit
+## (« Le bot réfléchit… »).
+##
 ## Le journal des coups : en paysage, une colonne à gauche ; en portrait, une page qu'ouvre
 ## le bouton à côté du tour.
 ##
@@ -38,8 +43,9 @@ const PLACE := "Place"
 const HARE_STEP := "HareStep"
 const CHOOSE := "Choose"
 
-## Le nom affiché de l'adversaire (le bot, un ami).
+## Le nom affiché de l'adversaire (le bot, un ami), et s'il s'agit d'un bot.
 var opponent_name := Labels.OPPONENT
+var opponent_is_bot := false
 ## Le catalogue des cartes (noms et textes), quand il est arrivé.
 var catalog: CardCatalog:
 	set(value):
@@ -92,6 +98,11 @@ var _action_menu: ActionMenu
 var _banner: PanelContainer
 var _banner_show: Tween
 var _journal := GameJournal.new()
+var _attack_banner: AttackBanner
+var _reveal: RevealOverlay
+var _reaction: ReactionPanel
+var _thinking: PanelContainer
+var _thinking_label: Label
 var _journal_panel: JournalPanel
 var _journal_button: Button
 ## En portrait, la page du journal, par-dessus tout ; et la ligne du tour qui porte son bouton.
@@ -125,6 +136,7 @@ func _ready() -> void:
 	_action_menu = ActionMenu.new()
 	_action_menu.option_chosen.connect(_on_menu_option)
 	_build_journal()
+	_build_opponent_turn()
 
 	_board.cell_clicked.connect(_on_cell_clicked)
 	_board.cell_hovered.connect(_on_cell_hovered)
@@ -157,6 +169,9 @@ func show_view(view: ViewData, events: Array) -> void:
 ## Affiche la vue suivante de la file, puis attend la fin de son animation.
 func _play_next() -> void:
 	while not _queue.is_empty():
+		# La cache révélée attend un toucher : la suite viendra après.
+		if _reveal.visible:
+			return
 		var next: Array = _queue.pop_front()
 		var duration := _apply_view(next[0], next[1])
 		if duration > 0.0:
@@ -173,8 +188,14 @@ func _is_behind() -> bool:
 
 func _apply_view(view: ViewData, events: Array) -> float:
 	var turn_before := _view.turn() if _view != null else view.turn()
+	var lines := _journal.lines(events, view, turn_before, catalog)
 	_journal_panel.set_names(view.viewer(), {view.viewer(): Labels.YOU, view.opponent(): opponent_name})
-	_journal_panel.add_entries(_journal.lines(events, view, turn_before, catalog))
+	_journal_panel.add_entries(lines)
+	# Le coup adverse de cette vue, raconté : ce à quoi on réagit (vide à la reprise).
+	var opponent_act := ""
+	for line in lines:
+		if line.get("acts", false) and line.get("player") == view.opponent():
+			opponent_act = "%s %s" % [opponent_name, line.get("text", "")]
 	_view = view
 	_waiting_reply = false
 	_end_choice()
@@ -190,7 +211,8 @@ func _apply_view(view: ViewData, events: Array) -> float:
 
 	var duration := _board.show_view(view, events)
 	_board.show_last(_last_opponent_pions)
-	_opponent_panel.show_side(view, view.opponent(), opponent_name)
+	_announce_opponent_cards(view, events)
+	_opponent_panel.show_side(view, view.opponent(), opponent_name, Labels.THINKS if opponent_is_bot else Labels.PLAYS)
 	_my_panel.show_side(view, me, Labels.YOU)
 	_arsenal.show_arsenal(view, me, catalog)
 	var my_turn := view.current_player() == me and not view.is_over()
@@ -198,6 +220,10 @@ func _apply_view(view: ViewData, events: Array) -> float:
 	_pill_icon.visible = not my_turn and not view.is_over()
 	_refresh_main_button()
 	_on_cell_hovered(_hovered)
+	if _is_reacting():
+		_reaction.show_window(view, opponent_act, catalog)
+	_apply_mode()
+	_refresh_thinking()
 
 	# Le bandeau n'annonce que le début de son tour, pas une réaction pendant celui de
 	# l'adversaire.
@@ -206,6 +232,57 @@ func _apply_view(view: ViewData, events: Array) -> float:
 		_announce_turn()
 	_was_my_turn = my_main_turn
 	return duration
+
+
+# --- Le tour adverse ---
+
+## Les cartes que l'adversaire vient de lancer : annoncées en haut de l'écran ; sa cache,
+## révélée en grand.
+func _announce_opponent_cards(view: ViewData, events: Array) -> void:
+	var opponent := view.opponent()
+	for event: Variant in events:
+		var data := GameEvents.payload(event)
+		if data.get("player") != opponent or not (data.get("attack") is Dictionary):
+			continue
+		var attack: Dictionary = data["attack"]
+		var cost: int = view.stats_of(attack).get("cost", 0)
+		match GameEvents.kind(event):
+			"AttackUsed":
+				var launcher: Variant = data.get("launcher")
+				var cell := Labels.cell_name(ViewData.to_cell(launcher)) if launcher is Dictionary else "?"
+				_attack_banner.announce(attack, opponent_name, cell, catalog, cost)
+			"CardRevealed":
+				_reveal.reveal(attack, opponent_name, catalog, cost)
+
+
+## La cache révélée est fermée : la file des vues reprend.
+func _on_reveal_dismissed() -> void:
+	if _playing == null or not _playing.is_running():
+		_play_next()
+
+
+## Vrai si c'est à soi de réagir au coup adverse, et qu'aucune réaction n'est en cours de
+## choix.
+func _is_reacting() -> bool:
+	if _view == null or _session != null:
+		return false
+	return _view.decision_kind() == "React" and _view.decision_player() == _view.viewer()
+
+
+func _on_pass() -> void:
+	if _view == null or _waiting_reply or _is_behind():
+		return
+	var pass_action: Variant = _view.simple_action("Pass")
+	if pass_action != null:
+		_request(pass_action)
+
+
+## La pastille « Le bot réfléchit… », tant que l'adversaire décide et que la vue affichée
+## est la dernière.
+func _refresh_thinking() -> void:
+	var deciding := _view != null and not _view.is_over() and _view.decision_player() == _view.opponent()
+	_thinking.visible = deciding and not _is_behind()
+	_thinking_label.text = Labels.BOT_THINKING if opponent_is_bot else Labels.OPPONENT_PLAYING
 
 
 ## La réponse du serveur à l'aperçu du choix en cours.
@@ -569,6 +646,32 @@ func _show_journal_page(shown: bool) -> void:
 	_journal_page.visible = shown and not _landscape
 
 
+func _build_opponent_turn() -> void:
+	_attack_banner = AttackBanner.new()
+	_attack_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	var insets := Ui.safe_insets()
+	_attack_banner.offset_left = Look.PAGE_MARGIN + insets.position.x
+	_attack_banner.offset_right = -Look.PAGE_MARGIN - insets.size.x
+	_attack_banner.offset_top = Look.PAGE_MARGIN + insets.position.y
+	add_child(_attack_banner)
+	_reveal = RevealOverlay.new()
+	_reveal.dismissed.connect(_on_reveal_dismissed)
+	add_child(_reveal)
+	_reaction = ReactionPanel.new()
+	_reaction.pass_requested.connect(_on_pass)
+	_reaction.reaction_chosen.connect(_on_card_chosen)
+	_thinking = PanelContainer.new()
+	_thinking.theme_type_variation = ThemeBuilder.PILL
+	_thinking.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_thinking.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var row := Ui.hbox(Look.GAP_S)
+	row.add_child(Ui.icon(HOURGLASS, Look.GOLD))
+	_thinking_label = Ui.label("", ThemeBuilder.PILL_LABEL)
+	row.add_child(_thinking_label)
+	_thinking.add_child(row)
+	_thinking.visible = false
+
+
 func _build_banner() -> void:
 	_banner = PanelContainer.new()
 	_banner.theme_type_variation = ThemeBuilder.BANNER
@@ -594,7 +697,7 @@ func _on_resized() -> void:
 ## leurs boîtes changent.
 func _arrange(landscape: bool) -> void:
 	_landscape = landscape
-	for item: Control in [_opponent_panel, _my_panel, _pill, _notice, _action_slot, _board_area, _arsenal, _choice_panel, _journal_panel, _journal_button]:
+	for item: Control in [_opponent_panel, _my_panel, _pill, _thinking, _notice, _action_slot, _board_area, _arsenal, _choice_panel, _reaction, _journal_panel, _journal_button]:
 		if item.get_parent() != null:
 			item.get_parent().remove_child(item)
 	if _top_row.get_parent() != null:
@@ -614,10 +717,12 @@ func _arrange(landscape: bool) -> void:
 		left.add_child(_board_area)
 		left.add_child(_arsenal)
 		left.add_child(_choice_panel)
+		left.add_child(_reaction)
 		row.add_child(left)
 		var column := Ui.vbox(Look.GAP_M)
 		column.custom_minimum_size.x = Look.SIDE_COLUMN_WIDTH
 		column.add_child(_pill)
+		column.add_child(_thinking)
 		column.add_child(_notice)
 		column.add_child(_opponent_panel)
 		column.add_child(_my_panel)
@@ -640,12 +745,14 @@ func _arrange(landscape: bool) -> void:
 		_top_row.add_child(_pill)
 		_top_row.add_child(right)
 		column.add_child(_top_row)
+		column.add_child(_thinking)
 		column.add_child(_notice)
 		column.add_child(_board_area)
 		column.add_child(_arsenal)
 		column.add_child(_my_panel)
 		column.add_child(_action_slot)
 		column.add_child(_choice_panel)
+		column.add_child(_reaction)
 		_my_panel.set_identity_visible(false)
 		_journal_panel.custom_minimum_size.x = 0.0
 		_journal_page_column.add_child(_journal_panel)
@@ -659,16 +766,20 @@ func _arrange(landscape: bool) -> void:
 	move_child(_banner, -1)
 	move_child(_action_menu, -1)
 	move_child(_journal_page, -1)
+	move_child(_attack_banner, -1)
+	move_child(_reveal, -1)
 
 
-## Montre l'arsenal et la barre, ou, pendant le choix d'une carte, le panneau de choix à
-## leur place.
+## Montre l'arsenal et la barre ; à leur place, pendant le choix d'une carte, le panneau de
+## choix, et quand on peut réagir au coup adverse, la fenêtre de réaction.
 func _apply_mode() -> void:
 	var choosing := _session != null
+	var reacting := _is_reacting()
 	_choice_panel.visible = choosing
-	_arsenal.visible = not choosing
-	_action_slot.visible = not choosing
-	_my_panel.visible = _landscape or not choosing
+	_reaction.visible = reacting
+	_arsenal.visible = not (choosing or reacting)
+	_action_slot.visible = not (choosing or reacting)
+	_my_panel.visible = _landscape or not (choosing or reacting)
 
 
 func _frame_board() -> void:
