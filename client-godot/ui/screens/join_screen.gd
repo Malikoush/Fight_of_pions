@@ -1,67 +1,86 @@
 class_name JoinScreen
-extends Control
-## Rejoindre la salle d'un ami (maquettes) : le code à 5 caractères, en capitales, et
+extends Screen
+## Rejoindre la salle d'un ami (maquettes 1-5, p. 5 et 6) : le code à 5 caractères, une case
+## par caractère, tapé au clavier (celui du téléphone s'ouvre tout de suite), et
 ## « REJOINDRE », allumé quand le code est complet. Un refus du serveur (salle inconnue,
-## complète) s'affiche dessous ; le code reste tapé, pour corriger une lettre.
+## complète) s'affiche sous les cases, bordées de braise ; le code reste tapé, pour
+## corriger une lettre, et le message suivant remplace le précédent. Sa place est gardée
+## même vide : le bouton ne saute pas quand il paraît.
 
 signal join_requested(code: String)
 signal back_requested
 
-## La longueur d'un code de salle (protocole).
-const CODE_LENGTH := 5
+var _waiting := false
 
-var _code: LineEdit
-var _join: Button
-var _error: Label
+@onready var _page: MarginContainer = %Page
+@onready var _header: PageHeader = %Header
+@onready var _help: Label = %Help
+@onready var _code: CodeField = %Code
+@onready var _error: RichTextLabel = %Error
+@onready var _join: Button = %Join
 
 
 func _ready() -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var column := Ui.vbox(Look.GAP_L)
-	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	column.add_child(Ui.centered_label(Labels.JOIN_TITLE, ThemeBuilder.HEADING_LABEL))
-	column.add_child(Ui.centered_label(Labels.JOIN_HELP, ThemeBuilder.MUTED_LABEL))
-	_code = LineEdit.new()
-	_code.theme_type_variation = ThemeBuilder.CODE_INPUT
-	_code.max_length = CODE_LENGTH
-	_code.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_code.custom_minimum_size.x = Look.CODE_INPUT_WIDTH
-	_code.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_code.text_changed.connect(_on_code_changed)
-	_code.text_submitted.connect(func(_text: String) -> void: _on_join())
-	column.add_child(_code)
-	_error = Ui.centered_label("", ThemeBuilder.THREAT_LABEL)
-	_error.visible = false
-	column.add_child(_error)
-	_join = Ui.button(Labels.JOIN, ThemeBuilder.PRIMARY_BUTTON)
-	_join.disabled = true
+	Ui.fit_page(_page, Look.CONTENT_MAX_WIDTH)
+	_header.set_title(Labels.JOIN_TITLE)
+	_header.back_pressed.connect(back_requested.emit)
+	_help.text = Labels.JOIN_HELP
+	_join.text = Labels.JOIN
+	_join.custom_minimum_size.y = Look.BUTTON_HEIGHT
 	_join.pressed.connect(_on_join)
-	column.add_child(_join)
-	var back := Ui.button(Labels.BACK, ThemeBuilder.SECONDARY_BUTTON)
-	back.pressed.connect(back_requested.emit)
-	column.add_child(back)
-	add_child(Ui.page(Ui.limit_width(column, Look.CONTENT_MAX_WIDTH)))
-	_code.grab_focus()
+	_code.changed.connect(func(_text: String) -> void:
+		_show_error(false)
+		_refresh())
+	_code.submitted.connect(func(_text: String) -> void: _on_join())
+	# Une ligne vide garde la place du message.
+	_write_error("")
+	_show_error(false)
+	_refresh()
+	_code.focus()
 
 
-## Le serveur a refusé ce code : son message, et le bouton de nouveau permis.
-func show_error(message: String) -> void:
-	_error.text = message
-	_error.visible = true
-	_join.disabled = _code.text.length() != CODE_LENGTH
+## Un refus du serveur : son message sous les cases (bordées de braise s'il parle du code :
+## salle inconnue, complète), le bouton de nouveau permis, et le focus rendu au code pour
+## corriger une lettre.
+func on_refused(category: ServerErrors.Category, message: String) -> Reply:
+	_waiting = false
+	_write_error(Labels.sentence(message))
+	_show_error(true)
+	if category == ServerErrors.Category.JOIN_REFUSED:
+		_code.show_refused()
+	_refresh()
+	_code.focus()
+	return Reply.HANDLED
 
 
-func _on_code_changed(text: String) -> void:
-	var caret := _code.caret_column
-	_code.text = text.to_upper()
-	_code.caret_column = caret
-	_error.visible = false
-	_join.disabled = _code.text.length() != CODE_LENGTH
+## Une coupure a pu perdre la demande : le bouton se réactive.
+func on_connection(status: ServerLink.Status) -> void:
+	if status == ServerLink.Status.RECONNECTING:
+		_waiting = false
+		_refresh()
 
 
 func _on_join() -> void:
 	if _join.disabled:
 		return
-	_join.disabled = true
-	join_requested.emit(_code.text)
+	_waiting = true
+	_refresh()
+	join_requested.emit(_code.code())
+
+
+## Le message, centré, derrière sa croix ; il passe à la ligne s'il est long. Le texte du
+## serveur est ajouté tel quel, jamais lu comme du BBCode.
+func _write_error(text: String) -> void:
+	_error.clear()
+	_error.push_paragraph(HORIZONTAL_ALIGNMENT_CENTER)
+	_error.add_image(load(Ui.ICON_DIR + "fermer.svg"), Look.ICON_SIZE, Look.ICON_SIZE, Look.THREAT, INLINE_ALIGNMENT_CENTER)
+	_error.add_text(Labels.ICON_SPACE + text)
+	_error.pop()
+
+
+func _show_error(shown: bool) -> void:
+	_error.modulate.a = 1.0 if shown else 0.0
+
+
+func _refresh() -> void:
+	_join.disabled = _waiting or not _code.is_complete()

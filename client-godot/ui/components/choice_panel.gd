@@ -60,7 +60,7 @@ func _init() -> void:
 
 ## Montre le choix en cours : la carte (`attack`) et l'aperçu qui donne les choix suivants
 ## (`null` en attendant la réponse).
-func show_choice(session: ChoiceSession, attack: Dictionary, catalog: CardCatalog, cost: int) -> void:
+func show_choice(session: CardChoice, attack: Dictionary, catalog: CardCatalog, cost: int) -> void:
 	var kind: String = attack.get("kind", "")
 	var rarity: String = attack.get("rarity", "")
 	_card.show_attack(attack, catalog, cost)

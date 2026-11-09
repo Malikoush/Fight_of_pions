@@ -7,10 +7,16 @@ extends RefCounted
 var _families := {}
 
 
-func _init(families: Array) -> void:
-	for family: Variant in families:
+func _init(entries: Array) -> void:
+	for family: Variant in entries:
 		if family is Dictionary and family.has("kind"):
 			_families[family["kind"]] = family
+
+
+## Toutes les familles, dans l'ordre des fiches attaques : `{"kind", "name", "reaction",
+## "summary", "rules", "rarities"}`.
+func families() -> Array:
+	return _families.values()
 
 
 ## Le nom affiché d'une famille (« Coup du taureau »), ou son identifiant si le catalogue

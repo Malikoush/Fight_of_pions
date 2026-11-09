@@ -4,8 +4,7 @@ extends Node
 ## annonce ce que le serveur répond. Il garde la place (code, joueur, clé) sur le disque et
 ## la reprend tout seul après une coupure, ou au lancement suivant.
 ## À chaque ouverture, il demande le catalogue des cartes (noms et textes à afficher).
-##
-## Rejoindre une salle par son code arrivera avec l'étape qui s'en sert (E3f).
+## Il classe chaque refus du serveur par catégorie (`ServerErrors`).
 
 ## L'état de la connexion.
 enum Status { OFFLINE, CONNECTING, ONLINE, RECONNECTING }
@@ -19,23 +18,21 @@ signal preview_received(view: ViewData)
 signal cards_received(cards: CardCatalog)
 ## L'adversaire humain s'est branché sur sa place, ou s'en est débranché.
 signal opponent_presence(connected: bool)
-## Une demande refusée (`kind` est stable, `message` est en français).
-signal server_error(kind: String, message: String)
+## Une demande refusée : sa catégorie, et le message du serveur, en français, à afficher.
+signal server_error(category: ServerErrors.Category, message: String)
 
-## L'adresse du serveur lancé par `cargo serveur` ; réglable dans Réglages plus tard (E3h).
-## En IPv4 : le serveur n'écoute que là, et « localhost » peut désigner l'IPv6 sous Windows.
+## L'adresse du serveur lancé par `cargo serveur`. En IPv4 : le serveur n'écoute que là,
+## et « localhost » peut désigner l'IPv6 sous Windows.
 const DEFAULT_URL := "ws://127.0.0.1:3000/ws"
-const SESSION_PATH := "user://session.cfg"
-const SESSION_SECTION := "place"
-const SESSION_FIELDS := ["code", "player", "key"]
+## La longueur du code d'une salle (protocole).
+const ROOM_CODE_LENGTH := 5
+const SEAT_PATH := "user://seat.cfg"
+const SEAT_SECTION := "place"
+const SEAT_FIELDS := ["code", "player", "key"]
 ## Une vue complète peut approcher la mémoire de réception par défaut de Godot (64 Kio).
 const INBOUND_BUFFER_BYTES := 1 << 20
 ## Les attentes entre deux essais de connexion, en secondes ; la dernière se répète.
 const RETRY_DELAYS: Array[float] = [0.5, 1.0, 2.0, 4.0]
-## Les erreurs qui disent que la place gardée n'existe plus : on l'oublie.
-const LOST_SEAT_ERRORS := ["unknown_room", "bad_key", "room_full"]
-## Une autre connexion a repris la place : on arrête de se reconnecter.
-const SEAT_TAKEN := "seat_taken"
 ## Les demandes qui peuvent attendre l'ouverture de la connexion. Un coup préparé avant une
 ## coupure, lui, est perdu : la vue reçue au retour fait foi.
 const QUEUED_REQUESTS := ["create", "join"]
@@ -51,13 +48,14 @@ var _socket: WebSocketPeer
 var _wants_connection := false
 var _retry_in := 0.0
 var _outbox: Array[String] = []
-var _session := {}
-var _rejoining := false
+var _seat := {}
+## Vrai entre une demande `join` et sa réponse : un refus parle alors du code tapé.
+var _joining := false
 var _reopen_after_close := false
 
 
 func _ready() -> void:
-	_load_session()
+	_load_seat()
 
 
 ## Ouvre la connexion, et la rouvre tant qu'elle n'est pas fermée volontairement.
@@ -80,19 +78,19 @@ func disconnect_from_server() -> void:
 
 
 ## Vrai si une place est gardée : elle sera reprise à l'ouverture de la connexion.
-func has_session() -> bool:
-	return not _session.is_empty()
+func has_saved_seat() -> bool:
+	return not _seat.is_empty()
 
 
-func forget_session() -> void:
-	_session = {}
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(SESSION_PATH))
+func forget_seat() -> void:
+	_seat = {}
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SEAT_PATH))
 
 
 ## Quitter sa salle : la place est oubliée et une connexion neuve s'ouvre, car le serveur
 ## n'accepte qu'une salle par connexion. Une demande faite d'ici là attend la nouvelle.
 func leave_room() -> void:
-	forget_session()
+	forget_seat()
 	if _socket != null:
 		_reopen_after_close = true
 		_socket.close()
@@ -109,12 +107,19 @@ func create_room(opponent: String, variant: String = "") -> void:
 
 ## Rejoindre la salle de ce code (5 caractères, la casse ne compte pas) en joueur 2.
 func join_room(code: String) -> void:
+	_joining = true
 	_send({"type": "join", "code": code})
 
 
 ## Le code de la salle où l'on est assis, ou vide.
 func room_code() -> String:
-	return _session.get("code", "")
+	return _seat.get("code", "")
+
+
+## Le joueur de la place où l'on est assis ; sans place, le joueur 1 (celui du créateur
+## d'une salle, le seul qui la regarde avant d'y être assis).
+func seat_player() -> String:
+	return _seat.get("player", ViewData.PLAYER_ONE)
 
 
 ## Jouer un coup de `legal_actions`, recopié tel quel.
@@ -165,9 +170,8 @@ func _on_opened() -> void:
 	failed_attempts = 0
 	_set_status(Status.ONLINE)
 	_write({"type": "cards"})
-	if has_session():
-		_rejoining = true
-		_write({"type": "rejoin", "code": _session["code"], "player": _session["player"], "key": _session["key"]})
+	if has_saved_seat():
+		_write({"type": "rejoin", "code": _seat["code"], "player": _seat["player"], "key": _seat["key"]})
 	var waiting := _outbox
 	_outbox = []
 	for text in waiting:
@@ -176,7 +180,8 @@ func _on_opened() -> void:
 
 func _on_closed() -> void:
 	_socket = null
-	_rejoining = false
+	# Une demande `join` perdue avec la connexion n'attend plus de réponse.
+	_joining = false
 	if _reopen_after_close:
 		_reopen_after_close = false
 		failed_attempts = 0
@@ -213,8 +218,8 @@ func _receive(text: String) -> void:
 		return
 	match message["type"]:
 		"seated":
-			_rejoining = false
-			_save_session(message)
+			_joining = false
+			_save_seat(message)
 		"state":
 			state_received.emit(ViewData.new(message["view"]), message.get("events", []))
 		"preview":
@@ -231,7 +236,7 @@ func _receive(text: String) -> void:
 static func _is_well_formed(message: Dictionary) -> bool:
 	match message.get("type"):
 		"seated":
-			return SESSION_FIELDS.all(func(field: String) -> bool: return message.get(field) is String)
+			return SEAT_FIELDS.all(func(field: String) -> bool: return message.get(field) is String)
 		"state":
 			return message.get("view") is Dictionary and message.get("events", []) is Array
 		"error":
@@ -245,13 +250,17 @@ static func _is_well_formed(message: Dictionary) -> bool:
 	return false
 
 
+## Un refus : la place gardée perdue est oubliée, une place reprise ailleurs arrête les
+## reconnexions ; puis il est annoncé par sa catégorie.
 func _on_error(kind: String, text: String) -> void:
-	if _rejoining and kind in LOST_SEAT_ERRORS:
-		_rejoining = false
-		forget_session()
-	if kind == SEAT_TAKEN:
-		disconnect_from_server()
-	server_error.emit(kind, text)
+	var category := ServerErrors.category(kind, _joining)
+	_joining = false
+	match category:
+		ServerErrors.Category.SEAT_LOST:
+			forget_seat()
+		ServerErrors.Category.SEAT_TAKEN:
+			disconnect_from_server()
+	server_error.emit(category, text)
 
 
 func _set_status(new_status: Status) -> void:
@@ -260,21 +269,21 @@ func _set_status(new_status: Status) -> void:
 		status_changed.emit(status)
 
 
-func _save_session(message: Dictionary) -> void:
-	_session = {}
+func _save_seat(message: Dictionary) -> void:
+	_seat = {}
 	var file := ConfigFile.new()
-	for field: String in SESSION_FIELDS:
-		_session[field] = message[field]
-		file.set_value(SESSION_SECTION, field, message[field])
-	file.save(SESSION_PATH)
+	for field: String in SEAT_FIELDS:
+		_seat[field] = message[field]
+		file.set_value(SEAT_SECTION, field, message[field])
+	file.save(SEAT_PATH)
 
 
-func _load_session() -> void:
+func _load_seat() -> void:
 	var file := ConfigFile.new()
-	if file.load(SESSION_PATH) != OK:
+	if file.load(SEAT_PATH) != OK:
 		return
 	var loaded := {}
-	for field: String in SESSION_FIELDS:
-		loaded[field] = file.get_value(SESSION_SECTION, field, "")
+	for field: String in SEAT_FIELDS:
+		loaded[field] = file.get_value(SEAT_SECTION, field, "")
 	if loaded.values().all(func(value: Variant) -> bool: return value is String and value != ""):
-		_session = loaded
+		_seat = loaded

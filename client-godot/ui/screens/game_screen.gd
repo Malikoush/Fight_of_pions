@@ -1,5 +1,5 @@
 class_name GameScreen
-extends Control
+extends Screen
 ## L'écran de partie : l'interface autour du plateau 3D. C'est le seul endroit qui
 ## transforme un geste en coup : il prend le coup dans `legal_actions` de la vue (ou d'un
 ## aperçu, pendant le choix d'une carte) et le demande tel quel (`play_requested`). Rien
@@ -45,19 +45,31 @@ const HOURGLASS := "sablier"
 const PLACE := "Place"
 const HARE_STEP := "HareStep"
 const CHOOSE := "Choose"
+## Le texte de chaque avertissement de la session (`Session.Warning`).
+const WARNING_TEXTS := {
+	Session.Warning.OFFLINE: Labels.RECONNECTING,
+	Session.Warning.BOT_DOWN: Labels.BOT_FAILED,
+	Session.Warning.FRIEND_LEFT: Labels.FRIEND_LEFT,
+}
 
-## Le nom affiché de l'adversaire (le bot, un ami), et s'il s'agit d'un bot.
-var opponent_name := Labels.OPPONENT
-var opponent_is_bot := false
-## Le catalogue des cartes (noms et textes), quand il est arrivé.
+## Le nom affiché de l'adversaire, s'il s'agit d'un bot, et le catalogue des cartes : ceux
+## de la session.
+var opponent_name: String:
+	get:
+		return session.opponent_name
+var opponent_is_bot: bool:
+	get:
+		return session.against_bot()
 var catalog: CardCatalog:
-	set(value):
-		catalog = value
-		if _view != null and is_node_ready():
-			_arsenal.show_arsenal(_view, _view.viewer(), catalog)
+	get:
+		return session.catalog
 
 var _board: Board3D
 var _view: ViewData
+## Vrai tant que la connexion au serveur est ouverte.
+var _online := true
+## Le catalogue avec lequel l'arsenal a été dessiné.
+var _shown_catalog: CardCatalog
 var _waiting_reply := false
 ## Les coups d'une carte complète envoyés et pas encore confirmés : on n'affiche pas les
 ## vues intermédiaires (le choix du lanceur, des cibles), seulement la dernière, avec les
@@ -75,7 +87,7 @@ var _was_my_turn := false
 ## Les pions du dernier coup adverse, par identité.
 var _last_opponent_pions: Array[int] = []
 ## Le choix d'une carte en cours, ou `null`.
-var _session: ChoiceSession
+var _choice: CardChoice
 ## Les réponses à venir d'aperçus demandés par un choix abandonné : on les ignore (les
 ## réponses arrivent dans l'ordre des demandes).
 var _stale_previews := 0
@@ -156,7 +168,7 @@ func _ready() -> void:
 	_board.cell_hovered.connect(_on_cell_hovered)
 	_board.empty_tapped.connect(_leave_hare_step)
 	resized.connect(_on_resized)
-	_arrange(_is_landscape())
+	_arrange(Ui.is_landscape(self))
 	_refresh_main_button()
 
 
@@ -168,7 +180,7 @@ func _exit_tree() -> void:
 
 ## Affiche cette vue et ce qui s'est passé depuis la précédente, dès que les vues reçues
 ## avant elle ont fini de s'animer.
-func show_view(view: ViewData, events: Array) -> void:
+func on_view(view: ViewData, events: Array) -> void:
 	_carried_events.append_array(events)
 	if _sequence_left > 0:
 		_sequence_left -= 1
@@ -224,11 +236,13 @@ func _apply_view(view: ViewData, events: Array) -> float:
 		_last_opponent_pions = opponent_placed
 
 	var duration := _board.show_view(view, events)
+	_play_sound(events)
 	_board.show_last(_last_opponent_pions)
 	_announce_opponent_cards(view, events)
 	_opponent_panel.show_side(view, view.opponent(), opponent_name, Labels.THINKS if opponent_is_bot else Labels.PLAYS)
 	_my_panel.show_side(view, me, Labels.YOU)
 	_arsenal.show_arsenal(view, me, catalog)
+	_shown_catalog = catalog
 	var my_turn := view.current_player() == me and not view.is_over()
 	_pill_label.text = Labels.GAME_OVER if view.is_over() else Labels.turn_pill(view.turn(), my_turn)
 	_pill_icon.visible = not my_turn and not view.is_over()
@@ -245,6 +259,7 @@ func _apply_view(view: ViewData, events: Array) -> float:
 		reveal.tween_callback(_show_end.bind(view))
 	_apply_mode()
 	_refresh_thinking()
+	_refresh_warning()
 
 	# Le bandeau n'annonce que le début de son tour, pas une réaction pendant celui de
 	# l'adversaire.
@@ -282,6 +297,20 @@ func _show_end(view: ViewData) -> void:
 	_apply_mode()
 
 
+## Un son pour ce qui vient de se passer, le plus fort seulement : un kill, une attaque,
+## une pose.
+func _play_sound(events: Array) -> void:
+	var kinds: Array[String] = []
+	for event: Variant in events:
+		kinds.append(GameEvents.kind(event))
+	if "PionKilled" in kinds:
+		Sounds.play("kill")
+	elif "AttackUsed" in kinds:
+		Sounds.play("attack")
+	elif "PionPlaced" in kinds:
+		Sounds.play("place")
+
+
 ## La flèche : pendant la partie, on confirme avant de la quitter.
 func _on_back() -> void:
 	if _view != null and _view.is_over():
@@ -299,7 +328,7 @@ func _on_reveal_dismissed() -> void:
 ## Vrai si c'est à soi de réagir au coup adverse, et qu'aucune réaction n'est en cours de
 ## choix.
 func _is_reacting() -> bool:
-	if _view == null or _session != null:
+	if _view == null or _choice != null:
 		return false
 	return _view.decision_kind() == "React" and _view.decision_player() == _view.viewer()
 
@@ -324,13 +353,17 @@ func _refresh_thinking() -> void:
 func on_preview(view: ViewData) -> void:
 	if _stale_previews > 0:
 		_stale_previews -= 1
-	elif _session != null:
-		_session.on_preview(view)
+	elif _choice != null:
+		_choice.on_preview(view)
 
 
-## Le serveur a refusé la dernière demande : le joueur peut rejouer. Vrai si une carte
-## était en train de partir : sa vue est alors peut-être périmée, à redemander.
-func on_refused() -> bool:
+func uses_board() -> bool:
+	return true
+
+
+## Le serveur a refusé la dernière demande : le joueur peut rejouer. La vue est à redemander
+## si le refus dit qu'elle est en retard, ou si une carte était en train de partir.
+func on_refused(category: ServerErrors.Category, _message: String) -> Reply:
 	var was_sending := _sequence_left > 0
 	_waiting_reply = false
 	_sequence_left = 0
@@ -339,12 +372,37 @@ func on_refused() -> bool:
 	_end_choice()
 	_refresh_main_button()
 	_on_cell_hovered(_hovered)
-	return was_sending
+	if was_sending or category == ServerErrors.Category.STALE_VIEW:
+		return Reply.RESYNC
+	return Reply.HANDLED
+
+
+## La connexion est revenue, ou s'est coupée : l'avertissement le dit.
+func on_connection(status: ServerLink.Status) -> void:
+	_online = status == ServerLink.Status.ONLINE
+	if not _online:
+		_lose_connection()
+	_refresh_warning()
+
+
+## L'ami est arrivé ou parti, le bot ne joue plus, ou le catalogue est arrivé (les noms
+## des cartes de l'arsenal changent alors).
+func on_session_changed() -> void:
+	_refresh_warning()
+	if catalog != _shown_catalog and _view != null and is_node_ready():
+		_shown_catalog = catalog
+		_arsenal.show_arsenal(_view, _view.viewer(), catalog)
+
+
+## L'avertissement de la session (connexion, bot, ami) sous le tour, ou rien.
+func _refresh_warning() -> void:
+	var text: String = WARNING_TEXTS.get(session.warning(_online), "")
+	set_notice(text, text != "")
 
 
 ## La connexion est coupée : ce qui attendait une réponse (un coup, une carte qui partait,
 ## un aperçu) n'en aura pas. La vue envoyée à la reprise fera foi.
-func on_connection_lost() -> void:
+func _lose_connection() -> void:
 	_waiting_reply = false
 	_sequence_left = 0
 	_carried_events = []
@@ -368,7 +426,7 @@ func set_notice(text: String, warning: bool = false) -> void:
 # --- Le choix d'une carte ---
 
 func _on_card_chosen(slot: int) -> void:
-	if _view == null or _waiting_reply or _session != null or _is_behind():
+	if _view == null or _waiting_reply or _choice != null or _is_behind():
 		return
 	var use_attack: Variant = _view.use_attack(slot)
 	if use_attack == null:
@@ -377,9 +435,9 @@ func _on_card_chosen(slot: int) -> void:
 	_action_menu.close()
 	_board.show_mark(ViewData.NO_CELL)
 	_board.show_ghost(ViewData.NO_CELL, "", false)
-	_session = ChoiceSession.new(slot, use_attack)
-	_session.changed.connect(_refresh_choice)
-	_session.complete.connect(_play_sequence)
+	_choice = CardChoice.new(slot, use_attack)
+	_choice.changed.connect(_refresh_choice)
+	_choice.complete.connect(_play_sequence)
 	_arsenal.select(slot)
 	_apply_mode()
 	_refresh_choice()
@@ -387,23 +445,23 @@ func _on_card_chosen(slot: int) -> void:
 
 ## Montre les choix suivants : les cases proposées, celles déjà choisies, et le panneau.
 func _refresh_choice() -> void:
-	if _session == null:
+	if _choice == null:
 		return
-	var choices := _session.choices
+	var choices := _choice.choices
 	_board.show_candidates(choices.cells_of(CHOOSE) if choices != null else ([] as Array[Vector2i]))
-	_board.show_chosen(_session.chosen_cells())
-	var slot: Variant = _view.arsenal(_view.viewer())[_session.slot]
+	_board.show_chosen(_choice.chosen_cells())
+	var slot: Variant = _view.arsenal(_view.viewer())[_choice.slot]
 	var attack: Dictionary = slot.get("attack", {}) if slot is Dictionary else {}
-	_choice_panel.show_choice(_session, attack, catalog, _view.stats_of(attack).get("cost", 0))
+	_choice_panel.show_choice(_choice, attack, catalog, _view.stats_of(attack).get("cost", 0))
 
 
 ## Choisit le coup sans case de ce nom (`FinishAttack`, `ChooseEnemyTokens`), s'il est proposé.
 func _choose_simple(kind: String) -> void:
-	if _session == null or _session.is_waiting():
+	if _choice == null or _choice.is_waiting():
 		return
-	var action: Variant = _session.choices.simple_action(kind)
+	var action: Variant = _choice.choices.simple_action(kind)
 	if action != null:
-		_session.choose(action)
+		_choice.choose(action)
 
 
 ## La carte est complète : ses coups partent, dans l'ordre.
@@ -418,10 +476,10 @@ func _play_sequence(actions: Array) -> void:
 
 ## Oublie le choix en cours (annuler ne coûte rien : rien n'a été joué).
 func _end_choice() -> void:
-	if _session == null:
+	if _choice == null:
 		return
-	_stale_previews += _session.pending
-	_session = null
+	_stale_previews += _choice.pending
+	_choice = null
 	_board.show_candidates([] as Array[Vector2i])
 	_board.show_chosen([] as Array[Vector2i])
 	_arsenal.select(-1)
@@ -433,7 +491,7 @@ func _end_choice() -> void:
 func _on_cell_clicked(cell: Vector2i) -> void:
 	if _view == null or _waiting_reply or _is_behind():
 		return
-	if _session != null:
+	if _choice != null:
 		_click_during_choice(cell)
 	elif _hare_from != ViewData.NO_CELL:
 		_click_hare_destination(cell)
@@ -442,13 +500,13 @@ func _on_cell_clicked(cell: Vector2i) -> void:
 
 
 func _click_during_choice(cell: Vector2i) -> void:
-	if _session.is_waiting():
+	if _choice.is_waiting():
 		return
-	var action: Variant = _session.choices.action_at(cell, CHOOSE)
+	var action: Variant = _choice.choices.action_at(cell, CHOOSE)
 	if action == null:
 		_board.flash_refusal(cell)
 	else:
-		_session.choose(action)
+		_choice.choose(action)
 
 
 func _click_cell(cell: Vector2i) -> void:
@@ -514,7 +572,7 @@ func _leave_hare_step() -> void:
 		return
 	_hare_from = ViewData.NO_CELL
 	_board.show_candidates([] as Array[Vector2i])
-	set_notice("")
+	_refresh_warning()
 
 
 func _place(cell: Vector2i) -> void:
@@ -530,7 +588,7 @@ func _on_cell_hovered(cell: Vector2i) -> void:
 	_hovered = cell
 	if _view == null or _waiting_reply or _is_behind():
 		return
-	if _session != null or _hare_from != ViewData.NO_CELL:
+	if _choice != null or _hare_from != ViewData.NO_CELL:
 		# Le survol (aimanté) désigne la case proposée qui serait choisie.
 		_board.show_mark(cell)
 		_board.show_ghost(ViewData.NO_CELL, "", false)
@@ -546,7 +604,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"ui_cancel") and _journal_page.visible:
 		_show_journal_page(false)
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(&"ui_cancel") and (_session != null or _hare_from != ViewData.NO_CELL):
+	elif event.is_action_pressed(&"ui_cancel") and (_choice != null or _hare_from != ViewData.NO_CELL):
 		_end_choice()
 		_leave_hare_step()
 		get_viewport().set_input_as_handled()
@@ -602,7 +660,8 @@ func _on_main_button() -> void:
 
 ## Le bandeau « À toi ! » au milieu du plateau, et une brève vibration sur téléphone.
 func _announce_turn() -> void:
-	Input.vibrate_handheld(Look.TURN_VIBRATION_MS)
+	Settings.vibrate(Look.TURN_VIBRATION_MS)
+	Sounds.play("turn")
 	if _banner_show != null:
 		_banner_show.kill()
 	_banner.reset_size()
@@ -722,13 +781,8 @@ func _build_banner() -> void:
 	add_child(_banner)
 
 
-func _is_landscape() -> bool:
-	var area := get_viewport_rect().size
-	return area.x > area.y
-
-
 func _on_resized() -> void:
-	var landscape := _is_landscape()
+	var landscape := Ui.is_landscape(self)
 	if landscape != _landscape:
 		_arrange(landscape)
 	_frame_board()
@@ -819,7 +873,7 @@ func _arrange(landscape: bool) -> void:
 ## Montre l'arsenal et la barre ; à leur place, pendant le choix d'une carte, le panneau de
 ## choix, et quand on peut réagir au coup adverse, la fenêtre de réaction.
 func _apply_mode() -> void:
-	var choosing := _session != null
+	var choosing := _choice != null
 	var reacting := _is_reacting()
 	var ending := _end_shown
 	_choice_panel.visible = choosing and not ending

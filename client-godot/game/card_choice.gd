@@ -1,4 +1,4 @@
-class_name ChoiceSession
+class_name CardChoice
 extends RefCounted
 ## Le choix d'une carte en cours (docs/PROTOCOLE.md, « Le déroulé ») : la liste des coups
 ## déjà choisis, et l'aperçu que le serveur rend pour eux (les choix suivants). Rien n'est

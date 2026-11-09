@@ -212,15 +212,21 @@ Le jeu lui-même, dans `client-godot/` (Godot 4.7, GDScript typé, rendu Compati
 
 ```
 client-godot/
-  main.gd / main.tscn   la racine : le plateau 3D, la couche d'interface, l'écran affiché ;
-                        elle enchaîne les écrans selon ce que répond le serveur
+  main.gd / main.tscn   la racine : le plateau 3D, la couche d'interface (le fond quadrillé,
+                        puis les écrans), la session ; elle
+                        décide du passage d'un écran à l'autre, et transmet le reste à l'écran
+                        affiché
   net/server_link.gd    (autoload ServerLink) la WebSocket, la place gardée et sa reprise
+  net/server_errors.gd  les refus du serveur, classés par catégorie (le seul endroit qui
+                        connaît leurs `kind`)
   net/wire.gd           le format du fil (JSON, nombres entiers remis en entiers, valeurs
                         étiquetées `{"Place": …}` lues par `tag` et `content`)
+  game/session.gd       la session en cours : l'adversaire (bot ou ami, nom, présent), la
+                        salle à lancer, le bot en panne, le catalogue
   game/view_data.gd     la vue du serveur, avec des lectures typées et les coups rangés par case
   game/game_events.gd   la lecture des événements joints à une vue (pour animer)
   game/card_catalog.gd  le catalogue des cartes reçu du serveur (noms et textes)
-  game/choice_session.gd  le choix d'une carte en cours, par aperçus du serveur
+  game/card_choice.gd   le choix d'une carte en cours, par aperçus du serveur
   game/game_journal.gd  le journal des coups, raconté à partir des événements
   board/                le plateau 3D : grid_geometry.gd (la seule conversion case ↔ monde),
                         board_3d.gd (cases, caméra, toucher), pion_3d.gd, tomb_3d.gd,
@@ -228,22 +234,33 @@ client-godot/
                         board_timeline.gd (le déroulé d'une vue, lu dans ses événements),
                         badge_layer.gd (les badges, en 2D par-dessus), board_materials.gd,
                         shaders/
-  ui/                   ui.gd (les briques), components/ (panneau de joueur, losanges,
-                        cartes, arsenal, choix, menu de case, journal, annonce d'une
-                        carte adverse, cache révélée, fenêtre de réaction),
-                        screens/ (démarrage, accueil, partie)
+  ui/                   ui.gd (les briques), screen_router.gd (l'écran affiché, le fondu,
+                        le plateau ou le fond derrière lui), screens/ (un écran par fichier,
+                        sur screens/screen.gd : démarrage, menu, rejoindre et salle d'attente
+                        en scènes .tscn ; draft, partie, messages), menu/ (les onglets du
+                        menu : Jouer en scène, Cartes, Règles, Réglages), components/
+                        (barre de navigation en scène, pastille du joueur, cartes de salle,
+                        cases du code et champ du code, en-tête de page, joueur de la salle
+                        d'attente, dessin d'éléments, aperçu du plateau, fond ; panneau de joueur,
+                        losanges, cartes, arsenal, choix, menu de case, journal, annonce
+                        d'une carte adverse, cache révélée, fenêtre de réaction)
   theme/look.gd         l'apparence : couleurs, tailles, marges et durées (comme theme.rs)
   theme/theme_builder.gd  le thème Godot, construit à partir de `Look`
   text/labels.gd        tout le texte affiché
-  assets/               polices (licence OFL jointe) et SVG copiés de design/elements
+  assets/               polices (licence OFL jointe), SVG copiés de design/elements (plus
+                        l'icône « rejoindre », dessinée dans leur style), et la position de
+                        l'aperçu de l'accueil (demo/home_board.json)
 ```
 
 - **Aucune règle.** La légalité vient de `legal_actions` : `ViewData` range les coups par case dans l'ordre du serveur, et l'écran de partie, seul endroit qui transforme un geste en coup, prend le coup tel quel dans cette liste. Ce qui est affiché vient de la vue (réserve, points, banque, poses), jamais d'un calcul.
-- **Un seul chemin vers le serveur** : `ServerLink`. Il garde la place (code, joueur, clé) dans `user://session.cfg` et la reprend toute seule après une coupure ou au lancement suivant (`rejoin`). Une salle par connexion : quitter sa salle ouvre une connexion neuve (`leave_room`). Les demandes faites hors connexion sont perdues, sauf créer et rejoindre : la vue reçue au retour fait foi.
+- **Des écrans séparés, une racine qui les enchaîne.** Chaque écran hérite de `Screen` et reçoit les nouvelles par des méthodes nommées, qu'il ne réécrit que si elles le concernent : `on_connection`, `on_view`, `on_preview`, `on_refused` (qui dit si la vue est à redemander), `on_session_changed`. La racine ne décide que du passage d'un écran à l'autre (`ScreenRouter`) ; ce qui dure d'un écran à l'autre est dans la session (`Session`), écrite seulement par ses méthodes `start_*`, `reset`, `restore`, `hold`, `launch` et `note_*`. Les refus du serveur arrivent classés par catégorie (`ServerErrors`).
+- **Des tests sans fenêtre** (`client-godot/tests/`) vérifient les lectures : la vue, le fil, les catégories de refus, les événements, le journal, le déroulé, les statuts, le catalogue, la session, le code tapé dans ses cases, la position de l'aperçu de l'accueil. Ils lisent de vraies vues du serveur, enregistrées par `tests/fixtures/capture_fixtures.py`. Pour les lancer : `godot --headless --path client-godot --script res://tests/run_tests.gd` (code de sortie 1 si un test échoue).
+- **Un seul chemin vers le serveur** : `ServerLink`. Il garde la place (code, joueur, clé) dans `user://seat.cfg` et la reprend toute seule après une coupure ou au lancement suivant (`rejoin`) ; la session garde à côté contre qui l'on joue et si la salle attend son lancement (`user://session.cfg`), relus au lancement s'il y a une place gardée. Une salle par connexion : quitter sa salle ouvre une connexion neuve (`leave_room`). Les demandes faites hors connexion sont perdues, sauf créer et rejoindre : la vue reçue au retour fait foi.
 - **Le plateau est en vraie 3D** (décision du 2026-11-04), filmé de face et en plongée par une caméra orthographique (essai du 2026-11-04 : le plateau droit plutôt qu'en losange, à la demande de Martin ; les maquettes le montraient en isométrique 2:1). Les cases sont des pavés, dessinés en un appel par sorte (`MultiMeshInstance3D`) ; J1 est un cylindre et J2 un prisme à 8 faces, la même primitive : la forme distingue les joueurs. Tout est peint sans éclairage, par des shaders qui donnent à chaque face sa couleur et à chaque arête son trait, comme les éléments fournis : net à tout zoom, léger sur téléphone. Un modèle plus riche pourra remplacer le corps d'un pion sans toucher au reste.
 - **Lisible sur un téléphone.** Du mur, on ne voit que les cases qui touchent le plateau. La caméra cadre les cases jouables, plus une demi-case, dans le rectangle que l'écran laisse au plateau, marges de la page comprises. Face au plateau, une case occupe deux fois plus de place à l'écran qu'en losange, et les lignes se lisent comme sur un damier. Parmi deux plongées (45° et 55°), la caméra prend celle qui donne les plus grandes cases : en portrait, où la largeur manque et la hauteur abonde, c'est 55° (environ 38 × 31 points par case). Les palets gardent leur relief ; les cases, vues de face, en montrent moins.
-- **Portrait d'abord, paysage sur PC.** En portrait : l'adversaire en haut, le tour, le plateau, sa barre, puis le bouton d'action sur toute la largeur, sous le pouce. En paysage : le plateau à gauche, une colonne à droite. Les mêmes éléments changent seulement de boîtes.
-- **Un système visuel unique.** Les couleurs et les tailles sont dans `look.gd` (`Look`), et nulle part ailleurs ; `ThemeBuilder` en fait le thème, et les composants choisissent un style par son nom de variante. Les boutons d'action sont dessinés (`StyleBoxHex`), pas étirés depuis une image, pour rester nets à toute taille. L'interface et le plateau sont construits dans le code, pour que tout parte de `Look` ; les scènes `.tscn` se limitent à la racine.
+- **Portrait d'abord, paysage sur PC.** En portrait : l'adversaire en haut, le tour, le plateau, sa barre, puis le bouton d'action sur toute la largeur, sous le pouce. En paysage : le plateau à gauche, une colonne à droite. Les mêmes éléments changent seulement de boîtes. Un écran passe en paysage quand la fenêtre est plus large que haute (`Ui.is_landscape`).
+- **Un système visuel unique.** Les couleurs et les tailles sont dans `look.gd` (`Look`), et nulle part ailleurs ; `ThemeBuilder` en fait le thème, et les composants choisissent un style par son nom de variante. Les boutons d'action sont dessinés (`StyleBoxHex`), pas étirés depuis une image, pour rester nets à toute taille. Le fond des écrans est un quadrillage en losanges à peine visible (`Backdrop`), caché derrière le plateau.
+- **Des scènes pour la structure, le code pour le reste** (décision du 2026-11-09). Un écran stable est une scène `.tscn` : démarrage, menu, onglet Jouer, barre de navigation, rejoindre, salle d'attente. La scène dit seulement quels nœuds sont où ; elle n'écrit ni nombre ni texte : chaque boîte choisit une variante du thème (`ColumnL`, `RowM`, `GridXL`, `Inset`…), et son script met les textes de `Labels` et les tailles de `Look`. Ce qui dépend de la vue ou se répète (cartes, cases du code, onglets) est construit dans le code. Les autres écrans passeront en scènes à leur reprise (R4 à R7).
 - **Des retours sans attendre le serveur, sans règle.** Ce qui est montré avant la réponse vient seulement de la liste des coups permis :
   - le palet fantôme au survol ;
   - le palet qui flotte au-dessus de la case touchée ;
@@ -260,8 +277,13 @@ client-godot/
   - sur un pion, d'après les effets continus qui le visent (`PionStatus`) : un anneau à ses pieds pour son statut le plus fort (immobilisé : chaîne grise ; protégé : or ; pacte : tirets magenta), la taille d'un enfant (Familia), une couronne en 3D pour une reine ;
   - au-dessus de lui, ses badges (`BadgeLayer`) : un par sorte d'effet (immobilisé, protégé ou enfant, pacte, retour d'Interchange), puis un losange chiffré pour les gardes d'une reine et les jetons de pas du Lièvre. Les badges sont en 2D, dans un calque entre le plateau et l'interface : nets, et d'une taille qui suit celle des cases à l'écran, entre deux bornes ;
   - dans le panneau de chaque joueur, une ligne par chose qui dure : Terre brûlée (jusqu'à quel tour, et un bord de braise en pointillés quand il attend), gardes de sa reine, piles de jetons du Massacre divin, pions à l'infirmerie et au cimetière.
-- **Jouer une carte sans règle** (protocole, « Le déroulé »). Toucher une carte vive (son `UseAttack` est permis) ouvre un choix (`ChoiceSession`) : la liste des coups choisis, et l'aperçu que le serveur rend pour elle. Les cases proposées sont celles des coups `Choose` de cet aperçu ; « JOUER LA CARTE » et « VISER LES JETONS » ne s'allument que si l'aperçu propose `FinishAttack` ou `ChooseEnemyTokens`. Quand l'aperçu répond `null`, la carte part coup par coup ; annuler, c'est oublier la liste. Un toucher pendant un choix s'aimante à la case proposée la plus proche : viser une petite case au doigt est difficile, et seules ces cases comptent alors.
+- **Jouer une carte sans règle** (protocole, « Le déroulé »). Toucher une carte vive (son `UseAttack` est permis) ouvre un choix (`CardChoice`) : la liste des coups choisis, et l'aperçu que le serveur rend pour elle. Les cases proposées sont celles des coups `Choose` de cet aperçu ; « JOUER LA CARTE » et « VISER LES JETONS » ne s'allument que si l'aperçu propose `FinishAttack` ou `ChooseEnemyTokens`. Quand l'aperçu répond `null`, la carte part coup par coup ; annuler, c'est oublier la liste. Un toucher pendant un choix s'aimante à la case proposée la plus proche : viser une petite case au doigt est difficile, et seules ces cases comptent alors.
 - **Une case, plusieurs coups.** Les coups permis sont rangés par case (le pas du Lièvre sous sa case de départ). Une case où seule la pose est permise pose tout de suite ; sinon, un petit menu propose chaque sorte de coup, et le pas du Lièvre demande ensuite sa case d'arrivée.
-- **Les écrans** : démarrage, accueil (bot, créer une salle, rejoindre), rejoindre (le code), draft, partie. Une vue dont la décision est un choix de draft s'affiche sur l'écran du draft (`DraftScreen`), construit sur les coups permis et le format de la partie ; la partie commence quand le draft finit.
+- **Les écrans** : démarrage, menu, rejoindre (le code), salle d'attente, draft, partie.
+  - Le menu (`MenuScreen`) garde la barre de navigation (`NavBar` : en bas en portrait, en haut en paysage) et montre un onglet : Jouer (l'accueil), Cartes, Règles, Réglages. Changer d'onglet ne change pas d'écran : la barre reste, le contenu change sans fondu, comme dans une application ; chaque onglet est gardé une fois construit.
+  - L'accueil (`PlayTab`) se range selon l'orientation. En portrait : le plateau en bande, « JOUER CONTRE LE BOT », puis la partie entre amis en deux cartes (créer, rejoindre). En paysage : le plateau et sa phrase d'accroche, et à sa droite la partie entre amis, où le code se tape directement dans ses cinq cases (`CodeField`).
+  - L'aperçu du plateau (`BoardPreview`) est le vrai `Board3D`, dans sa propre fenêtre, rendu à la résolution de l'écran et une seule fois par taille, sur une vraie vue du serveur où l'on a posé quelques pions (`tests/fixtures/make_home_board.py`).
+  - Les salles : rejoindre (le code en grandes cases, tapé au clavier ; un refus sous les cases, bordées de braise) et la salle d'attente (le code à copier ou partager, chaque joueur sur sa case, la place libre de l'ami en pointillés, « LANCER LA PARTIE » quand il est là).
+  - Une vue dont la décision est un choix de draft s'affiche sur l'écran du draft (`DraftScreen`), construit sur les coups permis et le format de la partie ; la partie commence quand le draft finit.
 - **Pendant le développement**, le bot est le bot aléatoire, qui ne charge pas la machine ; la variante est celle du jeu en ligne, choisie par le serveur (draft compris, depuis E3f).
 - **L'outil d'éditeur** `addons/godot_mcp_toolkit/` (greffon tiers, avec son autoload `MCPRuntimeServer`) permet à Claude de piloter l'éditeur et le jeu lancé depuis l'éditeur (captures, touchers simulés). Il ne fait pas partie du jeu : le code du client ne s'en sert jamais, et son serveur ne s'ouvre que lancé depuis l'éditeur (`OS.has_feature("editor")`), jamais dans un export. Il sera exclu des exports avec E3h.

@@ -5,6 +5,7 @@ extends RefCounted
 
 const ICON_DIR := "res://assets/elements/icones/"
 const PION_DIR := "res://assets/elements/pions/"
+const BOARD_DIR := "res://assets/elements/plateau/"
 
 
 static func label(text: String, variation: StringName = &"") -> Label:
@@ -51,15 +52,24 @@ static func icon(name: String, color: Color, size: float = Look.ICON_SIZE) -> Te
 ## Le palet d'un joueur, en image (panneaux de joueur), recadré sur le palet : le SVG a
 ## la toile commune des éléments du plateau, bien plus grande que lui.
 static func chip(player: String, size: Vector2 = Look.CHIP_SIZE) -> TextureRect:
-	var file := "pion-j1.svg" if player == ViewData.PLAYER_ONE else "pion-j2.svg"
-	var item := picture(PION_DIR + file, size, Color.WHITE)
-	var full: Texture2D = item.texture
+	var item := picture(pion_path(player), size, Color.WHITE)
+	item.texture = chip_texture(player)
+	return item
+
+
+## L'image du palet d'un joueur, recadrée (l'icône d'un bouton, comme la pastille du joueur).
+static func chip_texture(player: String) -> Texture2D:
+	var full: Texture2D = load(pion_path(player))
 	var cropped := AtlasTexture.new()
 	cropped.atlas = full
 	var scale := full.get_width() / Look.ELEMENT_CANVAS.x
 	cropped.region = Rect2(Look.CHIP_REGION.position * scale, Look.CHIP_REGION.size * scale)
-	item.texture = cropped
-	return item
+	return cropped
+
+
+## Le fichier du pion d'un joueur, sur la toile commune des éléments du plateau.
+static func pion_path(player: String) -> String:
+	return PION_DIR + ("pion-j1.svg" if player == ViewData.PLAYER_ONE else "pion-j2.svg")
 
 
 static func picture(path: String, size: Vector2, color: Color) -> TextureRect:
@@ -123,13 +133,41 @@ static func page(child: Control) -> MarginContainer:
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var insets := safe_insets()
-	margin.add_theme_constant_override(&"margin_left", Look.PAGE_MARGIN + int(insets.position.x))
-	margin.add_theme_constant_override(&"margin_top", Look.PAGE_MARGIN + int(insets.position.y))
-	margin.add_theme_constant_override(&"margin_right", Look.PAGE_MARGIN + int(insets.size.x))
-	margin.add_theme_constant_override(&"margin_bottom", Look.PAGE_MARGIN + int(insets.size.y))
+	set_page_margins(margin)
 	margin.add_child(child)
 	return margin
+
+
+## Donne à ce conteneur les marges d'une page (`side_margin` de chaque côté), élargies par les bords
+## inaccessibles du téléphone ; en haut et en bas, seulement si rien d'autre ne les couvre
+## (une barre de navigation y prend elle-même ces bords).
+static func set_page_margins(margin: MarginContainer, top_edge := true, bottom_edge := true, side_margin := Look.PAGE_MARGIN) -> void:
+	var insets := safe_insets()
+	margin.add_theme_constant_override(&"margin_left", side_margin + int(insets.position.x))
+	margin.add_theme_constant_override(&"margin_top", side_margin + (int(insets.position.y) if top_edge else 0))
+	margin.add_theme_constant_override(&"margin_right", side_margin + int(insets.size.x))
+	margin.add_theme_constant_override(&"margin_bottom", side_margin + (int(insets.size.y) if bottom_edge else 0))
+
+
+## Les marges d'une page dont le contenu ne dépasse pas `max_width` : sur un grand écran, il
+## reste centré, les marges des côtés s'élargissent. Elles suivent la taille du conteneur.
+static func fit_page(margin: MarginContainer, max_width: float) -> void:
+	var fit := func() -> void:
+		set_page_margins(margin)
+		var insets := safe_insets()
+		var inner := margin.size.x - 2 * Look.PAGE_MARGIN - insets.position.x - insets.size.x
+		var extra := int(maxf(0.0, (inner - max_width) / 2.0))
+		margin.add_theme_constant_override(&"margin_left", Look.PAGE_MARGIN + int(insets.position.x) + extra)
+		margin.add_theme_constant_override(&"margin_right", Look.PAGE_MARGIN + int(insets.size.x) + extra)
+	margin.resized.connect(fit)
+	fit.call()
+
+
+## Vrai si la fenêtre est plus large que haute : les écrans passent alors à leur mise en
+## page en paysage.
+static func is_landscape(item: CanvasItem) -> bool:
+	var area := item.get_viewport_rect().size
+	return area.x > area.y
 
 
 ## Les bords inaccessibles de l'écran, en points : à gauche et en haut dans `position`, à

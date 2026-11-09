@@ -1,0 +1,46 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/components/nav_bar.gd" id="1_bar"]
+[ext_resource type="Script" path="res://ui/components/player_pill.gd" id="2_pill"]
+
+[node name="NavBar" type="PanelContainer"]
+theme_type_variation = &"NavBar"
+script = ExtResource("1_bar")
+
+[node name="Stack" type="VBoxContainer" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"Stack"
+
+[node name="TopInset" type="Control" parent="Stack"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Row" type="HBoxContainer" parent="Stack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RowL"
+
+[node name="Logo" type="Label" parent="Stack/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"LogoLabel"
+
+[node name="Tabs" type="HBoxContainer" parent="Stack/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"RowXS"
+
+[node name="Pill" type="Button" parent="Stack/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("2_pill")
+
+[node name="BottomInset" type="Control" parent="Stack"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2

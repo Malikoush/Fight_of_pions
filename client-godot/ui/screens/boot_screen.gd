@@ -1,52 +1,57 @@
 class_name BootScreen
-extends Control
-## L'écran de démarrage : le nom du jeu et l'état de la connexion au serveur, avec une barre
-## qui court tant que la connexion se cherche.
+extends Screen
+## L'écran de démarrage (maquettes) : une rangée de cases avec un palet de chaque joueur, le
+## nom du jeu en grand, et l'état de la connexion au serveur, avec une barre qui court tant
+## que la connexion se cherche ; après quelques essais ratés, il dit que le serveur ne
+## répond pas et propose de réessayer.
+
+## Après autant d'essais ratés, l'écran dit que le serveur ne répond pas.
+const FAILURES_BEFORE_WARNING := 3
 
 signal retry_requested
 
-var _status: Label
-var _track: ColorRect
-var _runner: ColorRect
-var _retry: Button
 var _loop: Tween
+
+@onready var _page: MarginContainer = %Page
+@onready var _top_space: Control = %TopSpace
+@onready var _art: ElementArt = %Art
+@onready var _title: Label = %Title
+@onready var _track: Panel = %Track
+@onready var _runner: Panel = %Runner
+@onready var _status: Label = %Status
+@onready var _retry: Button = %Retry
 
 
 func _ready() -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var column := Ui.vbox(Look.GAP_XL)
-	column.add_child(Ui.centered_label(Labels.GAME_NAME, ThemeBuilder.DISPLAY_LABEL))
-
-	_track = ColorRect.new()
-	_track.color = Look.FOREST_RAISED
-	_track.custom_minimum_size = Look.PROGRESS_SIZE
-	_track.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_track.clip_contents = true
-	_runner = ColorRect.new()
-	_runner.color = Look.GOLD
-	_runner.size = Vector2(Look.PROGRESS_SIZE.x / 2.0, Look.PROGRESS_SIZE.y)
-	_track.add_child(_runner)
-	column.add_child(_track)
-
-	_status = Ui.centered_label(Labels.CONNECTING, ThemeBuilder.MUTED_LABEL)
-	column.add_child(_status)
-
-	_retry = Ui.button(Labels.RETRY, ThemeBuilder.SECONDARY_BUTTON)
-	_retry.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_retry.visible = false
+	Ui.set_page_margins(_page)
+	_top_space.size_flags_stretch_ratio = Look.BOOT_TOP_SHARE
+	_title.text = Labels.GAME_NAME_STACKED
+	_status.text = Labels.CONNECTING
+	_retry.text = Labels.RETRY
+	_retry.custom_minimum_size.y = Look.BUTTON_HEIGHT
 	_retry.pressed.connect(retry_requested.emit)
-	column.add_child(_retry)
-	add_child(Ui.page(Ui.limit_width(column, Look.CONTENT_MAX_WIDTH)))
-	_run()
-
-
-## Le texte d'état, et le bouton pour réessayer quand le serveur ne répond pas.
-func set_status(text: String, can_retry: bool) -> void:
-	_status.text = text
-	_retry.visible = can_retry
-
-
-func _run() -> void:
+	_track.custom_minimum_size = Look.PROGRESS_SIZE
+	_runner.size = Vector2(Look.PROGRESS_SIZE.x * Look.PROGRESS_RUNNER_SHARE, Look.PROGRESS_SIZE.y)
+	_draw_art()
 	_loop = create_tween().set_loops()
 	_loop.tween_property(_runner, "position:x", Look.PROGRESS_SIZE.x, Look.PROGRESS_LOOP).from(-_runner.size.x)
+
+
+func on_connection(status: ServerLink.Status) -> void:
+	if status == ServerLink.Status.ONLINE:
+		return
+	var lost := ServerLink.failed_attempts >= FAILURES_BEFORE_WARNING
+	_status.text = Labels.UNREACHABLE if lost else Labels.CONNECTING
+	_retry.visible = lost
+
+
+## Le dessin : des cases des éléments fournis, côte à côte pointe contre pointe, et un palet
+## de chaque joueur posé à leurs jonctions.
+func _draw_art() -> void:
+	var anchor := ElementArt.first_anchor(Look.BOOT_ART_SCALE)
+	var step := Look.ELEMENT_TILE_WIDTH * Look.BOOT_ART_SCALE
+	for index in Look.BOOT_TILES:
+		_art.add_tile(anchor + Vector2(step * index, 0.0), Look.BOOT_ART_SCALE)
+	var players := [ViewData.PLAYER_ONE, ViewData.PLAYER_TWO]
+	for index in mini(players.size(), Look.BOOT_TILES - 1):
+		_art.add_pion(players[index], anchor + Vector2(step * (index + 0.5), 0.0), Look.BOOT_ART_SCALE * Look.BOOT_PION_SCALE)

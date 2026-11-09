@@ -230,11 +230,24 @@ Le client (`client-godot/`) est en anglais dans le code, comme le moteur ; ses c
 | Catalogue (côté client) | `CardCatalog` | Les noms et les textes des cartes, reçus du serveur à chaque connexion |
 | Carte (affichée) | `CardView` | Une carte de l'arsenal : cadre, nom, coût, recharge, cache ; vive seulement si son coup est permis |
 | Arsenal (affiché) | `ArsenalBar` | La rangée des cartes du joueur, sous le plateau ; elle défile au doigt si elle déborde |
-| Choix d'une carte | `ChoiceSession`, `ChoicePanel` | Les coups choisis d'une carte en cours (lanceur, cibles) et l'aperçu du serveur qui donne les suivants ; le panneau qui les montre, avec Annuler et Jouer la carte |
+| Choix d'une carte | `CardChoice`, `ChoicePanel` | Les coups choisis d'une carte en cours (lanceur, cibles) et l'aperçu du serveur qui donne les suivants ; le panneau qui les montre, avec Annuler et Jouer la carte |
 | Case proposée, case choisie | `Board3D.show_candidates`, `Board3D.show_chosen`, `Board3D.Marks` | Pendant un choix : les cases des coups proposés (anneau d'or et petit losange) et celles déjà choisies (dorées) |
 | Aimantation | `Look.MAGNET_RADIUS` | Pendant un choix, un toucher désigne la case proposée la plus proche, jusqu'à cette distance |
 | Menu de case | `ActionMenu` | Le petit menu d'une case qui porte autre chose qu'une pose, ou plusieurs coups |
-| Écran | `BootScreen`, `HomeScreen`, `GameScreen` | Démarrage, accueil, partie ; la racine (`main.gd`) les enchaîne |
+| Écran | `Screen`, `ScreenRouter`, `BootScreen`, `MenuScreen`, `DraftScreen`, `GameScreen`… | Une page du client ; tous héritent de `Screen` et reçoivent les nouvelles du serveur par ses méthodes (`on_view`, `on_refused`…) ; le routeur affiche l'écran courant, la racine (`main.gd`) décide du passage de l'un à l'autre |
+| Menu, onglet | `MenuScreen`, `MenuScreen.Tab`, `PlayTab`, `MenuPage` | L'écran qui garde la barre de navigation et montre un onglet : Jouer (l'accueil, `PlayTab`), Cartes, Règles, Réglages |
+| Barre de navigation | `NavBar`, `ThemeBuilder.NAV_TAB` | La barre des onglets du menu : en bas en portrait, en haut en paysage ; l'onglet actif est allumé |
+| Carte de salle | `RoomCard` | Sur l'accueil en portrait, un panneau qu'on touche pour créer une salle ou en rejoindre une (à ne pas confondre avec le choix d'une carte d'attaque, `CardChoice`) |
+| Fond | `Backdrop` | Le quadrillage en losanges, à peine visible, derrière les écrans sans plateau |
+| Pastille du joueur | `PlayerPill`, `Settings.player_name` | Le palet et le pseudo du joueur, en haut de l'accueil ; la toucher ouvre Réglages |
+| Aperçu du plateau | `BoardPreview` | Le plateau 3D de l'accueil, sur une position de démonstration ; on ne peut pas y jouer |
+| Cases du code, champ du code | `CodeBoxes`, `CodeField` | Le code d'une salle, une case par caractère : les cases le montrent (salle d'attente), le champ le fait taper au clavier (rejoindre, accueil en paysage) |
+| En-tête de page | `PageHeader` | Le bouton retour et le titre d'une page (rejoindre, salle d'attente) |
+| Joueur de la salle | `LobbySeat` | Dans la salle d'attente : la case et le palet d'un joueur assis, ou sa place libre en pointillés, avec son nom et s'il est prêt |
+| Dessin d'éléments | `ElementArt` | Un petit dessin fait des éléments du plateau fournis (cases, palets, places libres), posés par leur ancre |
+| Session | `Session`, `Session.SAVE_PATH` | Ce que le client sait de la partie en cours en plus de la vue : l'adversaire (bot ou ami, nom, présent), la salle à lancer, le bot en panne, le catalogue ; écrite seulement par ses méthodes ; son mode et l'attente du lancement sont gardés sur l'appareil avec la place |
+| Place gardée | `ServerLink.has_saved_seat`, `forget_seat`, `user://seat.cfg` | Le code, le joueur et la clé de sa place, gardés sur l'appareil pour la reprendre après une coupure |
+| Catégorie de refus | `ServerErrors.Category` | Ce qu'un refus du serveur demande au client : place perdue, place reprise ailleurs, vue en retard, code refusé, bot muet, serveur complet, autre |
 | Action principale | `GameScreen.MAIN_ACTIONS` | Le coup sans case permis maintenant (finir son tour, passer), recopié de la vue, sur le grand bouton |
 
 ## Conventions

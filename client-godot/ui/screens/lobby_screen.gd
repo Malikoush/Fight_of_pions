@@ -1,80 +1,75 @@
 class_name LobbyScreen
-extends Control
-## La salle d'attente d'une partie entre amis (maquettes) : le code de la salle à envoyer,
-## « COPIER », les deux joueurs (toi prêt, ton ami en attente puis prêt), et « LANCER LA
-## PARTIE », permis quand ton ami est là. La partie (son draft) ne s'affiche qu'une fois
-## lancée. « FERMER LA SALLE » (ou la flèche) revient à l'accueil.
+extends Screen
+## La salle d'attente d'une partie entre amis (maquettes 1-5, p. 4) : le code de la salle en
+## cases, « COPIER » et « PARTAGER », les deux joueurs (toi prêt sur ta case ; ton ami en
+## attente, sa place en pointillés, puis prêt), et « LANCER LA PARTIE », permis quand ton ami
+## est là. La partie (son draft) ne s'affiche qu'une fois lancée. « FERMER LA SALLE » (ou la
+## flèche) revient à l'accueil.
+##
+## Le téléphone n'a pas encore de partage natif (R9) : « PARTAGER » copie un message
+## d'invitation, prêt à coller.
 
 signal launch_requested
 signal home_requested
 
-var _friend_status: Label
-var _help: Label
-var _launch: Button
-var _code := ""
+## Le numéro du dernier appui sur un bouton qui copie : seul son minuteur lui rend son nom.
+const COPY_PRESS := &"copy_press"
 
+## Le code de la salle : à régler avant l'entrée dans l'arbre.
+var code := ""
 
-func _init(code: String) -> void:
-	_code = code
+@onready var _page: MarginContainer = %Page
+@onready var _header: PageHeader = %Header
+@onready var _code_title: Label = %CodeTitle
+@onready var _code: CodeBoxes = %Code
+@onready var _copy: Button = %Copy
+@onready var _share: Button = %Share
+@onready var _me: LobbySeat = %Me
+@onready var _versus: Label = %Versus
+@onready var _friend: LobbySeat = %Friend
+@onready var _help: Label = %Help
+@onready var _launch: Button = %Launch
+@onready var _close: Button = %Close
 
 
 func _ready() -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var column := Ui.vbox(Look.GAP_L)
-	var header := Ui.hbox(Look.GAP_M)
-	var back := Ui.icon_button("retour", Labels.BACK)
-	back.pressed.connect(home_requested.emit)
-	header.add_child(back)
-	header.add_child(Ui.label(Labels.LOBBY_TITLE, ThemeBuilder.HEADING_LABEL))
-	column.add_child(header)
-
-	var code_panel := PanelContainer.new()
-	code_panel.theme_type_variation = ThemeBuilder.PANEL
-	var code_column := Ui.vbox(Look.GAP_S)
-	code_column.add_child(Ui.centered_label(Labels.ROOM_CODE, ThemeBuilder.CAPS_LABEL))
-	code_column.add_child(Ui.centered_label(_code, ThemeBuilder.CODE_LABEL))
-	var copy := Ui.button(Labels.COPY, ThemeBuilder.SECONDARY_BUTTON)
-	copy.pressed.connect(func() -> void: DisplayServer.clipboard_set(_code))
-	code_column.add_child(copy)
-	code_panel.add_child(code_column)
-	column.add_child(code_panel)
-
-	var players := Ui.hbox(Look.GAP_L)
-	players.alignment = BoxContainer.ALIGNMENT_CENTER
-	players.add_child(_player(ViewData.PLAYER_ONE, Labels.YOU, Labels.PLAYER_READY, ThemeBuilder.GOLD_CAPS_LABEL))
-	players.add_child(Ui.label(Labels.VERSUS, ThemeBuilder.HEADING_LABEL))
-	var friend := _player(ViewData.PLAYER_TWO, Labels.FRIEND, Labels.PLAYER_WAITING, ThemeBuilder.CAPS_LABEL)
-	_friend_status = friend.get_child(2)
-	players.add_child(friend)
-	column.add_child(players)
-
-	_help = Ui.centered_label(Labels.LOBBY_WAITING, ThemeBuilder.MUTED_LABEL)
-	column.add_child(_help)
-	_launch = Ui.button(Labels.LAUNCH, ThemeBuilder.PRIMARY_BUTTON)
-	_launch.disabled = true
+	Ui.fit_page(_page, Look.CONTENT_MAX_WIDTH)
+	_header.set_title(Labels.LOBBY_TITLE)
+	_header.back_pressed.connect(home_requested.emit)
+	_code_title.text = Labels.ROOM_CODE
+	_code.show_code(code)
+	_copy.text = Labels.COPY
+	_copy.icon = load(Ui.ICON_DIR + "copier.svg")
+	_share.text = Labels.SHARE
+	_versus.text = Labels.VERSUS
+	_launch.text = Labels.LAUNCH
+	_close.text = Labels.CLOSE_ROOM
+	for button: Button in [_copy, _share, _launch]:
+		button.custom_minimum_size.y = Look.BUTTON_HEIGHT
+	_copy.pressed.connect(_copy_to_clipboard.bind(_copy, code, Labels.COPY, Labels.COPIED))
+	_share.pressed.connect(_copy_to_clipboard.bind(_share, Labels.INVITE % code, Labels.SHARE, Labels.INVITE_COPIED))
 	_launch.pressed.connect(launch_requested.emit)
-	column.add_child(_launch)
-	var close := Ui.button(Labels.CLOSE_ROOM, ThemeBuilder.SECONDARY_BUTTON)
-	close.pressed.connect(home_requested.emit)
-	column.add_child(close)
-	add_child(Ui.page(Ui.limit_width(column, Look.CONTENT_MAX_WIDTH)))
+	_close.pressed.connect(home_requested.emit)
+	on_session_changed()
 
 
-## Ton ami est là, ou n'y est plus : « LANCER LA PARTIE » suit.
-func set_opponent_present(present: bool) -> void:
-	_friend_status.text = Labels.PLAYER_READY if present else Labels.PLAYER_WAITING
-	_friend_status.theme_type_variation = ThemeBuilder.GOLD_CAPS_LABEL if present else ThemeBuilder.CAPS_LABEL
+## Ton ami est là, ou n'y est plus : sa place, l'aide et « LANCER LA PARTIE » suivent.
+func on_session_changed() -> void:
+	var present := session.opponent_present
+	var mine := ServerLink.seat_player()
+	_me.show_seat(mine, Settings.player_name, true)
+	_friend.show_seat(ViewData.other(mine), Labels.FRIEND, present)
 	_help.text = Labels.LOBBY_READY if present else Labels.LOBBY_WAITING
 	_launch.disabled = not present
 
 
-## Un joueur de la salle : son palet, son nom, et s'il est prêt.
-func _player(player: String, display_name: String, status: String, variation: StringName) -> VBoxContainer:
-	var column := Ui.vbox(Look.GAP_XS)
-	var chip := Ui.chip(player)
-	chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	column.add_child(chip)
-	column.add_child(Ui.centered_label(display_name, ThemeBuilder.STRONG_LABEL))
-	column.add_child(Ui.centered_label(status, variation))
-	return column
+## Copie ce texte ; le bouton le dit un instant, puis reprend son nom (un nouvel appui
+## relance l'instant).
+func _copy_to_clipboard(button: Button, text: String, label: String, done: String) -> void:
+	DisplayServer.clipboard_set(text)
+	button.text = done
+	var press := int(button.get_meta(COPY_PRESS, 0)) + 1
+	button.set_meta(COPY_PRESS, press)
+	get_tree().create_timer(Look.COPIED_FEEDBACK).timeout.connect(func() -> void:
+		if is_instance_valid(button) and button.get_meta(COPY_PRESS) == press:
+			button.text = label)

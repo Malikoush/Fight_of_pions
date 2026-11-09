@@ -1,6 +1,33 @@
 [gd_scene format=3 uid="uid://bv4x3grjtuat6"]
 
 [ext_resource type="Script" uid="uid://v8g48vfltpk7" path="res://main.gd" id="1_ig7tw"]
+[ext_resource type="Script" path="res://board/board_3d.gd" id="2_board"]
+[ext_resource type="Script" path="res://ui/components/backdrop.gd" id="3_backdrop"]
 
 [node name="Main" type="Node" unique_id=343071713]
 script = ExtResource("1_ig7tw")
+
+[node name="Board" type="Node3D" parent="."]
+visible = false
+script = ExtResource("2_board")
+
+[node name="Interface" type="CanvasLayer" parent="."]
+
+[node name="Backdrop" type="Control" parent="Interface"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("3_backdrop")
+
+[node name="Screens" type="Control" parent="Interface"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2

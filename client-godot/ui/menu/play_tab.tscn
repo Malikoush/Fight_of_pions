@@ -1,0 +1,234 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/menu/play_tab.gd" id="1_tab"]
+[ext_resource type="Script" path="res://ui/components/player_pill.gd" id="2_pill"]
+[ext_resource type="Script" path="res://ui/components/board_preview.gd" id="3_preview"]
+[ext_resource type="Script" path="res://ui/components/code_field.gd" id="4_code"]
+
+[node name="PlayTab" type="VBoxContainer"]
+mouse_filter = 2
+theme_type_variation = &"ColumnL"
+script = ExtResource("1_tab")
+
+[node name="Header" type="HBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RowM"
+
+[node name="Logo" type="Label" parent="Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_type_variation = &"LogoLabel"
+
+[node name="Pill" type="Button" parent="Header"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("2_pill")
+
+[node name="Error" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"ThreatLabel"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Body" type="GridContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+theme_type_variation = &"GridXL"
+
+[node name="PlayPanel" type="PanelContainer" parent="Body"]
+unique_name_in_owner = true
+clip_children = 2
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_type_variation = &"BoardPanel"
+
+[node name="PanelStack" type="VBoxContainer" parent="Body/PlayPanel"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"Stack"
+
+[node name="Preview" type="TextureRect" parent="Body/PlayPanel/PanelStack"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("3_preview")
+
+[node name="PlayInset" type="MarginContainer" parent="Body/PlayPanel/PanelStack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"Inset"
+
+[node name="PlayRow" type="GridContainer" parent="Body/PlayPanel/PanelStack/PlayInset"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"GridXL"
+
+[node name="Pitch" type="VBoxContainer" parent="Body/PlayPanel/PanelStack/PlayInset/PlayRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 8
+mouse_filter = 2
+theme_type_variation = &"ColumnXS"
+
+[node name="Slogan" type="Label" parent="Body/PlayPanel/PanelStack/PlayInset/PlayRow/Pitch"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"SloganLabel"
+
+[node name="Tagline" type="Label" parent="Body/PlayPanel/PanelStack/PlayInset/PlayRow/Pitch"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+
+[node name="PlayBox" type="VBoxContainer" parent="Body/PlayPanel/PanelStack/PlayInset/PlayRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 8
+mouse_filter = 2
+theme_type_variation = &"ColumnS"
+
+[node name="PlayButton" type="Button" parent="Body/PlayPanel/PanelStack/PlayInset/PlayRow/PlayBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+
+[node name="PlayCaption" type="Label" parent="Body/PlayPanel/PanelStack/PlayInset/PlayRow/PlayBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+horizontal_alignment = 1
+
+[node name="Friends" type="VBoxContainer" parent="Body"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"ColumnM"
+
+[node name="FriendsTitle" type="Label" parent="Body/Friends"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"SectionLabel"
+
+[node name="Choices" type="HBoxContainer" parent="Body/Friends"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RowM"
+
+[node name="FriendsPanel" type="PanelContainer" parent="Body"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"GamePanel"
+
+[node name="FriendsColumn" type="VBoxContainer" parent="Body/FriendsPanel"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"ColumnM"
+
+[node name="PanelTitle" type="Label" parent="Body/FriendsPanel/FriendsColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"LogoLabel"
+
+[node name="Intro" type="Label" parent="Body/FriendsPanel/FriendsColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"FactLabel"
+autowrap_mode = 3
+
+[node name="CreateButton" type="Button" parent="Body/FriendsPanel/FriendsColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"SecondaryButton"
+
+[node name="OrRow" type="HBoxContainer" parent="Body/FriendsPanel/FriendsColumn"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RowS"
+
+[node name="LineBefore" type="HSeparator" parent="Body/FriendsPanel/FriendsColumn/OrRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_type_variation = &"Divider"
+
+[node name="Or" type="Label" parent="Body/FriendsPanel/FriendsColumn/OrRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+
+[node name="LineAfter" type="HSeparator" parent="Body/FriendsPanel/FriendsColumn/OrRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_type_variation = &"Divider"
+
+[node name="JoinLabel" type="Label" parent="Body/FriendsPanel/FriendsColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"FactLabel"
+
+[node name="Code" type="MarginContainer" parent="Body/FriendsPanel/FriendsColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+script = ExtResource("4_code")
+
+[node name="Hint" type="Label" parent="Body/FriendsPanel/FriendsColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 3
+
+[node name="JoinError" type="Label" parent="Body/FriendsPanel/FriendsColumn"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"ThreatLabel"
+autowrap_mode = 3
+
+[node name="JoinButton" type="Button" parent="Body/FriendsPanel/FriendsColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+
+[node name="Space" type="Control" parent="Body/FriendsPanel/FriendsColumn"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="Tip" type="PanelContainer" parent="Body/FriendsPanel/FriendsColumn"]
+layout_mode = 2
+theme_type_variation = &"TipPanel"
+
+[node name="TipRow" type="HBoxContainer" parent="Body/FriendsPanel/FriendsColumn/Tip"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RowM"
+
+[node name="TipIcon" type="TextureRect" parent="Body/FriendsPanel/FriendsColumn/Tip/TipRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="TipText" type="Label" parent="Body/FriendsPanel/FriendsColumn/Tip/TipRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"FactLabel"
+autowrap_mode = 3

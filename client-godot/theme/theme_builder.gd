@@ -48,6 +48,50 @@ const GOLD_CAPS_LABEL := &"GoldCapsLabel"
 const CODE_INPUT := &"CodeInput"
 const CODE_LABEL := &"CodeLabel"
 const OVERLAY := &"Overlay"
+## Le menu (maquettes 1-5) : le nom du jeu, la barre de navigation, la pastille du joueur,
+## les panneaux de l'accueil, les cases du code d'une salle, la barre de chargement.
+const HERO_LABEL := &"HeroLabel"
+const LOGO_LABEL := &"LogoLabel"
+const SLOGAN_LABEL := &"SloganLabel"
+const SECTION_LABEL := &"SectionLabel"
+const CHOICE_TITLE_LABEL := &"ChoiceTitleLabel"
+const NAV_BAR := &"NavBar"
+const NAV_BAR_TOP := &"NavBarTop"
+const NAV_TAB := &"NavTab"
+const NAV_TAB_WIDE := &"NavTabWide"
+const PILL_BUTTON := &"PillButton"
+const BOARD_PANEL := &"BoardPanel"
+const ROOM_CARD := &"RoomCard"
+const TIP_PANEL := &"TipPanel"
+const DIVIDER := &"Divider"
+const CODE_BOX := &"CodeBox"
+const CODE_BOX_ACTIVE := &"CodeBoxActive"
+const CODE_LETTER_LABEL := &"CodeLetterLabel"
+const HIDDEN_INPUT := &"HiddenInput"
+const PROGRESS_TRACK := &"ProgressTrack"
+const PROGRESS_FILL := &"ProgressFill"
+## Les salles : le titre d'une page, « contre », un refus, la case refusée, les grandes
+## lettres du code, et un bouton qui n'est qu'un mot (« FERMER LA SALLE »).
+const TITLE_LABEL := &"TitleLabel"
+const VERSUS_LABEL := &"VersusLabel"
+const ERROR_TEXT := &"ErrorText"
+const CODE_BOX_REFUSED := &"CodeBoxRefused"
+const CODE_LETTER_LARGE_LABEL := &"CodeLetterLargeLabel"
+const TEXT_BUTTON := &"TextButton"
+## Les boîtes des scènes : l'écart entre leurs enfants (colonne ou rangée), et une marge
+## intérieure. Une scène n'écrit ainsi aucun nombre : elle choisit une variante.
+const STACK := &"Stack"
+const COLUMN_XS := &"ColumnXS"
+const COLUMN_S := &"ColumnS"
+const COLUMN_M := &"ColumnM"
+const COLUMN_L := &"ColumnL"
+const COLUMN_XL := &"ColumnXL"
+const ROW_XS := &"RowXS"
+const ROW_S := &"RowS"
+const ROW_M := &"RowM"
+const ROW_L := &"RowL"
+const INSET := &"Inset"
+const GRID_XL := &"GridXL"
 
 static var _shared: Theme
 
@@ -92,6 +136,9 @@ static func build() -> Theme:
 	_label(theme, GOLD_CAPS_LABEL, caps, Look.FONT_BODY, Look.GOLD, false)
 	_label(theme, CODE_LABEL, caps, Look.FONT_CODE, Look.GOLD, false)
 	_code_input(theme, caps)
+	_menu(theme, display, caps)
+	_rooms(theme, display, caps)
+	_boxes(theme)
 	_journal(theme, strong)
 	_icon_button(theme)
 
@@ -111,10 +158,10 @@ static func _display_font() -> FontVariation:
 	return font
 
 
-static func _caps_font() -> FontVariation:
+static func _caps_font(spacing: int = Look.CAPS_SPACING) -> FontVariation:
 	var font := FontVariation.new()
 	font.base_font = load(CAPS_FONT)
-	font.spacing_glyph = Look.CAPS_SPACING
+	font.spacing_glyph = spacing
 	return font
 
 
@@ -153,6 +200,10 @@ static func _secondary_button(theme: Theme, font: Font) -> void:
 	theme.set_stylebox(&"focus", variation, _focus())
 	_button_text(theme, variation, font, Look.CREAM)
 	theme.set_color(&"font_disabled_color", variation, Look.DISABLED_TEXT)
+	# Son icône éventuelle (« CRÉER UNE SALLE ») est d'or.
+	_icon_colors(theme, variation, Look.GOLD, Look.GOLD)
+	theme.set_constant(&"icon_max_width", variation, Look.ICON_SIZE)
+	theme.set_constant(&"h_separation", variation, Look.GAP_S)
 
 
 ## La place du bouton d'action quand on attend l'adversaire : un cadre en pointillés, sans
@@ -326,3 +377,202 @@ static func _rounded(fill: Color, radius: int) -> StyleBoxFlat:
 	style.set_corner_radius_all(radius)
 	style.anti_aliasing = true
 	return style
+
+
+## Le menu (maquettes 1-5) : tout ce que l'accueil, la barre de navigation et le démarrage
+## ajoutent au thème.
+static func _menu(theme: Theme, display: Font, caps: Font) -> void:
+	_label(theme, HERO_LABEL, display, Look.FONT_HERO, Look.GOLD, true)
+	theme.set_constant(&"line_spacing", HERO_LABEL, -roundi(Look.FONT_HERO * Look.DISPLAY_LINE_TIGHTEN))
+	_label(theme, LOGO_LABEL, display, Look.FONT_LOGO, Look.GOLD, true)
+	_label(theme, SLOGAN_LABEL, display, Look.FONT_SLOGAN, Look.CREAM, true)
+	theme.set_constant(&"line_spacing", SLOGAN_LABEL, -roundi(Look.FONT_SLOGAN * Look.DISPLAY_LINE_TIGHTEN))
+	_label(theme, SECTION_LABEL, _caps_font(Look.SECTION_SPACING), Look.FONT_NAV, Look.MUTED, false)
+	_label(theme, CHOICE_TITLE_LABEL, caps, Look.FONT_BUTTON, Look.CREAM, false)
+	_label(theme, CODE_LETTER_LABEL, caps, Look.FONT_CODE, Look.INK, false)
+	_nav(theme, caps)
+	_menu_panels(theme)
+	_code_boxes(theme)
+	# La barre de chargement : une piste arrondie, et l'or qui y court.
+	for variation: StringName in [PROGRESS_TRACK, PROGRESS_FILL]:
+		theme.set_type_variation(variation, &"Panel")
+		var fill := Look.GOLD if variation == PROGRESS_FILL else Look.FOREST_RAISED
+		theme.set_stylebox(&"panel", variation, _rounded(fill, Look.RADIUS_PILL))
+
+
+## La barre de navigation, ses onglets, et la pastille du joueur.
+static func _nav(theme: Theme, caps: Font) -> void:
+	# La barre : sombre, bordée d'un trait d'or du côté de la page (dessus en portrait,
+	# dessous en paysage).
+	for variation: StringName in [NAV_BAR, NAV_BAR_TOP]:
+		theme.set_type_variation(variation, &"PanelContainer")
+		var bar := StyleBoxFlat.new()
+		bar.bg_color = Look.FOREST_DEEP
+		bar.border_color = Look.PANEL_BORDER
+		if variation == NAV_BAR:
+			bar.border_width_top = Look.BORDER
+			bar.content_margin_top = Look.GAP_M
+			bar.content_margin_bottom = Look.GAP_L
+		else:
+			bar.border_width_bottom = Look.BORDER
+			bar.content_margin_left = Look.GAP_XL
+			bar.content_margin_right = Look.GAP_XL
+		theme.set_stylebox(&"panel", variation, bar)
+	# Un onglet : son icône et son nom, ternes ; l'onglet actif a l'icône d'or et le nom
+	# crème. En bas, l'icône est au-dessus du nom ; en haut, à sa gauche.
+	for variation: StringName in [NAV_TAB, NAV_TAB_WIDE]:
+		var wide := variation == NAV_TAB_WIDE
+		theme.set_type_variation(variation, &"Button")
+		for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
+			var style := StyleBoxEmpty.new()
+			style.set_content_margin_all(Look.GAP_XS)
+			if wide:
+				style.content_margin_left = Look.GAP_M
+				style.content_margin_right = Look.GAP_M
+				style.content_margin_top = Look.GAP_L
+				style.content_margin_bottom = Look.GAP_L
+			theme.set_stylebox(state, variation, style)
+		theme.set_stylebox(&"focus", variation, _focus())
+		theme.set_font(&"font", variation, caps)
+		theme.set_font_size(&"font_size", variation, Look.FONT_NAV)
+		theme.set_color(&"font_color", variation, Look.MUTED)
+		theme.set_color(&"font_focus_color", variation, Look.MUTED)
+		for state in [&"font_hover_color", &"font_pressed_color", &"font_hover_pressed_color"]:
+			theme.set_color(state, variation, Look.CREAM)
+		_icon_colors(theme, variation, Look.MUTED, Look.GOLD)
+		theme.set_color(&"icon_hover_color", variation, Look.CREAM)
+		theme.set_constant(&"icon_max_width", variation, Look.NAV_ICON_SIZE_WIDE if wide else Look.NAV_ICON_SIZE)
+		theme.set_constant(&"h_separation", variation, Look.GAP_S if wide else Look.GAP_XS)
+
+	# La pastille du joueur : son palet et son pseudo, sur un fond de panneau arrondi.
+	theme.set_type_variation(PILL_BUTTON, &"Button")
+	for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
+		var pill := _rounded(Look.FOREST_RAISED if state == &"hover" else Look.FOREST_PANEL, Look.RADIUS_PILL)
+		pill.content_margin_left = Look.GAP_M
+		pill.content_margin_right = Look.GAP_L
+		pill.content_margin_top = Look.GAP_XS
+		pill.content_margin_bottom = Look.GAP_XS
+		theme.set_stylebox(state, PILL_BUTTON, pill)
+	theme.set_stylebox(&"focus", PILL_BUTTON, _focus())
+	theme.set_font(&"font", PILL_BUTTON, load(BOLD_FONT))
+	theme.set_font_size(&"font_size", PILL_BUTTON, Look.FONT_BODY)
+	for state in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_hover_pressed_color", &"font_focus_color"]:
+		theme.set_color(state, PILL_BUTTON, Look.CREAM)
+	theme.set_constant(&"icon_max_width", PILL_BUTTON, int(Look.PILL_CHIP.x))
+	theme.set_constant(&"h_separation", PILL_BUTTON, Look.GAP_S)
+
+
+## Les panneaux de l'accueil : celui du plateau, les cartes de salle, le conseil, le trait.
+static func _menu_panels(theme: Theme) -> void:
+	# Le panneau du plateau : le plateau y va jusqu'au bord, rogné par ses coins
+	# (`clip_children`).
+	theme.set_type_variation(BOARD_PANEL, &"PanelContainer")
+	var board := _rounded(Look.FOREST_PANEL, Look.RADIUS_PANEL)
+	board.set_border_width_all(Look.BORDER)
+	board.border_color = Look.PANEL_BORDER
+	theme.set_stylebox(&"panel", BOARD_PANEL, board)
+	# Une carte de salle (créer une salle, rejoindre) : un panneau qu'on touche.
+	theme.set_type_variation(ROOM_CARD, &"Button")
+	for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
+		var fill := Look.FOREST_PANEL
+		if state == &"hover":
+			fill = Look.FOREST_RAISED
+		elif state in [&"pressed", &"hover_pressed"]:
+			fill = Look.FOREST_DEEP
+		var card := _rounded(fill, Look.RADIUS_PANEL)
+		card.set_border_width_all(Look.BORDER)
+		card.border_color = Look.PANEL_BORDER
+		card.set_content_margin_all(Look.GAP_L)
+		theme.set_stylebox(state, ROOM_CARD, card)
+	theme.set_stylebox(&"focus", ROOM_CARD, _focus())
+	# Un conseil, en bas d'un panneau : une plaque sombre.
+	theme.set_type_variation(TIP_PANEL, &"PanelContainer")
+	var tip := _rounded(Look.FOREST_DEEP, Look.RADIUS_CONTROL)
+	tip.set_content_margin_all(Look.GAP_L)
+	theme.set_stylebox(&"panel", TIP_PANEL, tip)
+	# Le trait de part et d'autre de « ou ».
+	theme.set_type_variation(DIVIDER, &"HSeparator")
+	var line := StyleBoxLine.new()
+	line.color = Look.PANEL_BORDER
+	line.thickness = Look.DIVIDER_WIDTH
+	theme.set_stylebox(&"separator", DIVIDER, line)
+
+
+## Les cases du code d'une salle, et le champ invisible qui reçoit la frappe.
+static func _code_boxes(theme: Theme) -> void:
+	# Une case : une plaque crème ; celle où va la prochaine lettre est bordée d'or ; celles
+	# d'un code refusé, de braise.
+	var borders := {
+		CODE_BOX: [Look.CASE_SIDE_A, Look.BORDER],
+		CODE_BOX_ACTIVE: [Look.GOLD, Look.BORDER_STRONG],
+		CODE_BOX_REFUSED: [Look.THREAT, Look.BORDER_STRONG],
+	}
+	for variation: StringName in borders:
+		theme.set_type_variation(variation, &"PanelContainer")
+		var box := _rounded(Look.CREAM, Look.RADIUS_CODE_BOX)
+		box.border_color = borders[variation][0]
+		box.set_border_width_all(borders[variation][1])
+		theme.set_stylebox(&"panel", variation, box)
+	# Le champ est invisible : il ouvre le clavier d'un téléphone, et les cases montrent
+	# ce qu'on y tape.
+	theme.set_type_variation(HIDDEN_INPUT, &"LineEdit")
+	for state in [&"normal", &"focus", &"read_only"]:
+		theme.set_stylebox(state, HIDDEN_INPUT, StyleBoxEmpty.new())
+	for color in [&"font_color", &"caret_color", &"selection_color", &"font_selected_color", &"font_placeholder_color"]:
+		theme.set_color(color, HIDDEN_INPUT, Color.TRANSPARENT)
+
+
+## Les salles (maquettes 1-5, p. 4 à 6).
+static func _rooms(theme: Theme, display: Font, caps: Font) -> void:
+	_label(theme, TITLE_LABEL, display, Look.FONT_TITLE, Look.CREAM, true)
+	_label(theme, VERSUS_LABEL, display, Look.FONT_TITLE, Look.MUTED, false)
+	# Un refus : du texte riche, pour y mettre la croix devant le message.
+	theme.set_type_variation(ERROR_TEXT, &"RichTextLabel")
+	theme.set_font(&"normal_font", ERROR_TEXT, load(BOLD_FONT))
+	theme.set_font_size(&"normal_font_size", ERROR_TEXT, Look.FONT_BODY)
+	theme.set_color(&"default_color", ERROR_TEXT, Look.THREAT)
+	_label(theme, CODE_LETTER_LARGE_LABEL, caps, Look.FONT_CODE_LARGE, Look.INK, false)
+	# Un bouton qui n'est qu'un mot en capitales, terne, crème au survol.
+	theme.set_type_variation(TEXT_BUTTON, &"Button")
+	for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
+		var style := StyleBoxEmpty.new()
+		style.set_content_margin_all(Look.GAP_M)
+		theme.set_stylebox(state, TEXT_BUTTON, style)
+	theme.set_stylebox(&"focus", TEXT_BUTTON, _focus())
+	theme.set_font(&"font", TEXT_BUTTON, caps)
+	theme.set_font_size(&"font_size", TEXT_BUTTON, Look.FONT_BODY)
+	theme.set_color(&"font_color", TEXT_BUTTON, Look.MUTED)
+	theme.set_color(&"font_focus_color", TEXT_BUTTON, Look.MUTED)
+	for state in [&"font_hover_color", &"font_pressed_color", &"font_hover_pressed_color"]:
+		theme.set_color(state, TEXT_BUTTON, Look.CREAM)
+
+
+## Les boîtes des scènes, par l'écart entre leurs enfants, et la marge intérieure.
+static func _boxes(theme: Theme) -> void:
+	theme.set_type_variation(STACK, &"VBoxContainer")
+	theme.set_constant(&"separation", STACK, 0)
+	var columns := {
+		COLUMN_XS: Look.GAP_XS, COLUMN_S: Look.GAP_S, COLUMN_M: Look.GAP_M,
+		COLUMN_L: Look.GAP_L, COLUMN_XL: Look.GAP_XL,
+	}
+	for variation: StringName in columns:
+		theme.set_type_variation(variation, &"VBoxContainer")
+		theme.set_constant(&"separation", variation, columns[variation])
+	var rows := {ROW_XS: Look.GAP_XS, ROW_S: Look.GAP_S, ROW_M: Look.GAP_M, ROW_L: Look.GAP_L}
+	for variation: StringName in rows:
+		theme.set_type_variation(variation, &"HBoxContainer")
+		theme.set_constant(&"separation", variation, rows[variation])
+	theme.set_type_variation(GRID_XL, &"GridContainer")
+	theme.set_constant(&"h_separation", GRID_XL, Look.GAP_XL)
+	theme.set_constant(&"v_separation", GRID_XL, Look.GAP_XL)
+	theme.set_type_variation(INSET, &"MarginContainer")
+	for side in [&"margin_left", &"margin_top", &"margin_right", &"margin_bottom"]:
+		theme.set_constant(side, INSET, Look.GAP_L)
+
+
+## Les couleurs de l'icône d'un bouton : au repos, et enfoncé (l'onglet actif).
+static func _icon_colors(theme: Theme, variation: StringName, normal: Color, pressed: Color) -> void:
+	for state in [&"icon_normal_color", &"icon_hover_color", &"icon_focus_color", &"icon_disabled_color"]:
+		theme.set_color(state, variation, normal)
+	for state in [&"icon_pressed_color", &"icon_hover_pressed_color"]:
+		theme.set_color(state, variation, pressed)

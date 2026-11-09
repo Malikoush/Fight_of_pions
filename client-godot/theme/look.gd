@@ -144,8 +144,9 @@ const GAP_M := 12
 const GAP_L := 16
 const GAP_XL := 24
 const GAP_XXL := 40
-## La marge de la page, de chaque côté de l'écran.
+## La marge de la page, de chaque côté de l'écran ; plus large en paysage (maquettes).
 const PAGE_MARGIN := 16
+const PAGE_MARGIN_WIDE := 32
 const RADIUS_PANEL := 20
 const RADIUS_CONTROL := 14
 ## Assez grand pour qu'une pastille soit arrondie à ses deux bouts.
@@ -243,6 +244,19 @@ const END_PANEL_DELAY := 0.6
 const BOT_RETRY_DELAY := 3.0
 ## Le voile derrière une question (« Quitter la partie ? »).
 const DIALOG_DIM := Color(FOREST_DEEP, 0.8)
+## Les sons, fabriqués dans le code : le volume par défaut, le plus bas (le zéro n'a pas de
+## décibels), le pas du réglage, la force d'une note, et chaque note (hauteur en Hz, durée
+## en secondes, glissement final en part de la hauteur).
+const DEFAULT_VOLUME := 0.8
+const MIN_VOLUME := 0.001
+const VOLUME_STEP := 0.05
+const SOUND_LEVEL := 0.35
+const SOUNDS := {
+	"place": {"pitch": 520.0, "length": 0.09, "glide": -0.3},
+	"attack": {"pitch": 330.0, "length": 0.22, "glide": 0.6},
+	"kill": {"pitch": 180.0, "length": 0.3, "glide": -0.5},
+	"turn": {"pitch": 660.0, "length": 0.25, "glide": 0.25},
+}
 ## Le journal des coups : les lignes affichées (les plus anciennes s'en vont), la largeur de
 ## sa colonne en paysage, celle de la colonne des tours, et le palet de chaque ligne.
 const JOURNAL_SHOWN := 80
@@ -255,8 +269,82 @@ const OVERLAY_FILL := Color(FOREST_DEEP, 0.97)
 ## Les faits d'un panneau de joueur (infirmerie, jetons…) : la taille de leur icône.
 const FACT_ICON_SIZE := 16
 
-## La barre de chargement de l'écran de démarrage.
+## La barre de chargement de l'écran de démarrage, et le dessin au-dessus du titre : une
+## rangée de cases des éléments fournis, un palet de chaque joueur posé à leurs jonctions.
 const PROGRESS_SIZE := Vector2(210, 6)
+## La part de la piste qu'occupe l'or qui y court.
+const PROGRESS_RUNNER_SHARE := 0.5
+const BOOT_TILES := 3
+const BOOT_ART_SCALE := 1.0
+## Les palets du dessin sont un peu plus gros que sur une case du plateau (maquettes).
+const BOOT_PION_SCALE := 1.2
+## Le vide au-dessus du dessin, comparé à celui entre le titre et la barre (maquettes).
+const BOOT_TOP_SHARE := 1.5
+## Les éléments du plateau (design/elements/LISEZMOI.txt) : le point d'ancrage de leur toile
+## (le centre du dessus de la case), et la largeur du losange d'une case.
+const ELEMENT_ANCHOR := Vector2(64, 90)
+const ELEMENT_TILE_WIDTH := 120.0
+
+# --- Le menu : accueil, cartes, règles, réglages (maquettes 1-5 et 12-17) ---
+# Les maquettes ont 270 points de large, la fenêtre de base 390 : leurs mesures sont
+# agrandies d'autant (× 1,44).
+
+## Le fond : un quadrillage en losanges à peine visible, l'écart entre deux lignes
+## parallèles et leur trait.
+const BACKDROP_SPACING := 30.0
+const BACKDROP_LINE := Color(MUTED, 0.07)
+const BACKDROP_WIDTH := 1.0
+## Le nom du jeu : en grand au démarrage, en logo dans les barres ; la phrase d'accroche
+## du plateau, en paysage.
+const FONT_HERO := 80
+## Les lignes d'un titre gothique se serrent de cette part de sa taille : la police a de
+## très grands jambages.
+const DISPLAY_LINE_TIGHTEN := 0.62
+const FONT_LOGO := 28
+const FONT_SLOGAN := 44
+## Les libellés de la barre de navigation et des titres de section (capitales espacées).
+const FONT_NAV := 14
+const SECTION_SPACING := 2
+## La barre de navigation : la taille de ses icônes (en bas, et en haut en paysage), le
+## losange au-dessus de l'onglet actif, le trait sous lui en paysage.
+const NAV_ICON_SIZE := 24
+const NAV_ICON_SIZE_WIDE := 18
+const NAV_MARKER := 14.0
+const NAV_UNDERLINE := 3.0
+## Le trait lissé qui borde une forme pleine : les polygones ne sont pas lissés.
+const SMOOTH_EDGE := 1.0
+## La pastille du joueur : la taille de son palet.
+const PILL_CHIP := Vector2(30, 22)
+## Les cartes de salle de l'accueil : la taille de leur icône ; le trait de part et
+## d'autre de « ou ».
+const ROOM_ICON_SIZE := 26
+const DIVIDER_WIDTH := 1
+## L'aperçu du plateau de l'accueil : au moins aussi haut ; en portrait, sa hauteur en part
+## de sa largeur (une bande, comme sur la maquette) ; la marge autour du plateau, pour que
+## son mur reste entier.
+const PREVIEW_MIN_HEIGHT := 200
+const PREVIEW_ASPECT := 0.62
+const PREVIEW_PADDING := 24.0
+## Le panneau de la partie entre amis, en paysage.
+const FRIENDS_PANEL_WIDTH := 400
+## Les cases du code d'une salle : leur taille, leur arrondi ; en grand (rejoindre, salle
+## d'attente), elles se partagent la largeur, à cette hauteur, avec de plus grandes lettres.
+const CODE_BOX_SIZE := Vector2(48, 56)
+const RADIUS_CODE_BOX := 8
+const CODE_BOX_LARGE_HEIGHT := 70
+const FONT_CODE_LARGE := 42
+
+# --- Les salles (maquettes 1-5, p. 4 à 6) ---
+
+## L'en-tête d'une page : le bouton retour, et le titre.
+const HEADER_BUTTON_SIZE := 50
+const FONT_TITLE := 30
+## Un joueur de la salle d'attente : sa case et son palet (éléments fournis), à cette
+## échelle ; une place libre est un losange d'or en pointillés.
+const SEAT_ART_SCALE := 0.95
+const FREE_PLACE := Color(GOLD, 0.7)
+## Le temps où « COPIÉ » remplace le nom du bouton, en secondes.
+const COPIED_FEEDBACK := 1.6
 
 ## La largeur maximale d'une colonne de contenu (accueil, menus) sur un grand écran.
 const CONTENT_MAX_WIDTH := 400

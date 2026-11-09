@@ -1,5 +1,5 @@
 class_name DraftScreen
-extends Control
+extends Screen
 ## Le draft, avant la partie (maquettes) : la barre des étapes, l'adversaire (ce qu'il vient
 ## de faire, ses cartes, sa cache en dos), ce qu'il faut choisir, la grille des cartes, mon
 ## arsenal et ses places encore vides, et le bouton qui joue le choix (« BANNIR OURS »).
@@ -16,19 +16,27 @@ signal play_requested(action: Variant)
 signal home_requested
 
 const DRAFT := "Draft"
+## La carte (`{"kind", "rarity"}`) que montre chaque carte de la grille.
+const ATTACK_META := &"attack"
 ## Les étapes qui ajoutent une carte à l'arsenal (carnet, « Draft ») : un pick, une cache ;
 ## un ban, non. Sert seulement à dessiner les places encore vides.
 const STEPS_WITH_CARD: Array[String] = ["Pick", "Cache"]
 const ALL := ""
 
-## Le nom affiché de l'adversaire, et le catalogue des cartes.
-var opponent_name := Labels.OPPONENT
-var catalog: CardCatalog
+## Le nom affiché de l'adversaire, et le catalogue des cartes : ceux de la session.
+var opponent_name: String:
+	get:
+		return session.opponent_name
+var catalog: CardCatalog:
+	get:
+		return session.catalog
 
 var _view: ViewData
 var _waiting := false
 var _selected: Variant = null
 var _filter := ALL
+## Le catalogue avec lequel l'écran a été dessiné.
+var _shown_catalog: CardCatalog
 
 var _steps: HBoxContainer
 var _opponent_chip: Control
@@ -95,7 +103,7 @@ func _ready() -> void:
 
 
 ## Montre cette vue du draft, et ce que l'adversaire vient d'y faire.
-func show_view(view: ViewData, events: Array) -> void:
+func on_view(view: ViewData, events: Array) -> void:
 	_waiting = false
 	_redraw(view, events)
 
@@ -104,6 +112,7 @@ func show_view(view: ViewData, events: Array) -> void:
 ## changé ne doit pas permettre de rejouer).
 func _redraw(view: ViewData, events: Array) -> void:
 	_view = view
+	_shown_catalog = catalog
 	_selected = null
 	var step: Variant = view.draft_step()
 	var kind := Wire.tag(step)
@@ -120,11 +129,27 @@ func _redraw(view: ViewData, events: Array) -> void:
 	_refresh_button(kind)
 
 
-## Le serveur a refusé le choix : on peut rechoisir.
-func on_refused() -> void:
+## Le serveur a refusé le choix : on peut rechoisir, sur une vue redemandée.
+func on_refused(_category: ServerErrors.Category, _message: String) -> Reply:
 	_waiting = false
 	if _view != null:
 		_refresh_button(Wire.tag(_view.draft_step()))
+	return Reply.RESYNC
+
+
+## Le catalogue est arrivé : les noms des cartes changent, l'écran se redessine en gardant
+## la carte choisie. Le reste de la session (présence, bot) ne change rien ici.
+func on_session_changed() -> void:
+	if catalog == _shown_catalog or _view == null:
+		return
+	_shown_catalog = catalog
+	var selected: Variant = _selected
+	_redraw(_view, [])
+	if selected != null:
+		for card: Node in _grid.get_children():
+			var shown := card as CardView
+			if shown != null and shown.get_meta(ATTACK_META, null) == selected:
+				_select(selected, shown)
 
 
 # --- Les parties de l'écran ---
@@ -221,6 +246,7 @@ func _show_cards(view: ViewData, kind: String, mine: bool) -> void:
 		var card := CardView.new(Look.DRAFT_CARD_WIDTH)
 		card.show_attack(attack, catalog, view.stats_of(attack).get("cost", 0))
 		card.disabled = not mine
+		card.set_meta(ATTACK_META, attack)
 		card.pressed.connect(_select.bind(attack, card))
 		_grid.add_child(card)
 

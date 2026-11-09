@@ -1,5 +1,5 @@
 class_name MessageScreen
-extends Control
+extends Screen
 ## Une page qui dit ce qui se passe et propose quoi faire (« Partie ouverte ailleurs » :
 ## « REPRENDRE ICI » ou « ACCUEIL »).
 
