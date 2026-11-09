@@ -625,14 +625,20 @@
   "legal_actions": [
    {
     "Draft": {
+     "kind": "BeauteFatale",
+     "rarity": "Rare"
+    }
+   },
+   {
+    "Draft": {
      "kind": "Reine",
      "rarity": "Common"
     }
    },
    {
     "Draft": {
-     "kind": "Reine",
-     "rarity": "Rare"
+     "kind": "Attila",
+     "rarity": "Legendary"
     }
    },
    {
@@ -643,44 +649,38 @@
    },
    {
     "Draft": {
-     "kind": "Interchange",
+     "kind": "MassacreDivin",
      "rarity": "Rare"
     }
    },
    {
     "Draft": {
-     "kind": "CoupDuTaureau",
-     "rarity": "Common"
-    }
-   },
-   {
-    "Draft": {
      "kind": "Ours",
      "rarity": "Common"
-    }
-   },
-   {
-    "Draft": {
-     "kind": "Ours",
-     "rarity": "Epic"
     }
    },
    {
     "Draft": {
      "kind": "Lievre",
-     "rarity": "Legendary"
+     "rarity": "Rare"
     }
    },
    {
     "Draft": {
-     "kind": "Familia",
-     "rarity": "Legendary"
+     "kind": "Hibou",
+     "rarity": "Common"
     }
    },
    {
     "Draft": {
      "kind": "QueueDuLezard",
      "rarity": "Rare"
+    }
+   },
+   {
+    "Draft": {
+     "kind": "Feintaille",
+     "rarity": "Common"
     }
    }
   ],
@@ -1271,46 +1271,47 @@
   "graveyard": [],
   "draft_pool": [
    {
+    "kind": "BeauteFatale",
+    "rarity": "Rare"
+   },
+   {
     "kind": "Reine",
     "rarity": "Common"
    },
    {
-    "kind": "Reine",
-    "rarity": "Rare"
+    "kind": "Attila",
+    "rarity": "Legendary"
    },
    {
     "kind": "Medecin",
     "rarity": "Epic"
    },
    {
-    "kind": "Interchange",
+    "kind": "MassacreDivin",
     "rarity": "Rare"
    },
    {
-    "kind": "CoupDuTaureau",
-    "rarity": "Common"
-   },
-   {
     "kind": "Ours",
     "rarity": "Common"
-   },
-   {
-    "kind": "Ours",
-    "rarity": "Epic"
    },
    {
     "kind": "Lievre",
-    "rarity": "Legendary"
+    "rarity": "Rare"
    },
    {
-    "kind": "Familia",
-    "rarity": "Legendary"
+    "kind": "Hibou",
+    "rarity": "Common"
    },
    {
     "kind": "QueueDuLezard",
     "rarity": "Rare"
+   },
+   {
+    "kind": "Feintaille",
+    "rarity": "Common"
    }
   ],
+  "draft_history": [],
   "end": null,
   "winning_line": []
  },

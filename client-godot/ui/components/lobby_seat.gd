@@ -24,7 +24,7 @@ func _ready() -> void:
 	status.theme_type_variation = ThemeBuilder.ROW_XS
 	status.alignment = BoxContainer.ALIGNMENT_CENTER
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hourglass = Ui.icon("sablier", Look.MUTED, Look.FACT_ICON_SIZE)
+	_hourglass = Ui.icon(Ui.HOURGLASS, Look.MUTED, Look.FACT_ICON_SIZE)
 	status.add_child(_hourglass)
 	_status = Ui.label("", ThemeBuilder.CAPS_LABEL)
 	status.add_child(_status)

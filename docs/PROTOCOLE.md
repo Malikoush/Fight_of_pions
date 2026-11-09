@@ -69,6 +69,7 @@ Tout ce qu'il faut afficher. Le client redessine tout à partir d'elle.
 | `effects` | Les statuts et effets en jeu (immobilisé, protégé, gardes de la reine…), avec le pion visé |
 | `token_piles`, `infirmary`, `graveyard` | Jetons du Massacre divin, pions à l'infirmerie, pions au cimetière |
 | `draft_pool` | Pendant le draft : les cartes tirées qui restent, à partir du premier ban ou pick (vide pendant le choix des caches) |
+| `draft_history` | Pendant le draft : les choix déjà faits, dans l'ordre des étapes (`[{"step": {"Ban": "Two"}, "attack": {"kind": "Ours", "rarity": "Common"}}, …]`) ; la cache de l'adversaire y est `"attack": null`. Le rang de l'étape en cours est leur nombre. Vide hors du draft |
 | `turn`, `current_player`, `end` | Le tour, à qui c'est le tour, la fin (gagnant et raison) |
 | `winning_line` | Les cases de la ligne gagnante (`[{"row":…,"col":…}]`), si la partie est gagnée par alignement ; vide sinon |
 | `config` | Les réglages : taille, mur, catalogue et coûts des cartes |

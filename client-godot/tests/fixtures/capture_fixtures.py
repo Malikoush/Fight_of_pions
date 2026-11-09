@@ -6,8 +6,9 @@
     python client-godot/tests/fixtures/capture_fixtures.py
 
 Il crée une salle contre le bot aléatoire, enregistre la première vue du draft, joue le
-premier coup permis à chaque étape du draft, puis enregistre la première vue de la partie,
-et la vue qui suit une pose (avec ses événements).
+premier coup permis à chaque étape du draft (et enregistre la première vue où c'est à lui de
+prendre une carte, avec l'historique des choix), puis enregistre la première vue de la
+partie, et la vue qui suit une pose (avec ses événements).
 """
 import json
 import pathlib
@@ -40,7 +41,12 @@ def main():
     receive(ws, "seated")
     state = receive(ws, "state")
     save("draft_view", state)
+    picks_saved = False
     while "Draft" in (state["view"]["decision"] or {}):
+        step = state["view"]["decision"]["Draft"]["step"]
+        if not picks_saved and step.get("Pick") == "One" and state["view"]["legal_actions"]:
+            save("draft_picks_view", state)
+            picks_saved = True
         if state["view"]["legal_actions"]:
             ws.send(json.dumps({"type": "play", "action": state["view"]["legal_actions"][0]}))
         state = receive(ws, "state")

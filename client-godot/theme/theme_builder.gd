@@ -78,6 +78,19 @@ const ERROR_TEXT := &"ErrorText"
 const CODE_BOX_REFUSED := &"CodeBoxRefused"
 const CODE_LETTER_LARGE_LABEL := &"CodeLetterLargeLabel"
 const TEXT_BUTTON := &"TextButton"
+## Le draft : les étiquettes d'une carte (crème : l'adversaire l'a prise ; braise : bannie),
+## le contour de la carte choisie, les filtres en pastilles, les places de l'ordre des picks.
+const TAG_PLAIN := &"TagPlain"
+const TAG_PLAIN_LABEL := &"TagPlainLabel"
+const TAG_THREAT := &"TagThreat"
+const TAG_THREAT_LABEL := &"TagThreatLabel"
+const CARD_OUTLINE := &"CardOutline"
+const FILTER_PILL := &"FilterPill"
+const SNAKE_SLOT := &"SnakeSlot"
+const SNAKE_SLOT_CURRENT := &"SnakeSlotCurrent"
+const SLOT_LABEL := &"SlotLabel"
+const CARD_GRID := &"CardGrid"
+const CARD_GRID_INSET := &"CardGridInset"
 ## Les boîtes des scènes : l'écart entre leurs enfants (colonne ou rangée), et une marge
 ## intérieure. Une scène n'écrit ainsi aucun nombre : elle choisit une variante.
 const STACK := &"Stack"
@@ -122,8 +135,9 @@ static func build() -> Theme:
 	_label(theme, NUMBER_LABEL, caps, Look.FONT_NUMBER, Look.CREAM, false)
 	_label(theme, PILL_LABEL, caps, Look.FONT_BODY, Look.CREAM, false)
 	_label(theme, WAITING_LABEL, caps, Look.FONT_BUTTON, Look.MUTED, false)
-	_label(theme, CARD_NAME_LABEL, caps, Look.FONT_CARD_NAME, Look.INK, false)
-	_label(theme, CARD_COST_LABEL, caps, Look.FONT_CARD_COST, Look.INK, false)
+	# Leur taille suit celle de la carte (`CardView`, `Look.CARD_TEXT_SHARE`).
+	_label(theme, CARD_NAME_LABEL, caps, Look.FONT_BODY, Look.INK, false)
+	_label(theme, CARD_COST_LABEL, caps, Look.FONT_BODY, Look.INK, false)
 	_label(theme, TAG_LABEL, caps, Look.FONT_CARD_TAG, Look.GOLD, false)
 	_label(theme, CAPS_LABEL, caps, Look.FONT_BODY, Look.MUTED, false)
 	_label(theme, BADGE_NUMBER_LABEL, caps, Look.FONT_BODY, Look.CREAM, false)
@@ -138,6 +152,7 @@ static func build() -> Theme:
 	_code_input(theme, caps)
 	_menu(theme, display, caps)
 	_rooms(theme, display, caps)
+	_draft(theme, caps)
 	_boxes(theme)
 	_journal(theme, strong)
 	_icon_button(theme)
@@ -307,13 +322,7 @@ static func _cards(theme: Theme) -> void:
 		theme.set_stylebox(state, CARD_BUTTON, StyleBoxEmpty.new())
 	theme.set_stylebox(&"focus", CARD_BUTTON, _focus())
 	theme.set_type_variation(TAG, &"PanelContainer")
-	var tag := StyleBoxFlat.new()
-	tag.bg_color = Look.FOREST_DEEP
-	tag.set_border_width_all(Look.BORDER)
-	tag.border_color = Look.GOLD
-	tag.content_margin_left = Look.GAP_XS
-	tag.content_margin_right = Look.GAP_XS
-	theme.set_stylebox(&"panel", TAG, tag)
+	theme.set_stylebox(&"panel", TAG, _tag(Look.GOLD))
 
 
 ## Une ligne du journal : un texte riche (le nom du joueur en couleur), sur plusieurs lignes
@@ -545,6 +554,69 @@ static func _rooms(theme: Theme, display: Font, caps: Font) -> void:
 	theme.set_color(&"font_focus_color", TEXT_BUTTON, Look.MUTED)
 	for state in [&"font_hover_color", &"font_pressed_color", &"font_hover_pressed_color"]:
 		theme.set_color(state, TEXT_BUTTON, Look.CREAM)
+
+
+## Le draft (maquettes 1-5, p. 7 à 9).
+static func _draft(theme: Theme, caps: Font) -> void:
+	# Les étiquettes d'une carte : la plaque sombre de « CACHE », bordée de crème ou de braise.
+	for pair: Array in [[TAG_PLAIN, TAG_PLAIN_LABEL, Look.CREAM], [TAG_THREAT, TAG_THREAT_LABEL, Look.THREAT]]:
+		theme.set_type_variation(pair[0], &"PanelContainer")
+		theme.set_stylebox(&"panel", pair[0], _tag(pair[2]))
+		_label(theme, pair[1], caps, Look.FONT_CARD_TAG, pair[2], false)
+	# La carte choisie : un contour d'or arrondi autour d'elle.
+	theme.set_type_variation(CARD_OUTLINE, &"Panel")
+	var outline := _rounded(Color.TRANSPARENT, Look.RADIUS_CONTROL)
+	outline.draw_center = false
+	outline.set_border_width_all(Look.BORDER_STRONG)
+	outline.border_color = Look.GOLD
+	theme.set_stylebox(&"panel", CARD_OUTLINE, outline)
+	# Un filtre : une pastille bordée, d'or pleine quand il est choisi.
+	theme.set_type_variation(FILTER_PILL, &"Button")
+	for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
+		var chosen: bool = state in [&"pressed", &"hover_pressed"]
+		var pill := _rounded(Look.GOLD if chosen else (Look.FOREST_RAISED if state == &"hover" else Look.FOREST_PANEL), Look.RADIUS_PILL)
+		pill.set_border_width_all(Look.BORDER)
+		pill.border_color = Look.GOLD if chosen else Look.FOREST_RAISED
+		pill.content_margin_left = Look.GAP_L
+		pill.content_margin_right = Look.GAP_L
+		theme.set_stylebox(state, FILTER_PILL, pill)
+	theme.set_stylebox(&"focus", FILTER_PILL, _focus())
+	theme.set_font(&"font", FILTER_PILL, caps)
+	theme.set_font_size(&"font_size", FILTER_PILL, Look.FONT_BODY)
+	for state in [&"font_color", &"font_hover_color", &"font_focus_color"]:
+		theme.set_color(state, FILTER_PILL, Look.CREAM)
+	for state in [&"font_pressed_color", &"font_hover_pressed_color"]:
+		theme.set_color(state, FILTER_PILL, Look.INK)
+	# Le nom d'une place vide d'un arsenal (« PICK », « CACHE »), et la grille des cartes,
+	# assez espacée pour leurs étiquettes.
+	_label(theme, SLOT_LABEL, caps, Look.FONT_CARD_TAG, Look.MUTED, false)
+	theme.set_type_variation(CARD_GRID, &"GridContainer")
+	theme.set_constant(&"h_separation", CARD_GRID, Look.CARD_GAP)
+	theme.set_constant(&"v_separation", CARD_GRID, Look.DRAFT_ROW_GAP)
+	# Autour de la grille, la place de l'étiquette et du contour des cartes du bord.
+	theme.set_type_variation(CARD_GRID_INSET, &"MarginContainer")
+	theme.set_constant(&"margin_top", CARD_GRID_INSET, Look.GAP_L)
+	for side in [&"margin_left", &"margin_right", &"margin_bottom"]:
+		theme.set_constant(side, CARD_GRID_INSET, Look.CARD_GRID_SIDE)
+	# Une place de l'ordre des picks : le pick en cours est bordé d'or.
+	for variation: StringName in [SNAKE_SLOT, SNAKE_SLOT_CURRENT]:
+		theme.set_type_variation(variation, &"PanelContainer")
+		var slot := _rounded(Look.FOREST_PANEL, Look.RADIUS_CONTROL)
+		slot.set_border_width_all(Look.BORDER_STRONG if variation == SNAKE_SLOT_CURRENT else Look.BORDER)
+		slot.border_color = Look.GOLD if variation == SNAKE_SLOT_CURRENT else Look.FOREST_RAISED
+		slot.set_content_margin_all(Look.GAP_XS)
+		theme.set_stylebox(&"panel", variation, slot)
+
+
+## La plaque sombre d'une étiquette, bordée de cette couleur.
+static func _tag(border: Color) -> StyleBoxFlat:
+	var tag := StyleBoxFlat.new()
+	tag.bg_color = Look.FOREST_DEEP
+	tag.set_border_width_all(Look.BORDER)
+	tag.border_color = border
+	tag.content_margin_left = Look.GAP_XS
+	tag.content_margin_right = Look.GAP_XS
+	return tag
 
 
 ## Les boîtes des scènes, par l'écart entre leurs enfants, et la marge intérieure.

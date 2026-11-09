@@ -10,6 +10,11 @@ var _text: Label
 var _yes: Button
 
 
+## « Quitter la partie ? », au draft comme pendant la partie.
+static func quit_game() -> ConfirmDialog:
+	return ConfirmDialog.new(Labels.QUIT_TITLE, Labels.QUIT_TEXT, Labels.STAY, Labels.QUIT)
+
+
 func _init(title: String, text: String, no_label: String, yes_label: String) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP

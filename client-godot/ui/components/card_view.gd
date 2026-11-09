@@ -1,8 +1,9 @@
 class_name CardView
 extends Button
 ## Une carte : le cadre de sa rareté (ou celui des réactions), son nom sur le ruban, son coût
-## dans le losange, un sablier et le nombre de tours quand elle se recharge, et l'étiquette
-## « CACHE » pour sa carte cachée. Une carte qu'on ne peut pas voir montre son dos.
+## dans le losange, un sablier et le nombre de tours quand elle se recharge, et une
+## étiquette au-dessus de son coin (« CACHE » pour sa carte cachée ; au draft, qui l'a
+## prise ou bannie). Une carte qu'on ne peut pas voir montre son dos.
 ##
 ## Tout ce qu'elle montre lui est donné : le coût vient de la configuration de la partie, le
 ## nom du catalogue, et « jouable » de la présence de son coup dans les coups permis.
@@ -16,10 +17,19 @@ const FRAMES := {
 }
 const REACTION_FRAME := "cadre-reaction"
 const HIDDEN_FRAME := "cadre-dos"
-const HOURGLASS := "sablier"
+## Les sortes d'étiquette : d'or (« CACHE », « TOI »), crème (prise par l'adversaire), de
+## braise (bannie, à bannir).
+enum Tag { GOLD, PLAIN, THREAT }
+const TAG_STYLES := {
+	Tag.GOLD: [ThemeBuilder.TAG, ThemeBuilder.TAG_LABEL],
+	Tag.PLAIN: [ThemeBuilder.TAG_PLAIN, ThemeBuilder.TAG_PLAIN_LABEL],
+	Tag.THREAT: [ThemeBuilder.TAG_THREAT, ThemeBuilder.TAG_THREAT_LABEL],
+}
 
 ## L'emplacement de la carte dans l'arsenal.
 var slot := -1
+## Vrai pour qu'une carte choisie soit aussi entourée d'or (au draft).
+var outlined := false
 
 var _face: Control
 var _frame: TextureRect
@@ -28,6 +38,8 @@ var _cost: Label
 var _cooldown: Control
 var _cooldown_turns: Label
 var _tag: PanelContainer
+var _tag_label: Label
+var _outline: Panel
 var _lift: Tween
 var _selected := false
 
@@ -45,6 +57,14 @@ func _init(width: float = Look.CARD_WIDTH) -> void:
 	_face.position.y = Look.CARD_LIFT
 	add_child(_face)
 
+	_outline = Panel.new()
+	_outline.theme_type_variation = ThemeBuilder.CARD_OUTLINE
+	_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_outline.position = -Vector2.ONE * Look.GAP_XS
+	_outline.size = face_size + Vector2.ONE * Look.GAP_XS * 2.0
+	_outline.visible = false
+	_face.add_child(_outline)
+
 	_frame = TextureRect.new()
 	_frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_frame.stretch_mode = TextureRect.STRETCH_SCALE
@@ -60,9 +80,9 @@ func _init(width: float = Look.CARD_WIDTH) -> void:
 	_face.add_child(_cooldown)
 
 	_tag = PanelContainer.new()
-	_tag.theme_type_variation = ThemeBuilder.TAG
 	_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_tag.add_child(Ui.label(Labels.SECRET_TAG, ThemeBuilder.TAG_LABEL))
+	_tag_label = Ui.label("", ThemeBuilder.TAG_LABEL)
+	_tag.add_child(_tag_label)
 	_tag.visible = false
 	_face.add_child(_tag)
 
@@ -75,7 +95,7 @@ func show_card(attack: Variant, display_name: String, cost: int, reaction: bool,
 		_name.text = ""
 		_cost.text = ""
 		_cooldown.visible = false
-		_tag.visible = false
+		set_tag("")
 		disabled = true
 		_face.modulate = Color.WHITE
 		return
@@ -85,9 +105,7 @@ func show_card(attack: Variant, display_name: String, cost: int, reaction: bool,
 	_cost.text = str(cost) if cost > 0 else ""
 	_cooldown.visible = cooldown_left > 0
 	_cooldown_turns.text = str(cooldown_left)
-	_tag.visible = secret
-	_tag.reset_size()
-	_tag.position = Vector2(_face.size.x - _tag.size.x, -_tag.size.y / 2.0)
+	set_tag(Labels.SECRET_TAG if secret else "")
 	disabled = not playable
 	_face.modulate = Color.WHITE if playable or _selected else Look.CARD_UNPLAYABLE
 	tooltip_text = display_name
@@ -122,9 +140,31 @@ func show_slot(view: ViewData, player: String, index: int, catalog: CardCatalog,
 	)
 
 
-## Lève la carte choisie au-dessus des autres.
+## L'étiquette au-dessus du coin de la carte, de cette sorte ; vide : aucune.
+func set_tag(text: String, kind := Tag.GOLD) -> void:
+	_tag.visible = text != ""
+	if text == "":
+		return
+	_tag.theme_type_variation = TAG_STYLES[kind][0]
+	_tag_label.theme_type_variation = TAG_STYLES[kind][1]
+	_tag_label.text = text
+	_tag.reset_size()
+	_tag.position = Vector2(_face.size.x - _tag.size.x, -_tag.size.y / 2.0)
+
+
+## Une carte qu'on ne peut plus choisir (prise, bannie) : son dessin assombri de cette
+## teinte ; son étiquette reste vive.
+func dim(shade: Color) -> void:
+	disabled = true
+	for part: Node in _face.get_children():
+		if part != _tag and part is CanvasItem:
+			(part as CanvasItem).modulate = shade
+
+
+## Lève la carte choisie au-dessus des autres (et l'entoure d'or, si `outlined`).
 func set_selected(selected: bool) -> void:
 	_selected = selected
+	_outline.visible = selected and outlined
 	if _lift != null:
 		_lift.kill()
 	_lift = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -142,7 +182,7 @@ func _build_cooldown(window: Rect2) -> Control:
 	shade.size = window.size
 	var column := Ui.vbox(Look.GAP_XS)
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	var hourglass := Ui.icon(HOURGLASS, Look.CREAM)
+	var hourglass := Ui.icon(Ui.HOURGLASS, Look.CREAM)
 	hourglass.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	column.add_child(hourglass)
 	_cooldown_turns = Ui.centered_label("", ThemeBuilder.NUMBER_LABEL)
@@ -158,8 +198,14 @@ func _placed_label(variation: StringName, rect: Rect2) -> Label:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.clip_text = true
+	# Le texte suit la taille de la carte : il tient dans son ruban ou son losange, que la
+	# carte soit petite (draft) ou grande (cache révélée).
+	label.add_theme_font_size_override(&"font_size", maxi(1, roundi(rect.size.y * Look.CARD_TEXT_SHARE)))
 	label.position = rect.position
 	label.size = rect.size
+	# Hors de l'arbre, le libellé ne connaît pas encore le thème : il se croit plus haut que
+	# sa zone. Il la reprend en y entrant, pour rester centré sur son ruban.
+	label.ready.connect(func() -> void: label.size = rect.size)
 	_face.add_child(label)
 	return label
 

@@ -1,0 +1,1338 @@
+{
+ "type": "state",
+ "view": {
+  "viewer": "One",
+  "config": {
+   "board_size": 10,
+   "wall_thickness": 3,
+   "align_to_win": 6,
+   "pions_per_player": 15,
+   "first_turn_actions": 1,
+   "actions_per_turn": 1,
+   "max_banked_actions": 3,
+   "starting_banked_actions": [
+    0,
+    1
+   ],
+   "place_cost": 0,
+   "max_placements_per_turn": 1,
+   "summoning_sickness": true,
+   "golden_rule": true,
+   "infirmary_turns": 2,
+   "guard_shot_cost": 1,
+   "max_turns": 200,
+   "attack_catalog": [
+    {
+     "attack": {
+      "kind": "BeauteFatale",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "BeauteFatale",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "BeauteFatale",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "BeauteFatale",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "SautDuLoup",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "SautDuLoup",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "SautDuLoup",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "SautDuLoup",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Reine",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Reine",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Reine",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Reine",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Attila",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Attila",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Attila",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Attila",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Medecin",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Medecin",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Medecin",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Medecin",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Interchange",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Interchange",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Interchange",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Interchange",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "CoupDuTaureau",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "CoupDuTaureau",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "CoupDuTaureau",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "CoupDuTaureau",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "MassacreDivin",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "MassacreDivin",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "MassacreDivin",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "MassacreDivin",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Ours",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Ours",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Ours",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Ours",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Lievre",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Lievre",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Lievre",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Lievre",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Familia",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Familia",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Familia",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Familia",
+      "rarity": "Legendary"
+     },
+     "stats": {
+      "cost": 4,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "MeilleursAmis",
+      "rarity": "Epic"
+     },
+     "stats": {
+      "cost": 3,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Sentinelle",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Sentinelle",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Hibou",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Hibou",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "QueueDuLezard",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "QueueDuLezard",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Perroquet",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Perroquet",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Feintaille",
+      "rarity": "Common"
+     },
+     "stats": {
+      "cost": 1,
+      "cooldown": 1
+     }
+    },
+    {
+     "attack": {
+      "kind": "Feintaille",
+      "rarity": "Rare"
+     },
+     "stats": {
+      "cost": 2,
+      "cooldown": 1
+     }
+    }
+   ],
+   "starting_attacks": [
+    [],
+    []
+   ],
+   "draft": {
+    "pool_size": 10,
+    "steps": [
+     {
+      "Ban": "One"
+     },
+     {
+      "Ban": "Two"
+     },
+     {
+      "Pick": "Two"
+     },
+     {
+      "Pick": "One"
+     },
+     {
+      "Pick": "One"
+     },
+     {
+      "Pick": "Two"
+     },
+     {
+      "Pick": "Two"
+     },
+     {
+      "Pick": "One"
+     },
+     {
+      "Cache": "One"
+     },
+     {
+      "Cache": "Two"
+     }
+    ]
+   }
+  },
+  "turn": 1,
+  "current_player": "One",
+  "decision": {
+   "Draft": {
+    "step": {
+     "Pick": "One"
+    }
+   }
+  },
+  "legal_actions": [
+   {
+    "Draft": {
+     "kind": "Reine",
+     "rarity": "Common"
+    }
+   },
+   {
+    "Draft": {
+     "kind": "Medecin",
+     "rarity": "Epic"
+    }
+   },
+   {
+    "Draft": {
+     "kind": "MassacreDivin",
+     "rarity": "Rare"
+    }
+   },
+   {
+    "Draft": {
+     "kind": "Ours",
+     "rarity": "Common"
+    }
+   },
+   {
+    "Draft": {
+     "kind": "Lievre",
+     "rarity": "Rare"
+    }
+   },
+   {
+    "Draft": {
+     "kind": "Hibou",
+     "rarity": "Common"
+    }
+   },
+   {
+    "Draft": {
+     "kind": "QueueDuLezard",
+     "rarity": "Rare"
+    }
+   }
+  ],
+  "board": {
+   "size": 16,
+   "cells": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    {
+     "pion": null,
+     "tomb": null
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  "sides": [
+   {
+    "reserve": 15,
+    "banked_actions": 0,
+    "actions_left": 1,
+    "placements_left": 1,
+    "arsenal": [],
+    "queen": null,
+    "scorched_until": null
+   },
+   {
+    "reserve": 15,
+    "banked_actions": 1,
+    "actions_left": 0,
+    "placements_left": 0,
+    "arsenal": [
+     {
+      "attack": {
+       "kind": "Feintaille",
+       "rarity": "Common"
+      },
+      "cooldown_left": 0,
+      "secret": false
+     }
+    ],
+    "queen": null,
+    "scorched_until": null
+   }
+  ],
+  "effects": [],
+  "token_piles": [],
+  "infirmary": [],
+  "graveyard": [],
+  "draft_pool": [
+   {
+    "kind": "Reine",
+    "rarity": "Common"
+   },
+   {
+    "kind": "Medecin",
+    "rarity": "Epic"
+   },
+   {
+    "kind": "MassacreDivin",
+    "rarity": "Rare"
+   },
+   {
+    "kind": "Ours",
+    "rarity": "Common"
+   },
+   {
+    "kind": "Lievre",
+    "rarity": "Rare"
+   },
+   {
+    "kind": "Hibou",
+    "rarity": "Common"
+   },
+   {
+    "kind": "QueueDuLezard",
+    "rarity": "Rare"
+   }
+  ],
+  "draft_history": [
+   {
+    "step": {
+     "Ban": "One"
+    },
+    "attack": {
+     "kind": "BeauteFatale",
+     "rarity": "Rare"
+    }
+   },
+   {
+    "step": {
+     "Ban": "Two"
+    },
+    "attack": {
+     "kind": "Attila",
+     "rarity": "Legendary"
+    }
+   },
+   {
+    "step": {
+     "Pick": "Two"
+    },
+    "attack": {
+     "kind": "Feintaille",
+     "rarity": "Common"
+    }
+   }
+  ],
+  "end": null,
+  "winning_line": []
+ },
+ "events": [
+  {
+   "Drafted": {
+    "step": {
+     "Pick": "Two"
+    },
+    "attack": {
+     "kind": "Feintaille",
+     "rarity": "Common"
+    }
+   }
+  }
+ ]
+}

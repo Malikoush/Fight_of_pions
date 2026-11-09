@@ -47,3 +47,24 @@ func test_a_placed_pion_is_found_by_cell_and_by_identity() -> bool:
 	equal(view.cell_of(999), ViewData.NO_CELL, "un pion absent")
 	equal(Labels.cell_name(cell), "D4", "le nom de sa case, comme le moteur")
 	return true
+
+
+func test_a_picks_view_tells_what_was_chosen_and_where_the_draft_stands() -> bool:
+	var view := view_of("draft_picks_view")
+	var history := view.draft_history()
+	equal(history.size(), 3, "deux bans, puis le pick du bot")
+	equal(view.draft_step_index(), 3, "le rang de l'étape en cours")
+	equal(view.draft_steps()[view.draft_step_index()], view.draft_step(), "l'étape en cours suit l'historique")
+	equal(Wire.tag(history[0].get("step")), "Ban", "le premier choix est un ban")
+	check(history[0].get("attack") is Dictionary, "un ban est public")
+	equal(view.draft_pool().size() + history.size(), 10, "les cartes tirées : celles qui restent et celles choisies")
+	return true
+
+
+func test_the_drawn_cards_keep_the_catalog_order() -> bool:
+	var view := view_of("draft_picks_view")
+	var pool := view.draft_pool()
+	for index in range(1, pool.size()):
+		check(view.catalog_index(pool[index - 1]) < view.catalog_index(pool[index]), "dans l'ordre du catalogue")
+	equal(view.catalog_index({"kind": "Inconnue", "rarity": "Common"}), -1, "une carte absente")
+	return true

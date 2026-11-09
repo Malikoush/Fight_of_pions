@@ -18,6 +18,7 @@ const BOOT_SCENE := preload("res://ui/screens/boot_screen.tscn")
 const MENU_SCENE := preload("res://ui/screens/menu_screen.tscn")
 const JOIN_SCENE := preload("res://ui/screens/join_screen.tscn")
 const LOBBY_SCENE := preload("res://ui/screens/lobby_screen.tscn")
+const DRAFT_SCENE := preload("res://ui/screens/draft_screen.tscn")
 
 var _session := Session.new(Session.SAVE_PATH)
 var _router: ScreenRouter
@@ -81,7 +82,7 @@ func _open_lobby() -> void:
 
 
 func _open_draft() -> DraftScreen:
-	var draft := DraftScreen.new()
+	var draft: DraftScreen = DRAFT_SCENE.instantiate()
 	draft.play_requested.connect(ServerLink.play)
 	draft.home_requested.connect(_on_leave)
 	_router.show(draft)

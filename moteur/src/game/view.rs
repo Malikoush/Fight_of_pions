@@ -4,9 +4,9 @@
 //! savoir : la cache adverse pas encore lancée, les cartes tirées pendant le choix des
 //! caches.
 //!
-//! Ce qui est secret n'est décidé qu'à trois endroits :
-//! [`Game::arsenal_seen_by`] et [`Game::visible_draft_pool`] pour l'état, [`Event::seen_by`] pour
-//! les événements.
+//! Ce qui est secret n'est décidé qu'à quatre endroits :
+//! [`Game::arsenal_seen_by`], [`Game::visible_draft_pool`] et [`Game::draft_history_seen_by`]
+//! pour l'état, [`Event::seen_by`] pour les événements.
 //! Ajouter une information visible, c'est ajouter un champ ici, lu sur la partie.
 
 use super::state::Game;
@@ -47,6 +47,11 @@ pub struct PlayerView {
     /// Les cartes tirées du draft qui restent, quand on peut les voir (voir
     /// [`Game::visible_draft_pool`]) ; vide hors du draft.
     pub draft_pool: Vec<Attack>,
+    /// Les choix déjà faits du draft, dans l'ordre des étapes (voir
+    /// [`Game::draft_history_seen_by`]) : le client montre qui a banni ou pris quelle carte,
+    /// et le rang de l'étape en cours est leur nombre. Vide hors du draft.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub draft_history: Vec<DraftEntry>,
     /// La fin de la partie, si elle est finie.
     pub end: Option<GameEnd>,
     /// Les cases de la ligne gagnante (toutes les lignes d'assez de pions du gagnant), si la
@@ -77,6 +82,16 @@ impl BoardView {
             .copied()
             .flatten()
     }
+}
+
+/// Un choix déjà fait du draft, vu par le joueur qui regarde.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DraftEntry {
+    /// L'étape : qui a choisi, et quoi (ban, pick, cache).
+    pub step: DraftStep,
+    /// La carte choisie ; `None` pour la cache de l'adversaire, secrète.
+    pub attack: Option<Attack>,
 }
 
 /// Ce qu'un joueur a, vu par le joueur qui regarde.
@@ -123,6 +138,7 @@ impl Game {
             infirmary: self.infirmary().to_vec(),
             graveyard: self.graveyard().to_vec(),
             draft_pool: self.visible_draft_pool().to_vec(),
+            draft_history: self.draft_history_seen_by(viewer),
             end: self.end,
             winning_line: self.winning_line(),
         }

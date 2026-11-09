@@ -5,13 +5,17 @@
 
 use super::arsenal::ArsenalSlot;
 use super::state::Game;
-use crate::{Action, Attack, DraftStep, Event, GameConfig, GameError, Rng};
+use super::view::DraftEntry;
+use crate::{Action, Attack, DraftStep, Event, GameConfig, GameError, Player, Rng};
 
 /// Le draft en cours.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) struct DraftState {
     /// Les cartes tirées qui restent, dans l'ordre du catalogue.
     pool: Vec<Attack>,
+    /// Les cartes bannies, dans l'ordre : les seuls choix que rien d'autre ne garde (un pick
+    /// ou une cache est dans l'arsenal de son joueur).
+    banned: Vec<Attack>,
     /// L'indice de l'étape en cours dans `DraftRules::steps`.
     next_step: usize,
 }
@@ -38,10 +42,14 @@ impl DraftState {
                 .unwrap_or(0);
             order.swap(index, index + offset);
         }
-        let mut chosen = order[..drawn].to_vec();
-        chosen.sort_unstable();
+        let mut drawn_cards = order[..drawn].to_vec();
+        drawn_cards.sort_unstable();
         Some(DraftState {
-            pool: chosen.into_iter().map(|index| catalog[index]).collect(),
+            pool: drawn_cards
+                .into_iter()
+                .map(|index| catalog[index])
+                .collect(),
+            banned: Vec::new(),
             next_step: 0,
         })
     }
@@ -80,6 +88,43 @@ impl Game {
             _ => false,
         };
         if shown { self.draft_pool() } else { &[] }
+    }
+
+    /// Les choix déjà faits du draft, dans l'ordre des étapes, tels que `viewer` les voit :
+    /// la carte que son adversaire a mise en cache reste cachée, comme dans
+    /// [`Event::seen_by`]. Les bans et les picks sont publics. Vide hors du draft.
+    ///
+    /// Un ban est relu dans les cartes bannies ; un pick ou une cache, dans l'arsenal de son
+    /// joueur (emplacement suivant, après ses cartes de départ) : une partie aux secrets
+    /// devinés ([`Game::with_secrets_guessed`]) n'y garde rien de la vraie cache.
+    pub fn draft_history_seen_by(&self, viewer: Player) -> Vec<DraftEntry> {
+        let (Some(draft), Some(rules)) = (&self.draft, &self.config.draft) else {
+            return Vec::new();
+        };
+        let mut bans = draft.banned.iter();
+        let mut next_slot = self.config.starting_attacks.each_ref().map(Vec::len);
+        let mut history = Vec::new();
+        for &step in rules.steps.iter().take(draft.next_step) {
+            let attack = match step {
+                DraftStep::Ban(_) => bans.next().copied(),
+                DraftStep::Pick(player) | DraftStep::Cache(player) => {
+                    let slot = &mut next_slot[player.index()];
+                    let card = self.arsenals[player.index()]
+                        .get(*slot)
+                        .map(|slot| slot.attack());
+                    *slot += 1;
+                    card
+                }
+            };
+            history.push(DraftEntry {
+                step,
+                attack: match step {
+                    DraftStep::Cache(owner) if owner != viewer => None,
+                    _ => attack,
+                },
+            });
+        }
+        history
     }
 
     /// Les cartes que l'étape en cours permet de choisir : tout le catalogue pour la cache,
@@ -128,8 +173,9 @@ impl Game {
             DraftStep::Pick(_) => Some(ArsenalSlot::new(attack)),
             DraftStep::Ban(_) => None,
         };
-        if let Some(slot) = slot {
-            self.arsenals[step.player().index()].push(slot);
+        match slot {
+            Some(slot) => self.arsenals[step.player().index()].push(slot),
+            None => draft.banned.push(attack),
         }
         draft.next_step += 1;
         events.push(Event::Drafted { step, attack });

@@ -77,7 +77,24 @@ const DRAFT_HELP := {
 	"Pick": "Une carte tirée rejoint ton arsenal. Les picks sont publics.",
 	"Cache": "Dans tout le catalogue. L'adversaire ne la verra qu'au moment où tu la lanceras.",
 }
-const DRAFT_ACTIONS := {"Ban": "BANNIR %s", "Pick": "PRENDRE %s", "Cache": "CACHER %s"}
+const DRAFT_ACTIONS := {"Ban": "BANNIR %s", "Pick": "PRENDRE %s", "Cache": "VALIDER MA CACHE"}
+## Ce que fait l'adversaire pendant qu'il choisit.
+const DRAFT_THINKING := {"Ban": "bannit une carte…", "Pick": "prend une carte…", "Cache": "choisit sa cache…"}
+## Le rang du pick en cours (maquettes : « Pick 4 sur 6 · en serpent »).
+const DRAFT_PICK_RANK := "Pick %d sur %d · en serpent"
+## Les étiquettes des cartes tirées : qui l'a prise (le nom court du joueur), bannie, à bannir.
+const TAG_YOU := "TOI"
+const TAG_BOT := "BOT"
+const TAG_FRIEND := "AMI"
+const TAG_BANNED := "BANNI"
+const TAG_BANNED_BY := "BANNI · %s"
+const TAG_TO_BAN := "BANNIR ?"
+## Les places encore vides d'un arsenal, par sorte de choix.
+const DRAFT_SLOTS := {"Pick": "PICK", "Cache": "CACHE"}
+## Ce que le draft ajoute à mon arsenal (« 3 picks + 1 cache ») : une part par sorte, au
+## singulier ou au pluriel.
+const DRAFT_PLAN_PARTS := {"Pick": ["%d pick", "%d picks"], "Cache": ["%d cache", "%d caches"]}
+const DRAFT_PLAN_JOIN := " + "
 ## Ce que vient de faire l'adversaire, au draft.
 const DRAFT_DONE := {"Ban": "a banni %s", "Pick": "a pris %s"}
 const DRAFT_CACHED := "a mis une carte en cache"

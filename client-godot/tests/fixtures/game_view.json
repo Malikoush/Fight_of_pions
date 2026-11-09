@@ -1794,7 +1794,7 @@
      {
       "attack": {
        "kind": "Reine",
-       "rarity": "Rare"
+       "rarity": "Common"
       },
       "cooldown_left": 0,
       "secret": false
@@ -1809,7 +1809,7 @@
      },
      {
       "attack": {
-       "kind": "Interchange",
+       "kind": "MassacreDivin",
        "rarity": "Rare"
       },
       "cooldown_left": 0,
@@ -1835,8 +1835,8 @@
     "arsenal": [
      {
       "attack": {
-       "kind": "QueueDuLezard",
-       "rarity": "Rare"
+       "kind": "Feintaille",
+       "rarity": "Common"
       },
       "cooldown_left": 0,
       "secret": false
@@ -1844,14 +1844,14 @@
      {
       "attack": {
        "kind": "Ours",
-       "rarity": "Epic"
+       "rarity": "Common"
       },
       "cooldown_left": 0,
       "secret": false
      },
      {
       "attack": {
-       "kind": "Ours",
+       "kind": "Hibou",
        "rarity": "Common"
       },
       "cooldown_left": 0,
@@ -1868,6 +1868,7 @@
   "infirmary": [],
   "graveyard": [],
   "draft_pool": [],
+  "draft_history": [],
   "end": null,
   "winning_line": []
  },

@@ -13,6 +13,10 @@ extends Node3D
 ## Les effets continus se voient sur les pions (`PionStatus`) : anneau, taille d'enfant,
 ## couronne en 3D ; leurs badges, dans un calque 2D par-dessus (`BadgeLayer`).
 ##
+## Deux morceaux l'aident : la caméra (`BoardCamera` : le cadrage, et le point de l'écran
+## sous un toucher) et les marques (`BoardMarks` : survol, refus, marques par sorte, éclats
+## et tirs du déroulé).
+##
 ## Du mur, on ne voit que les cases qui touchent le plateau (la première rangée, et les
 ## voisines des cases creusées). La caméra cadre les cases jouables, plus une demi-case,
 ## dans le rectangle que l'écran lui laisse (`frame`) : sur un téléphone, c'est la largeur
@@ -26,9 +30,6 @@ signal cell_hovered(cell: Vector2i)
 signal empty_tapped
 
 enum Tile { CASE, CASE_ALT, WALL, DUG }
-## Les marques posées sur des cases, par sorte : le dernier coup adverse, les cases
-## proposées pendant le choix d'une carte, les cases déjà choisies, la ligne gagnante.
-enum Marks { LAST, CANDIDATE, CHOSEN, WIN }
 
 ## Les huit voisines d'une case.
 const NEIGHBORS: Array[Vector2i] = [
@@ -37,9 +38,9 @@ const NEIGHBORS: Array[Vector2i] = [
 ]
 
 var _geometry: GridGeometry
-var _rig: Node3D
-var _camera: Camera3D
-var _reframe: Tween
+## La caméra, et ce qui se pose ou passe sur les cases sans être une pièce.
+var _view_camera: BoardCamera
+var _marks: BoardMarks
 var _layers: Dictionary[Tile, MultiMeshInstance3D] = {}
 ## Les cases dessinées, et ce qu'on y dessine.
 var _drawn: Dictionary[Vector2i, Tile] = {}
@@ -54,12 +55,6 @@ var _pieces: Node3D
 var _badges: BadgeLayer
 ## Les statuts de la vue en cours, montrés quand son déroulé a fini.
 var _statuses_later: Tween
-var _mark: MeshInstance3D
-var _refusal: MeshInstance3D
-var _refusal_fade: Tween
-## Les marques de chaque sorte (réutilisées d'une vue à l'autre), et leur matériau.
-var _marks: Dictionary[Marks, Array] = {}
-var _mark_materials: Dictionary[Marks, ShaderMaterial] = {}
 ## Les pions du dernier coup adverse : leur marque les suit s'ils bougent.
 var _last_ids: Array[int] = []
 ## Les cases vers lesquelles un toucher s'aimante (les cases proposées d'un choix).
@@ -74,13 +69,8 @@ var _pressing := false
 
 
 func _ready() -> void:
-	_rig = Node3D.new()
-	add_child(_rig)
-	_camera = Camera3D.new()
-	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	_camera.position = Vector3(0.0, 0.0, Look.CAMERA_DISTANCE)
-	_camera.far = Look.CAMERA_DISTANCE * 2.0
-	_rig.add_child(_camera)
+	_view_camera = BoardCamera.new()
+	add_child(_view_camera)
 
 	for tile: Tile in Tile.values():
 		var layer := MultiMeshInstance3D.new()
@@ -97,16 +87,10 @@ func _ready() -> void:
 	add_child(_badges)
 	# Un calque 2D ne suit pas la visibilité d'un nœud 3D : on la lui recopie.
 	visibility_changed.connect(func() -> void: _badges.visible = visible)
-	_mark = _flat_mark(Look.MARK_SIZE, BoardMaterials.mark(Look.MARK_FILL, Look.MARK_BORDER))
-	_refusal = _flat_mark(Look.MARK_SIZE, BoardMaterials.mark(Look.REFUSAL_FILL, Look.REFUSAL_BORDER))
-	_mark_materials = {
-		Marks.LAST: BoardMaterials.dashed_mark(Look.LAST_MARK, Look.LAST_MARK_DASHES),
-		Marks.CANDIDATE: BoardMaterials.dotted_mark(Look.CANDIDATE_FILL, Look.CANDIDATE_DOT, Look.CANDIDATE_DOT_SIZE),
-		Marks.CHOSEN: BoardMaterials.mark(Look.CHOSEN_FILL, Look.CHOSEN_BORDER),
-		Marks.WIN: BoardMaterials.mark(Look.WIN_FILL, Look.WIN_BORDER),
-	}
-	for kind: Marks in Marks.values():
-		_marks[kind] = []
+	_marks = BoardMarks.new()
+	_marks.ground = _ground
+	_marks.is_drawn = func(cell: Vector2i) -> bool: return _drawn.has(cell)
+	add_child(_marks)
 	get_viewport().size_changed.connect(_update_camera.bind(false))
 
 
@@ -120,9 +104,9 @@ func show_view(view: ViewData, events: Array = []) -> float:
 	_update_tiles(view)
 	_update_pieces(view, timeline)
 	for pulse in timeline.pulses:
-		_pulse(pulse["cell"], pulse["color"], pulse["delay"])
+		_marks.pulse(pulse["cell"], pulse["color"], pulse["delay"])
 	for shot in timeline.shots:
-		_shoot(shot["from"], shot["to"], shot["delay"])
+		_marks.shoot(shot["from"], shot["to"], shot["delay"])
 	# Un palet en attente que cette vue n'a pas posé (le coup a abouti ailleurs) disparaît.
 	if _ghost_lifted:
 		show_ghost(ViewData.NO_CELL, "", false)
@@ -139,7 +123,7 @@ func frame(rect: Rect2) -> void:
 
 ## Montre la marque sur cette case, ou la cache (`ViewData.NO_CELL`).
 func show_mark(cell: Vector2i) -> void:
-	_place_flat(_mark, cell)
+	_marks.show_hover(cell)
 
 
 ## Montre le palet fantôme de ce joueur sur cette case : posé (survol) ou flottant au-dessus
@@ -171,14 +155,7 @@ func flash_refusal(cell: Vector2i) -> void:
 		if _pion_cells[id] == cell and _pions.has(id):
 			_pions[id].wiggle()
 			return
-	if not _place_flat(_refusal, cell):
-		return
-	if _refusal_fade != null:
-		_refusal_fade.kill()
-	_refusal.transparency = 0.0
-	_refusal_fade = create_tween()
-	_refusal_fade.tween_property(_refusal, "transparency", 1.0, Look.REFUSAL_TIME)
-	_refusal_fade.tween_callback(func() -> void: _refusal.visible = false)
+	_marks.flash_refusal(cell)
 
 
 ## Entoure de pointillés ces pions (par identité) : le dernier coup adverse.
@@ -189,23 +166,23 @@ func show_last(ids: Array[int]) -> void:
 
 ## Le point de l'écran où se trouve le centre de cette case.
 func screen_point(cell: Vector2i) -> Vector2:
-	return _camera.unproject_position(_ground(cell))
+	return _view_camera.screen_point(_ground(cell))
 
 
 ## Marque ces cases proposées (le choix d'une carte) ; un toucher proche s'y aimante.
 func show_candidates(cells: Array[Vector2i]) -> void:
 	_magnet = cells
-	_show_marks(Marks.CANDIDATE, cells)
+	_marks.show_marks(BoardMarks.Kind.CANDIDATE, cells)
 
 
 ## Allume ces cases : la ligne gagnante, que donne la vue (rien n'est calculé ici).
 func show_winning_line(cells: Array[Vector2i]) -> void:
-	_show_marks(Marks.WIN, cells)
+	_marks.show_marks(BoardMarks.Kind.WIN, cells)
 
 
 ## Marque ces cases déjà choisies (le lanceur et les cibles d'une carte en cours).
 func show_chosen(cells: Array[Vector2i]) -> void:
-	_show_marks(Marks.CHOSEN, cells)
+	_marks.show_marks(BoardMarks.Kind.CHOSEN, cells)
 
 
 func _update_tiles(view: ViewData) -> void:
@@ -306,10 +283,11 @@ func _show_statuses(statuses: Dictionary[int, PionStatus]) -> void:
 
 
 func _process(_delta: float) -> void:
-	if visible and _camera != null and _camera.size > 0.0:
+	var camera := _view_camera.camera if _view_camera != null else null
+	if visible and camera != null and camera.size > 0.0:
 		# La caméra est orthographique et garde sa hauteur : `size` est la hauteur filmée.
-		var cell_pixels := get_viewport().get_visible_rect().size.y / _camera.size * GridGeometry.CELL_SIZE
-		_badges.follow(_camera, _pions, cell_pixels)
+		var cell_pixels := get_viewport().get_visible_rect().size.y / camera.size * GridGeometry.CELL_SIZE
+		_badges.follow(camera, _pions, cell_pixels)
 
 
 ## Crée la pièce de ce pion si elle n'existe pas, sinon l'amène à sa case (en sautant, si
@@ -345,56 +323,7 @@ func _update_last_marks() -> void:
 	for id in _last_ids:
 		if _pion_cells.has(id):
 			cells.append(_pion_cells[id])
-	_show_marks(Marks.LAST, cells)
-
-
-## Pose une marque de cette sorte sur chacune de ces cases, et cache les autres.
-func _show_marks(kind: Marks, cells: Array[Vector2i]) -> void:
-	var pool: Array = _marks[kind]
-	var size := Look.LAST_MARK_SIZE if kind == Marks.LAST else Look.MARK_SIZE
-	while pool.size() < cells.size():
-		pool.append(_flat_mark(size, _mark_materials[kind]))
-	for index in pool.size():
-		_place_flat(pool[index], cells[index] if index < cells.size() else ViewData.NO_CELL)
-
-
-## Un éclat à plat sur cette case, après ce délai : un anneau de cette couleur qui
-## s'élargit en s'effaçant (attaque lancée, pion tué, mur creusé).
-func _pulse(cell: Vector2i, color: Color, delay: float) -> void:
-	if not _drawn.has(cell):
-		return
-	var ring := _flat_mark(GridGeometry.CELL_SIZE, BoardMaterials.pulse(color))
-	_place_flat(ring, cell)
-	ring.visible = false
-	ring.scale = Vector3.ONE * Look.PULSE_START_SCALE
-	var grow := create_tween()
-	grow.tween_interval(delay)
-	grow.tween_callback(ring.show)
-	grow.set_parallel()
-	grow.chain().tween_property(ring, "scale", Vector3.ONE * Look.PULSE_END_SCALE, Look.PULSE_TIME).set_ease(Tween.EASE_OUT)
-	grow.tween_property(ring, "transparency", 1.0, Look.PULSE_TIME).set_ease(Tween.EASE_IN)
-	grow.chain().tween_callback(ring.queue_free)
-
-
-## Le tir d'un garde de la reine, après ce délai : une balle d'or qui vole en cloche de la
-## reine à sa cible.
-func _shoot(from: Vector2i, to: Vector2i, delay: float) -> void:
-	if not (_drawn.has(from) and _drawn.has(to)):
-		return
-	var ball := MeshInstance3D.new()
-	ball.mesh = BoardMaterials.shot_mesh()
-	ball.visible = false
-	add_child(ball)
-	var start := _ground(from) + Vector3.UP * Look.PION_HEIGHT
-	var end := _ground(to) + Vector3.UP * Look.PION_HEIGHT
-	var fly := func(progress: float) -> void:
-		ball.position = BoardTimeline.along_arc(start, end, Look.SHOT_ARC, progress)
-	fly.call(0.0)
-	var flight := create_tween()
-	flight.tween_interval(delay)
-	flight.tween_callback(ball.show)
-	flight.tween_method(fly, 0.0, 1.0, Look.SHOT_TIME)
-	flight.tween_callback(ball.queue_free)
+	_marks.show_marks(BoardMarks.Kind.LAST, cells)
 
 
 ## Le sol d'une case : le dessus de la case, là où se posent les pièces.
@@ -402,93 +331,11 @@ func _ground(cell: Vector2i) -> Vector3:
 	return _geometry.center(cell) + Vector3.UP * Look.CASE_HEIGHT
 
 
-## Une marque à plat, cachée, de cette taille et ce matériau.
-func _flat_mark(size: float, material: ShaderMaterial) -> MeshInstance3D:
-	var mark := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2.ONE * size
-	mark.mesh = plane
-	mark.material_override = material
-	mark.visible = false
-	add_child(mark)
-	return mark
-
-
-## Pose cette marque sur une case dessinée, ou la cache ; vrai si elle est montrée.
-func _place_flat(mark: MeshInstance3D, cell: Vector2i) -> bool:
-	mark.visible = _drawn.has(cell)
-	if mark.visible:
-		mark.position = _ground(cell) + Vector3.UP * Look.FLAT_LIFT
-	return mark.visible
-
-
-## Place la caméra pour que les cases cadrées tiennent dans le rectangle de cadrage. Parmi
-## les plongées permises, elle prend celle qui donne les plus grandes cases à l'écran : la
-## surface d'une case y vaut le sinus de la plongée sur le carré de la hauteur filmée.
-## Quand la largeur manque et que la hauteur abonde (téléphone en portrait), une plongée
-## plus forte grandit les cases en hauteur. `animated` : la caméra glisse vers son cadrage
-## (le plateau a changé), sinon elle y saute (la fenêtre a changé).
+## Cadre les cases jouables, plus une demi-case, dans le rectangle de cadrage
+## (`BoardCamera`). `animated` : la caméra glisse vers son cadrage (le plateau a changé).
 func _update_camera(animated: bool) -> void:
-	if _camera == null or not _bounds.has_volume():
-		return
-	var viewport := get_viewport().get_visible_rect().size
-	var rect := _frame_rect if _frame_rect.has_area() else Rect2(Vector2.ZERO, viewport)
-	var start_rotation := _rig.rotation_degrees
-	var start_position := _rig.position
-	_rig.position = _bounds.get_center()
-	var best_pitch: float = Look.CAMERA_PITCHES_DEGREES[0]
-	var best := Rect2()
-	var best_height := INF
-	var best_area := 0.0
-	for pitch: float in Look.CAMERA_PITCHES_DEGREES:
-		_rig.rotation_degrees = Vector3(pitch, Look.CAMERA_YAW_DEGREES, 0.0)
-		var extent := _projected_bounds()
-		var world_height := maxf(extent.size.y * viewport.y / rect.size.y, extent.size.x * viewport.y / rect.size.x)
-		var cell_area := absf(sin(deg_to_rad(pitch))) / (world_height * world_height)
-		if cell_area > best_area:
-			best_area = cell_area
-			best_height = world_height
-			best_pitch = pitch
-			best = extent
-	var target_size := best_height * Look.FRAME_MARGIN
-	var per_point := target_size / viewport.y
-	var shift := rect.get_center() - viewport / 2.0
-	var middle := best.get_center()
-	var target_rotation := Vector3(best_pitch, Look.CAMERA_YAW_DEGREES, 0.0)
-	var target_offset := Vector2(middle.x - shift.x * per_point, middle.y + shift.y * per_point)
-
-	if _reframe != null:
-		_reframe.kill()
-	var target_position := _rig.position
-	if not animated:
-		_rig.rotation_degrees = target_rotation
-		_camera.size = target_size
-		_camera.h_offset = target_offset.x
-		_camera.v_offset = target_offset.y
-		return
-	_rig.rotation_degrees = start_rotation
-	_rig.position = start_position
-	_reframe = create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	_reframe.tween_property(_rig, "position", target_position, Look.REFRAME_TIME)
-	_reframe.tween_property(_rig, "rotation_degrees", target_rotation, Look.REFRAME_TIME)
-	_reframe.tween_property(_camera, "size", target_size, Look.REFRAME_TIME)
-	_reframe.tween_property(_camera, "h_offset", target_offset.x, Look.REFRAME_TIME)
-	_reframe.tween_property(_camera, "v_offset", target_offset.y, Look.REFRAME_TIME)
-
-
-## L'emprise à l'écran des cases cadrées, dans le plan de la caméra telle qu'elle est
-## tournée (en unités du monde, autour du centre du cadrage).
-func _projected_bounds() -> Rect2:
-	var right := _rig.global_basis.x
-	var up := _rig.global_basis.y
-	var low := Vector2(INF, INF)
-	var high := Vector2(-INF, -INF)
-	for index in 8:
-		var offset := _bounds.get_endpoint(index) - _rig.position
-		var projected := Vector2(offset.dot(right), offset.dot(up))
-		low = low.min(projected)
-		high = high.max(projected)
-	return Rect2(low, high - low)
+	if _view_camera != null:
+		_view_camera.frame_bounds(_bounds, _frame_rect, animated)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -517,11 +364,10 @@ func _unhandled_input(event: InputEvent) -> void:
 ## un choix, la case proposée la plus proche, si elle est assez près : viser juste une
 ## petite case au doigt est difficile, et seules ces cases comptent alors.
 func _pick(screen_position: Vector2) -> Vector2i:
-	var origin := _camera.project_ray_origin(screen_position)
-	var direction := _camera.project_ray_normal(screen_position)
-	if is_zero_approx(direction.y):
+	var found: Variant = _view_camera.ground_hit(screen_position, Look.CASE_HEIGHT)
+	if found == null:
 		return ViewData.NO_CELL
-	var hit := origin + direction * ((Look.CASE_HEIGHT - origin.y) / direction.y)
+	var hit: Vector3 = found
 	if not _magnet.is_empty():
 		return _nearest_candidate(hit)
 	var cell := _geometry.cell_at(hit)

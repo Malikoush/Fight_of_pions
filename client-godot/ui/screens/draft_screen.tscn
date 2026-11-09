@@ -1,0 +1,189 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/screens/draft_screen.gd" id="1_draft"]
+[ext_resource type="Script" path="res://ui/components/draft_steps.gd" id="2_steps"]
+[ext_resource type="Script" path="res://ui/components/draft_arsenal.gd" id="3_arsenal"]
+[ext_resource type="Script" path="res://ui/components/snake_order.gd" id="4_snake"]
+
+[node name="DraftScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_draft")
+
+[node name="Page" type="MarginContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Column" type="VBoxContainer" parent="Page"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"ColumnM"
+
+[node name="Header" type="HBoxContainer" parent="Page/Column"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RowM"
+
+[node name="Back" type="Button" parent="Page/Column/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"IconButton"
+
+[node name="Steps" type="HBoxContainer" parent="Page/Column/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("2_steps")
+
+[node name="Opponent" type="PanelContainer" parent="Page/Column"]
+layout_mode = 2
+theme_type_variation = &"GamePanel"
+
+[node name="OpponentRow" type="HBoxContainer" parent="Page/Column/Opponent"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RowM"
+
+[node name="OpponentChip" type="TextureRect" parent="Page/Column/Opponent/OpponentRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="OpponentText" type="VBoxContainer" parent="Page/Column/Opponent/OpponentRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+mouse_filter = 2
+theme_type_variation = &"ColumnXS"
+
+[node name="OpponentName" type="Label" parent="Page/Column/Opponent/OpponentRow/OpponentText"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"NameLabel"
+
+[node name="StatusRow" type="HBoxContainer" parent="Page/Column/Opponent/OpponentRow/OpponentText"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RowXS"
+
+[node name="Hourglass" type="TextureRect" parent="Page/Column/Opponent/OpponentRow/OpponentText/StatusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Status" type="Label" parent="Page/Column/Opponent/OpponentRow/OpponentText/StatusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="OpponentCards" type="HBoxContainer" parent="Page/Column/Opponent/OpponentRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+script = ExtResource("3_arsenal")
+
+[node name="Title" type="Label" parent="Page/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+autowrap_mode = 3
+
+[node name="Help" type="Label" parent="Page/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="Snake" type="HBoxContainer" parent="Page/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("4_snake")
+
+[node name="Filters" type="ScrollContainer" parent="Page/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_scroll_mode = 3
+vertical_scroll_mode = 0
+
+[node name="FilterRow" type="HBoxContainer" parent="Page/Column/Filters"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RowS"
+
+[node name="Cards" type="ScrollContainer" parent="Page/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 3
+vertical_scroll_mode = 3
+
+[node name="GridInset" type="MarginContainer" parent="Page/Column/Cards"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"CardGridInset"
+
+[node name="Grid" type="GridContainer" parent="Page/Column/Cards/GridInset"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"CardGrid"
+
+[node name="Mine" type="PanelContainer" parent="Page/Column"]
+layout_mode = 2
+theme_type_variation = &"GamePanel"
+
+[node name="MineRow" type="HBoxContainer" parent="Page/Column/Mine"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RowM"
+
+[node name="MineText" type="VBoxContainer" parent="Page/Column/Mine/MineRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+mouse_filter = 2
+theme_type_variation = &"ColumnXS"
+
+[node name="MineTitle" type="Label" parent="Page/Column/Mine/MineRow/MineText"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"GoldCapsLabel"
+autowrap_mode = 3
+
+[node name="MinePlan" type="Label" parent="Page/Column/Mine/MineRow/MineText"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="MyCards" type="HBoxContainer" parent="Page/Column/Mine/MineRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+script = ExtResource("3_arsenal")
+
+[node name="Play" type="Button" parent="Page/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"

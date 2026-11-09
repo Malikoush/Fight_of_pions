@@ -6,6 +6,8 @@ extends RefCounted
 const ICON_DIR := "res://assets/elements/icones/"
 const PION_DIR := "res://assets/elements/pions/"
 const BOARD_DIR := "res://assets/elements/plateau/"
+## L'icône du sablier : on attend (l'adversaire, une recharge, un ami).
+const HOURGLASS := "sablier"
 
 
 static func label(text: String, variation: StringName = &"") -> Label:
@@ -108,6 +110,13 @@ static func limit_width(child: Control, max_width: float) -> CenterContainer:
 		child.custom_minimum_size.x = minf(max_width, available) if available > 0.0 else max_width
 	center.resized.connect(fit)
 	return center
+
+
+## Retire et libère tous les enfants de ce nœud, tout de suite hors de sa mise en page.
+static func clear(node: Node) -> void:
+	for child in node.get_children():
+		node.remove_child(child)
+		child.queue_free()
 
 
 ## Un vide qui prend toute la place libre de sa boîte.

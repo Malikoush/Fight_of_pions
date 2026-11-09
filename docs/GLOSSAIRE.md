@@ -172,8 +172,9 @@ Le labo est entièrement en français, noms du code compris.
 | Terme du jeu | Nom dans le code | Rôle |
 |---|---|---|
 | Cache secrète | `DraftStep::Cache` | Les cartes (1 par défaut) que chaque joueur choisit dans tout le catalogue avant le draft ; cachées à l'adversaire jusqu'à ce qu'elles soient lancées pour la première fois (`ArsenalSlot::is_secret`, `Event::CardRevealed`, `Game::arsenal_seen_by`, `Game::with_secrets_guessed`) |
-| Vue joueur | `PlayerView`, `BoardView`, `SideView`, `Game::view`, `Event::seen_by`, `Event::CardCached`, `Game::visible_draft_pool` | Ce qu'un joueur voit de la partie, prêt à envoyer en JSON : tout l'affichage, la décision attendue et ses coups permis, jamais la cache adverse pas encore lancée ni les cartes tirées pendant le choix des caches |
-| Draft | `GameConfig::draft`, `DraftRules`, `DraftStep`, `Decision::Draft`, `Action::Draft`, `Event::Drafted`, `Game::draft_pool` | Avant la partie : la cache, puis des cartes tirées avec la graine (10 par défaut), bannies et prises dans l'ordre des étapes (1 ban chacun, 3 picks en serpent) |
+| Vue joueur | `PlayerView`, `BoardView`, `SideView`, `Game::view`, `Event::seen_by`, `Event::CardCached`, `Game::visible_draft_pool`, `Game::draft_history_seen_by` | Ce qu'un joueur voit de la partie, prêt à envoyer en JSON : tout l'affichage, la décision attendue et ses coups permis, jamais la cache adverse pas encore lancée ni les cartes tirées pendant le choix des caches |
+| Draft | `GameConfig::draft`, `DraftRules`, `DraftStep`, `Decision::Draft`, `Action::Draft`, `Event::Drafted`, `Game::draft_pool` | Avant la partie : des cartes tirées avec la graine (10 par défaut), bannies et prises dans l'ordre des étapes (1 ban chacun, 3 picks en serpent), puis la cache, choisie dans tout le catalogue |
+| Historique du draft | `DraftEntry`, `PlayerView::draft_history`, `Game::draft_history_seen_by` | Les choix déjà faits du draft, dans l'ordre des étapes, avec leur carte (celle de la cache adverse cachée) ; leur nombre est le rang de l'étape en cours |
 | Gacha, collection | hors moteur | Le moteur reçoit les cartes déjà choisies |
 
 ## Serveur
@@ -244,7 +245,12 @@ Le client (`client-godot/`) est en anglais dans le code, comme le moteur ; ses c
 | Cases du code, champ du code | `CodeBoxes`, `CodeField` | Le code d'une salle, une case par caractère : les cases le montrent (salle d'attente), le champ le fait taper au clavier (rejoindre, accueil en paysage) |
 | En-tête de page | `PageHeader` | Le bouton retour et le titre d'une page (rejoindre, salle d'attente) |
 | Joueur de la salle | `LobbySeat` | Dans la salle d'attente : la case et le palet d'un joueur assis, ou sa place libre en pointillés, avec son nom et s'il est prêt |
+| Barre des étapes, ordre en serpent, arsenal du draft | `DraftSteps`, `SnakeOrder`, `DraftArsenal` | Au draft : les phases en losanges numérotés, l'ordre des picks en palets, l'arsenal d'un joueur et ses places encore vides |
 | Dessin d'éléments | `ElementArt` | Un petit dessin fait des éléments du plateau fournis (cases, palets, places libres), posés par leur ancre |
+| File des vues | `ViewQueue` | Les vues de la partie qui attendent la fin de l'animation de la précédente ; une carte qui part coup par coup n'y montre que sa dernière vue |
+| Mise en page de la partie, gestes | `GameLayout`, `BoardGestures` | Les éléments de l'écran de partie et leurs boîtes (portrait, paysage) ; les gestes sur le plateau, seul endroit où un toucher devient un coup |
+| Caméra, marques du plateau | `BoardCamera`, `BoardMarks` | Le cadrage du plateau et la case sous un toucher ; ce qui se pose sur les cases sans être une pièce (survol, refus, marques, éclats, tir) |
+| Pastille d'état | `StatusPill` | Un sablier d'or et un texte : le tour de la partie, « Le bot réfléchit… » |
 | Session | `Session`, `Session.SAVE_PATH` | Ce que le client sait de la partie en cours en plus de la vue : l'adversaire (bot ou ami, nom, présent), la salle à lancer, le bot en panne, le catalogue ; écrite seulement par ses méthodes ; son mode et l'attente du lancement sont gardés sur l'appareil avec la place |
 | Place gardée | `ServerLink.has_saved_seat`, `forget_seat`, `user://seat.cfg` | Le code, le joueur et la clé de sa place, gardés sur l'appareil pour la reprendre après une coupure |
 | Catégorie de refus | `ServerErrors.Category` | Ce qu'un refus du serveur demande au client : place perdue, place reprise ailleurs, vue en retard, code refusé, bot muet, serveur complet, autre |

@@ -328,3 +328,87 @@ fn a_guess_replaces_only_the_opponent_secret_cards() {
     assert_eq!(guessed.arsenal(Player::Two)[0].attack(), ours);
     assert_eq!(guessed.board(), game.board());
 }
+
+#[test]
+fn the_history_keeps_each_choice_in_step_order_and_the_next_step_follows_it() {
+    let mut game = game_with(drafted());
+    assert!(game.draft_history_seen_by(Player::One).is_empty());
+    let steps = DraftRules::standard().steps;
+    let mut chosen = Vec::new();
+    for _ in 0..3 {
+        let card = first_choice(&game);
+        game.apply(Action::Draft(card)).unwrap();
+        chosen.push(card);
+    }
+    let history = game.draft_history_seen_by(Player::One);
+    assert_eq!(history.len(), 3);
+    for (index, entry) in history.iter().enumerate() {
+        assert_eq!(entry.step, steps[index]);
+        assert_eq!(entry.attack, Some(chosen[index]));
+    }
+    // L'étape en cours est celle qui suit les choix faits.
+    assert_eq!(game.draft_step(), Some(steps[history.len()]));
+    // Les bans et les picks sont publics.
+    assert_eq!(game.draft_history_seen_by(Player::Two), history);
+}
+
+#[test]
+fn the_history_hides_the_opponent_cache_but_not_ones_own() {
+    let mut game = game_with(drafted());
+    draft_until_the_caches(&mut game);
+    let card = first_choice(&game);
+    let Some(Decision::Draft { step }) = game.pending_decision() else {
+        panic!("le choix de la cache était attendu");
+    };
+    game.apply(Action::Draft(card)).unwrap();
+    let owner = step.player();
+    let own = game.draft_history_seen_by(owner);
+    let seen = game.draft_history_seen_by(owner.opponent());
+    assert_eq!(own.last().map(|entry| entry.attack), Some(Some(card)));
+    assert_eq!(
+        seen.last().map(|entry| (entry.step, entry.attack)),
+        Some((step, None))
+    );
+    // Le reste de l'historique est le même pour les deux.
+    assert_eq!(own[..own.len() - 1], seen[..seen.len() - 1]);
+    // La vue dit la même chose.
+    assert_eq!(game.view(owner.opponent()).draft_history, seen);
+}
+
+#[test]
+fn the_history_is_gone_once_the_game_starts() {
+    let mut game = game_with(drafted());
+    while game.draft_step().is_some() {
+        let card = first_choice(&game);
+        game.apply(Action::Draft(card)).unwrap();
+    }
+    assert!(game.draft_history_seen_by(Player::One).is_empty());
+    assert!(game.view(Player::One).draft_history.is_empty());
+}
+
+#[test]
+fn a_guessed_game_keeps_nothing_of_the_real_cache_in_the_history() {
+    let config = GameConfig {
+        wall_thickness: 0,
+        draft: Some(DraftRules::new(0, &[DraftPhase::Caches(1)])),
+        ..GameConfig::default()
+    };
+    let mut game = game_with(config);
+    // J1 a mis un Lièvre en cache ; J2 doit encore choisir la sienne.
+    game.apply(Action::Draft(hare())).unwrap();
+    let ours = Attack {
+        kind: AttackKind::Ours,
+        rarity: Rarity::Rare,
+    };
+    let guessed = game.with_secrets_guessed(Player::Two, || ours);
+    assert_eq!(
+        game.draft_history_seen_by(Player::One)[0].attack,
+        Some(hare())
+    );
+    // La partie devinée par J2 ne connaît que sa supposition, même vue par J1.
+    assert_eq!(
+        guessed.draft_history_seen_by(Player::One)[0].attack,
+        Some(ours)
+    );
+    assert_eq!(guessed.draft_history_seen_by(Player::Two)[0].attack, None);
+}

@@ -305,6 +305,26 @@ func draft_steps() -> Array:
 	return rules.get("steps", []) if rules is Dictionary else []
 
 
+## Les choix déjà faits du draft, dans l'ordre des étapes (`[{"step": {"Ban": "Two"},
+## "attack": {…}}, …]`) ; `attack` vaut `null` pour la cache de l'adversaire.
+func draft_history() -> Array:
+	return raw.get("draft_history", [])
+
+
+## Le rang de l'étape en cours du draft dans `draft_steps` : le nombre de choix faits.
+func draft_step_index() -> int:
+	return draft_history().size()
+
+
+## La place de cette carte dans le catalogue de la partie (l'ordre des cartes tirées), ou -1.
+func catalog_index(attack: Variant) -> int:
+	var entries: Array = config().get("attack_catalog", [])
+	for index in entries.size():
+		if entries[index] is Dictionary and entries[index].get("attack") == attack:
+			return index
+	return -1
+
+
 ## Les cartes de départ de ce joueur, avant le draft.
 func starting_attacks(player: String) -> Array:
 	var starting: Array = config().get("starting_attacks", [[], []])

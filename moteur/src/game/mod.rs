@@ -27,4 +27,4 @@ pub(crate) use lasting::{cancellable_plays_on, has_effect_of, is_child, pion_has
 pub use record::{GameRecord, ReplayError};
 pub use state::Game;
 pub use tokens::{TokenPile, TokenReward};
-pub use view::{BoardView, PlayerView, SideView};
+pub use view::{BoardView, DraftEntry, PlayerView, SideView};

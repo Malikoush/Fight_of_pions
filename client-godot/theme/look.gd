@@ -190,8 +190,9 @@ const CARD_LIFT := 10.0
 const CARD_LIFT_TIME := 0.12
 ## Le voile d'une carte en recharge, sous le sablier.
 const CARD_COOLDOWN_SHADE := Color(FOREST_DEEP, 0.78)
-const FONT_CARD_NAME := 12
-const FONT_CARD_COST := 17
+## Sur une carte, le nom et le coût prennent cette part de la hauteur de leur zone (le
+## ruban, le losange) : ils grandissent et rapetissent avec la carte.
+const CARD_TEXT_SHARE := 0.8
 const FONT_CARD_TAG := 11
 
 ## Les badges des pions, par-dessus le plateau : leur taille suit celle d'une case à l'écran
@@ -228,10 +229,25 @@ const CAPTION_LINES := 3
 const PLAY_BUTTON_STRETCH := 2.0
 ## Le draft : la largeur des cartes de la grille, celle des petites cartes des arsenaux, et
 ## la largeur maximale de l'écran sur un PC ; la hauteur des boutons de filtre.
-const DRAFT_CARD_WIDTH := 84.0
-const DRAFT_MINI_CARD := 34.0
+const DRAFT_CARD_WIDTH := 76.0
+const DRAFT_MINI_CARD := 38.0
+## Les cartes de l'adversaire, plus petites que les miennes (maquettes).
+const DRAFT_OPPONENT_CARD := 26.0
 const DRAFT_MAX_WIDTH := 760
 const FILTER_HEIGHT := 40
+## Le draft (maquettes 1-5, p. 7 à 9) :
+## - la barre des étapes : la taille d'un losange numéroté, l'épaisseur du trait qui les relie ;
+const STEP_DIAMOND := 32.0
+const STEP_LINE := 2.0
+## - l'écart entre deux rangées de cartes, assez grand pour leurs étiquettes ;
+const DRAFT_ROW_GAP := 18
+## - la marge de la grille sur ses côtés, pour le contour d'or des cartes du bord ;
+const CARD_GRID_SIDE := GAP_XS
+## - une carte bannie, plus sombre qu'une carte prise ;
+const CARD_BANNED := Color(0.32, 0.32, 0.32)
+## - l'ordre des picks en serpent : la taille d'un palet, et un pick passé, en retrait.
+const SNAKE_CHIP := Vector2(34, 24)
+const SNAKE_PAST_ALPHA := 0.45
 ## Le code d'une salle : sa taille de police, et la largeur du champ où on le tape.
 const FONT_CODE := 34
 const CODE_INPUT_WIDTH := 260
