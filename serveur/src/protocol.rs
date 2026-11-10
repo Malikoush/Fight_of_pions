@@ -5,10 +5,11 @@
 
 use crate::ServerError;
 use crate::cards::CardFamily;
-use fight_of_pions::{Action, Event, Player, PlayerView};
+use fight_of_pions::{Action, Attack, Event, Player, PlayerView};
 use serde::{Deserialize, Serialize};
 
-/// Un message du client.
+/// Un message du client. Créer ou rejoindre une salle demande d'être connecté à son compte
+/// (`register` la première fois, puis `login`) : la cache se choisit parmi ses cartes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClientMessage {
@@ -55,6 +56,33 @@ pub enum ClientMessage {
     /// Demander le catalogue des cartes ([`ServerMessage::Cards`]) : leurs noms et leurs
     /// textes, à afficher. Possible à tout moment, assis ou non.
     Cards,
+    /// Créer un compte invité et s'y connecter. La réponse ([`ServerMessage::Account`])
+    /// donne son jeton, une seule fois : le client le garde pour revenir avec `login`.
+    Register {
+        /// Le pseudo ; sans pseudo, « Pion » et quatre chiffres.
+        #[serde(default)]
+        pseudo: Option<String>,
+    },
+    /// Se connecter à son compte. Réponses : [`ServerMessage::Account`] (sans jeton), puis
+    /// [`ServerMessage::Collection`].
+    Login {
+        /// Le jeton reçu à la création du compte.
+        token: String,
+    },
+    /// Changer son pseudo. Réponse : [`ServerMessage::Account`].
+    SetPseudo {
+        /// Le nouveau pseudo.
+        pseudo: String,
+    },
+    /// Redemander sa collection ([`ServerMessage::Collection`]).
+    Collection,
+    /// Ranger son trio de cache : jusqu'à 3 cartes différentes de sa collection ; vide, la
+    /// serveur tire 3 cartes de sa collection au hasard à chaque partie. Réponse : [`ServerMessage::Collection`].
+    /// Le trio compte pour les salles créées ou rejointes ensuite.
+    SetCacheTrio {
+        /// Les cartes, dans l'ordre voulu.
+        cards: Vec<Attack>,
+    },
 }
 
 /// L'adversaire choisi en créant une salle.
@@ -110,6 +138,32 @@ pub enum ServerMessage {
     Opponent {
         /// Vrai s'il est branché.
         connected: bool,
+    },
+    /// Le compte de cette connexion, après `register`, `login` ou `set_pseudo`.
+    Account {
+        /// Son numéro, stable.
+        id: i64,
+        /// Son pseudo.
+        pseudo: String,
+        /// Son jeton secret, seulement en réponse à `register` : le client doit le garder,
+        /// le serveur ne le redonnera jamais.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        token: Option<String>,
+    },
+    /// Ce que possède le compte : après `register`, `login`, `collection` ou
+    /// `set_cache_trio`.
+    Collection {
+        /// Ses cartes, dans l'ordre des familles puis des raretés.
+        cards: Vec<Attack>,
+        /// Son trio de cache, de 0 à 3 cartes.
+        cache_trio: Vec<Attack>,
+    },
+    /// La partie vient de finir et le gagnant a gagné cette carte : elle est dans sa
+    /// collection. Seulement au gagnant d'un autre compte ou du MCTS (pas du bot aléatoire),
+    /// et s'il lui manque encore une carte du catalogue de la partie.
+    Reward {
+        /// La carte gagnée.
+        card: Attack,
     },
     /// Une demande refusée ; rien n'a changé. Arrive aussi sans demande si le bot du
     /// serveur ne peut plus jouer.

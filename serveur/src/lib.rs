@@ -7,21 +7,30 @@
 //! aperçu ne la sonde pas. Les règles restent dans le moteur, les bots dans `bots`.
 //!
 //! - `protocol` : les messages ;
+//! - `account` : les comptes invités (pseudo, jeton) ;
+//! - `collection` : les cartes d'un compte, son trio de cache, le paquet de départ ;
+//! - `database` : la base SQLite des comptes ;
 //! - `cards` : le catalogue des cartes à afficher (noms et textes, tirés de `data/cartes.json`) ;
 //! - `limits` : les limites du serveur (taille des messages, salles, bots) ;
 //! - `room` : une partie et ses places, sans réseau ;
 //! - `lobby` : les salles ouvertes, et la diffusion des vues ;
-//! - `connection` : une WebSocket.
+//! - `connection` : une WebSocket ;
+//! - `random` : le hasard des codes, des clés et des jetons.
 
+mod account;
 mod cards;
+mod collection;
 mod connection;
+mod database;
 mod error;
 mod limits;
 mod lobby;
 mod protocol;
+mod random;
 mod room;
 
 pub use cards::{CardFamily, CardRarity};
+pub use database::Database;
 pub use error::ServerError;
 pub use protocol::{ClientMessage, Opponent, ServerMessage};
 
@@ -33,20 +42,28 @@ use axum::routing::get;
 use lobby::Lobby;
 use std::sync::Arc;
 
-/// Le routeur du serveur : la WebSocket du jeu sur `/ws`, et `/health` pour l'hébergeur.
-pub fn app() -> Router {
+/// Ce que partagent toutes les connexions : les salles, et la base des comptes.
+#[derive(Clone)]
+struct Shared {
+    lobby: Arc<Lobby>,
+    database: Database,
+}
+
+/// Le routeur du serveur, avec cette base : la WebSocket du jeu sur `/ws`, et `/health`
+/// pour l'hébergeur.
+pub fn app(database: Database) -> Router {
     Router::new()
         .route("/ws", get(websocket))
         .route("/health", get(|| async { "ok" }))
-        .with_state(Arc::new(Lobby::default()))
+        .with_state(Shared {
+            lobby: Arc::new(Lobby::default()),
+            database,
+        })
 }
 
-async fn websocket(
-    upgrade: WebSocketUpgrade,
-    State(lobby): State<Arc<Lobby>>,
-) -> impl IntoResponse {
+async fn websocket(upgrade: WebSocketUpgrade, State(shared): State<Shared>) -> impl IntoResponse {
     upgrade
         .max_message_size(limits::MAX_MESSAGE_BYTES)
         .max_frame_size(limits::MAX_MESSAGE_BYTES)
-        .on_upgrade(move |socket| connection::serve(socket, lobby))
+        .on_upgrade(move |socket| connection::serve(socket, shared.lobby, shared.database))
 }

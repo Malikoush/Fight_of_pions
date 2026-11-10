@@ -1,9 +1,10 @@
 //! Le serveur de bout en bout, sur une vraie WebSocket : des clients qui ne connaissent
-//! aucune règle et jouent les coups que le serveur leur propose.
+//! aucune règle et jouent les coups que le serveur leur propose. Chaque serveur a sa base,
+//! en mémoire.
 
-use fight_of_pions::{Action, Decision, DraftStep, Event, Player, PlayerView};
+use fight_of_pions::{Action, Attack, Decision, DraftStep, Event, Player, PlayerView};
 use futures_util::{SinkExt, StreamExt};
-use serveur::{ClientMessage, Opponent, ServerMessage};
+use serveur::{ClientMessage, Database, Opponent, ServerMessage};
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
@@ -12,7 +13,8 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 async fn start_server() -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    tokio::spawn(async move { axum::serve(listener, serveur::app()).await.unwrap() });
+    let database = Database::in_memory().await.unwrap();
+    tokio::spawn(async move { axum::serve(listener, serveur::app(database)).await.unwrap() });
     format!("ws://{address}/ws")
 }
 
@@ -24,6 +26,39 @@ impl Client {
     async fn connect(url: &str) -> Client {
         let (socket, _) = connect_async(url).await.unwrap();
         Client { socket }
+    }
+
+    /// Un client connecté à un compte neuf, qui a reçu son compte et sa collection.
+    async fn registered(url: &str) -> Client {
+        let mut client = Client::connect(url).await;
+        client.send(ClientMessage::Register { pseudo: None }).await;
+        client.account().await;
+        client.collection().await;
+        client
+    }
+
+    /// Le prochain message, qui doit être un compte : son numéro, son pseudo, son jeton.
+    async fn account(&mut self) -> (i64, String, Option<String>) {
+        match self.receive().await {
+            ServerMessage::Account { id, pseudo, token } => (id, pseudo, token),
+            other => panic!("un compte était attendu, reçu : {other:?}"),
+        }
+    }
+
+    /// Le prochain message, qui doit être une collection : ses cartes et son trio.
+    async fn collection(&mut self) -> (Vec<Attack>, Vec<Attack>) {
+        match self.receive().await {
+            ServerMessage::Collection { cards, cache_trio } => (cards, cache_trio),
+            other => panic!("une collection était attendue, reçu : {other:?}"),
+        }
+    }
+
+    /// Le prochain message, qui doit être une erreur : sa sorte.
+    async fn error_kind(&mut self) -> String {
+        match self.receive().await {
+            ServerMessage::Error { kind, .. } => kind,
+            other => panic!("une erreur était attendue, reçu : {other:?}"),
+        }
     }
 
     async fn send(&mut self, message: ClientMessage) {
@@ -93,7 +128,7 @@ fn simple_choice(view: &PlayerView) -> Action {
 #[tokio::test]
 async fn two_humans_play_and_each_sees_only_its_own_cache() {
     let url = start_server().await;
-    let mut one = Client::connect(&url).await;
+    let mut one = Client::registered(&url).await;
     one.send(ClientMessage::Create {
         opponent: Opponent::Human,
         variant: None,
@@ -109,7 +144,7 @@ async fn two_humans_play_and_each_sees_only_its_own_cache() {
         })
     );
 
-    let mut two = Client::connect(&url).await;
+    let mut two = Client::registered(&url).await;
     two.send(ClientMessage::Join {
         code: code.to_lowercase(),
     })
@@ -167,7 +202,7 @@ async fn two_humans_play_and_each_sees_only_its_own_cache() {
 #[tokio::test]
 async fn requests_out_of_turn_or_out_of_a_room_are_refused() {
     let url = start_server().await;
-    let mut client = Client::connect(&url).await;
+    let mut client = Client::registered(&url).await;
     client.play(Action::EndTurn).await;
     assert!(client.error().await.contains("salle"));
     client
@@ -191,7 +226,7 @@ async fn requests_out_of_turn_or_out_of_a_room_are_refused() {
         .await;
     let (code, _, _) = client.seated().await;
     client.state().await;
-    let mut other = Client::connect(&url).await;
+    let mut other = Client::registered(&url).await;
     other.send(ClientMessage::Join { code }).await;
     other.seated().await;
     other.state().await;
@@ -203,7 +238,7 @@ async fn requests_out_of_turn_or_out_of_a_room_are_refused() {
 #[ignore = "fait jouer un bot une partie entière : à lancer à la main"]
 async fn a_whole_game_against_a_server_bot() {
     let url = start_server().await;
-    let mut client = Client::connect(&url).await;
+    let mut client = Client::registered(&url).await;
     client
         .send(ClientMessage::Create {
             opponent: Opponent::Random,
@@ -226,7 +261,7 @@ async fn a_whole_game_against_a_server_bot() {
 #[tokio::test]
 async fn a_player_gets_its_seat_back_with_its_key() {
     let url = start_server().await;
-    let mut client = Client::connect(&url).await;
+    let mut client = Client::registered(&url).await;
     client
         .send(ClientMessage::Create {
             opponent: Opponent::Human,
@@ -256,7 +291,7 @@ async fn a_player_gets_its_seat_back_with_its_key() {
 #[tokio::test]
 async fn the_card_catalog_is_sent_on_request_even_without_a_seat() {
     let url = start_server().await;
-    let mut client = Client::connect(&url).await;
+    let mut client = Client::registered(&url).await;
     client.send(ClientMessage::Cards).await;
     let cards = match client.receive().await {
         ServerMessage::Cards { cards } => cards,
@@ -289,7 +324,7 @@ async fn the_card_catalog_is_sent_on_request_even_without_a_seat() {
 #[tokio::test]
 async fn each_player_learns_when_the_other_arrives_and_leaves() {
     let url = start_server().await;
-    let mut one = Client::connect(&url).await;
+    let mut one = Client::registered(&url).await;
     one.send(ClientMessage::Create {
         opponent: Opponent::Human,
         variant: None,
@@ -298,7 +333,7 @@ async fn each_player_learns_when_the_other_arrives_and_leaves() {
     let (code, _, _) = one.seated().await;
     one.state().await;
 
-    let mut two = Client::connect(&url).await;
+    let mut two = Client::registered(&url).await;
     two.send(ClientMessage::Join { code }).await;
     two.seated().await;
     assert!(matches!(
@@ -318,5 +353,193 @@ async fn each_player_learns_when_the_other_arrives_and_leaves() {
     assert_eq!(
         one.receive_any().await,
         ServerMessage::Opponent { connected: false }
+    );
+}
+
+/// Une partie entre deux humains, jouée au plus simple jusqu'à la cache de J1 (choisie en
+/// dernier) ; rend les deux clients et la vue de chacun.
+async fn draft_until_the_first_cache(
+    mut one: Client,
+    mut two: Client,
+) -> (Client, Client, PlayerView, PlayerView) {
+    one.send(ClientMessage::Create {
+        opponent: Opponent::Human,
+        variant: None,
+    })
+    .await;
+    let (code, _, _) = one.seated().await;
+    let (mut view_of_one, _) = one.state().await;
+    two.send(ClientMessage::Join { code }).await;
+    two.seated().await;
+    let (mut view_of_two, _) = two.state().await;
+    loop {
+        let step = match view_of_one.decision {
+            Some(Decision::Draft {
+                step: DraftStep::Cache(_),
+            }) => break,
+            Some(Decision::Draft { step }) => step,
+            other => panic!("un choix de draft était attendu, reçu : {other:?}"),
+        };
+        if step.player() == Player::One {
+            one.play(simple_choice(&view_of_one)).await;
+        } else {
+            two.play(simple_choice(&view_of_two)).await;
+        }
+        view_of_one = one.state().await.0;
+        view_of_two = two.state().await.0;
+    }
+    (one, two, view_of_one, view_of_two)
+}
+
+/// Les cartes que ce joueur peut choisir au draft, triées.
+fn draft_choices(view: &PlayerView) -> Vec<Attack> {
+    let mut cards: Vec<Attack> = view
+        .legal_actions
+        .iter()
+        .map(|action| match action {
+            Action::Draft(card) => *card,
+            other => panic!("un choix de draft était attendu, reçu : {other:?}"),
+        })
+        .collect();
+    cards.sort_unstable();
+    cards
+}
+
+#[tokio::test]
+async fn an_account_is_created_once_then_found_again_with_its_token() {
+    let url = start_server().await;
+    let mut first = Client::connect(&url).await;
+    first
+        .send(ClientMessage::Register {
+            pseudo: Some("  Martin ".to_string()),
+        })
+        .await;
+    let (id, pseudo, token) = first.account().await;
+    assert_eq!(pseudo, "Martin");
+    let token = token.expect("le jeton est donné à la création");
+    let (cards, trio) = first.collection().await;
+    assert!(!cards.is_empty(), "le paquet de départ");
+    assert!(trio.is_empty());
+    first.send(ClientMessage::Register { pseudo: None }).await;
+    assert_eq!(first.error_kind().await, "already_logged_in");
+    drop(first);
+
+    let mut again = Client::connect(&url).await;
+    again
+        .send(ClientMessage::Login {
+            token: "faux".to_string(),
+        })
+        .await;
+    assert_eq!(again.error_kind().await, "unknown_account");
+    again.send(ClientMessage::Login { token }).await;
+    assert_eq!(again.account().await, (id, "Martin".to_string(), None));
+    assert_eq!(again.collection().await, (cards, trio));
+
+    again
+        .send(ClientMessage::SetPseudo {
+            pseudo: "<b>".to_string(),
+        })
+        .await;
+    assert_eq!(again.error_kind().await, "bad_pseudo");
+    again
+        .send(ClientMessage::SetPseudo {
+            pseudo: "Martin le Pion".to_string(),
+        })
+        .await;
+    assert_eq!(
+        again.account().await,
+        (id, "Martin le Pion".to_string(), None)
+    );
+}
+
+#[tokio::test]
+async fn a_room_needs_an_account() {
+    let url = start_server().await;
+    let mut guest = Client::connect(&url).await;
+    guest
+        .send(ClientMessage::Create {
+            opponent: Opponent::Human,
+            variant: None,
+        })
+        .await;
+    assert_eq!(guest.error_kind().await, "not_logged_in");
+    guest.send(ClientMessage::Collection).await;
+    assert_eq!(guest.error_kind().await, "not_logged_in");
+    guest
+        .send(ClientMessage::Join {
+            code: "ZZZZZ".to_string(),
+        })
+        .await;
+    assert_eq!(guest.error_kind().await, "not_logged_in");
+}
+
+#[tokio::test]
+async fn a_trio_holds_up_to_three_owned_cards() {
+    let url = start_server().await;
+    let mut client = Client::connect(&url).await;
+    client.send(ClientMessage::Register { pseudo: None }).await;
+    client.account().await;
+    let (cards, _) = client.collection().await;
+    let legendary = Attack {
+        kind: fight_of_pions::AttackKind::Ours,
+        rarity: fight_of_pions::Rarity::Legendary,
+    };
+    assert!(!cards.contains(&legendary));
+    client
+        .send(ClientMessage::SetCacheTrio {
+            cards: vec![cards[0], legendary],
+        })
+        .await;
+    assert_eq!(client.error_kind().await, "not_owned");
+    client
+        .send(ClientMessage::SetCacheTrio {
+            cards: cards[..4].to_vec(),
+        })
+        .await;
+    assert_eq!(client.error_kind().await, "bad_cache_trio");
+    let trio = vec![cards[2], cards[0]];
+    client
+        .send(ClientMessage::SetCacheTrio {
+            cards: trio.clone(),
+        })
+        .await;
+    assert_eq!(client.collection().await, (cards.clone(), trio.clone()));
+    client.send(ClientMessage::Collection).await;
+    assert_eq!(client.collection().await, (cards, trio));
+}
+
+#[tokio::test]
+async fn each_player_caches_one_of_its_own_cards() {
+    let url = start_server().await;
+    // J1 a rangé un trio ; J2 non : le serveur lui tire 3 de ses cartes au hasard.
+    let mut one = Client::connect(&url).await;
+    one.send(ClientMessage::Register { pseudo: None }).await;
+    one.account().await;
+    let (cards, _) = one.collection().await;
+    let trio = vec![cards[5], cards[1]];
+    one.send(ClientMessage::SetCacheTrio {
+        cards: trio.clone(),
+    })
+    .await;
+    one.collection().await;
+    let mut two = Client::connect(&url).await;
+    two.send(ClientMessage::Register { pseudo: None }).await;
+    two.account().await;
+    let (cards_of_two, _) = two.collection().await;
+
+    let (mut one, mut two, view_of_one, _) = draft_until_the_first_cache(one, two).await;
+    assert_eq!(draft_choices(&view_of_one), [cards[1], cards[5]]);
+    let not_in_trio = Action::Draft(cards[0]);
+    one.play(not_in_trio).await;
+    assert!(one.error().await.contains("draft"));
+    one.play(Action::Draft(cards[5])).await;
+    one.state().await;
+    let (view_of_two, _) = two.state().await;
+    let choices_of_two = draft_choices(&view_of_two);
+    assert_eq!(choices_of_two.len(), 3);
+    assert!(
+        choices_of_two
+            .iter()
+            .all(|card| cards_of_two.contains(card))
     );
 }

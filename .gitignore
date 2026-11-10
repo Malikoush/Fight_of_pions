@@ -6,3 +6,8 @@
 
 # Maquettes : seuls les fichiers décompressés sont versionnés, pas les archives.
 /design/**/*.zip
+
+# La base locale du serveur (cargo serveur), créée au premier lancement.
+*.db
+*.db-shm
+*.db-wal

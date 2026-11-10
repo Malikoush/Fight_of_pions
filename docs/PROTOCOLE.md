@@ -11,6 +11,8 @@ Ce que doit savoir un client (Godot, sur le web, le PC ou le mobile) pour jouer 
 - Une vue complète (configuration et catalogue compris) peut approcher la mémoire de réception par défaut de Godot (64 Kio) : le client Godot en prend 1 Mio.
 - Les coups reçus se renvoient tels quels. Un client dont le JSON lit les nombres en flottants (Godot) doit les réécrire en entiers : le serveur refuse `{"row":3.0}`.
 - `GET /health` répond `ok` (pour l'hébergeur).
+- **Un compte d'abord** : créer ou rejoindre une salle demande d'être connecté à son compte. La première fois, le client envoie `register` et garde le jeton reçu (`account.token`) ; ensuite, à chaque connexion (et après chaque coupure), il envoie `login` avec ce jeton, avant ses autres demandes. `cards` et `rejoin` n'en ont pas besoin.
+- La base des comptes est le fichier de `DATABASE_URL` (par défaut `sqlite://fight_of_pions.db`, dans le dossier où le serveur est lancé), créé au premier lancement.
 
 ## Messages du client
 
@@ -18,6 +20,11 @@ Chaque message a un champ `type`.
 
 | Message | Exemple | Effet |
 |---|---|---|
+| Créer un compte | `{"type":"register","pseudo":"Martin"}` | Crée un compte invité et s'y connecte. `pseudo` (facultatif) : de 3 à 16 caractères, lettres, chiffres, espaces, `-`, `_`, `.` ; sans pseudo, « Pion » et quatre chiffres. Réponses : `account` **avec son jeton**, puis `collection`. |
+| Se connecter | `{"type":"login","token":"…"}` | Avec le jeton reçu à la création. Réponses : `account` (sans jeton), puis `collection`. |
+| Changer de pseudo | `{"type":"set_pseudo","pseudo":"Martin"}` | Réponse : `account`. |
+| Sa collection | `{"type":"collection"}` | Redemande ses cartes et son trio (réponse `collection`). |
+| Ranger son trio de cache | `{"type":"set_cache_trio","cards":[{"kind":"Ours","rarity":"Common"}]}` | De 0 à 3 cartes différentes de sa collection, dans l'ordre voulu. Au draft, la cache se choisit dans le trio ; si le trio est vide, le serveur tire 3 cartes de la collection au hasard, à chaque partie. Compte pour les salles créées ou rejointes ensuite. Réponse : `collection`. |
 | Créer une salle | `{"type":"create","opponent":"mcts"}` | Le client est joueur 1. `opponent` : `"human"` (un ami rejoint avec le code), `"mcts"` (le bot du serveur) ou `"random"`. `variant` (facultatif) : le nom d'une variante du labo ; par défaut « règles actuelles avec draft ». |
 | Rejoindre | `{"type":"join","code":"K7QXM"}` | Le client prend la place libre (joueur 2). Majuscules ou minuscules. |
 | Reprendre sa place | `{"type":"rejoin","code":"K7QXM","player":"One","key":"…"}` | Après une déconnexion, avec la clé reçue en s'asseyant. |
@@ -53,6 +60,9 @@ Les coups (`action`) ont la forme du moteur. Le client n'a pas à les construire
 | Aperçu | `{"type":"preview","view":{…}}` ou `{"type":"preview","view":null}` | Réponse à un `preview` : la vue après ces coups, ou `null` si le dernier coup finit les choix de la carte (la suite est prête à être jouée). Rien n'est joué, l'adversaire ne voit rien. |
 | Catalogue | `{"type":"cards","cards":[{"kind":"Ours","name":"Ours","reaction":false,"summary":"…","rules":["…"],"rarities":[{"rarity":"Rare","name":"Rare","effect":"…"}]}]}` | Réponse à `cards` : toutes les familles, dans l'ordre des fiches attaques, avec leurs raretés jouables. Les textes viennent de `serveur/data/cartes.json`, les noms du moteur. Le coût et la recharge sont dans la configuration de la partie (`config.attack_catalog` de la vue). |
 | Adversaire | `{"type":"opponent","connected":true}` | L'adversaire humain vient de se brancher sur sa place (`true`) ou de s'en débrancher (`false`). Aussi juste après sa première vue, à celui qui s'assoit, si son adversaire est déjà là. Jamais pour un bot. Sert à la salle d'attente : le créateur d'une salle lance la partie quand son ami est là. |
+| Compte | `{"type":"account","id":12,"pseudo":"Martin","token":"…"}` | Après `register`, `login` ou `set_pseudo`. `token` n'est là qu'après `register` : **le garder**, le serveur ne le redonnera jamais (il n'en garde que l'empreinte). |
+| Collection | `{"type":"collection","cards":[{"kind":"Ours","rarity":"Common"}],"cache_trio":[]}` | Après `register`, `login`, `collection` ou `set_cache_trio` : les cartes que possède le compte (triées par famille puis rareté) et son trio de cache. Un compte neuf reçoit le paquet de départ (`serveur/data/depart.json`). |
+| Récompense | `{"type":"reward","card":{"kind":"Ours","rarity":"Epic"}}` | La partie vient de finir et ce joueur a gagné cette carte, déjà rangée dans sa collection. Seulement au gagnant d'un autre compte ou du MCTS (rien contre le bot aléatoire, contre soi-même, ni pour un nul), et s'il lui manque encore une carte du catalogue de la partie. Arrive juste après la dernière vue ; un gagnant déconnecté la trouvera dans sa collection. |
 | Erreur | `{"type":"error","kind":"not_your_turn","message":"ce n'est pas à toi de jouer"}` | Demande refusée, rien n'a changé. `message` est en français, à afficher ; `kind` est stable, pour réagir sans lire le texte (voir « Les erreurs »). Arrive aussi sans demande, `bot_failed`, si le bot du serveur ne peut plus jouer du tout : la partie attend, et le prochain message du client relance le bot. |
 
 ### La vue (`view`)
@@ -106,6 +116,15 @@ En cas de coupure, le client rouvre une WebSocket et envoie `rejoin` : il retrou
 | `bot_failed` | Le bot du serveur ne peut plus jouer | Afficher le message ; la partie attend |
 | `refused_move` | Le moteur refuse ce coup | Envoyer `sync` |
 | `cards_unavailable` | Le fichier des textes des cartes est mal écrit (un bug du serveur) | Afficher les cartes sans texte |
+| `not_logged_in` | `create`, `join`, `collection`, `set_pseudo` ou `set_cache_trio` sans compte | Envoyer `login` (ou `register`) |
+| `already_logged_in` | `register` ou `login` sur une connexion déjà connectée | Un bug du client |
+| `unknown_account` | Aucun compte n'a ce jeton | Oublier le jeton et proposer de créer un compte |
+| `bad_pseudo` | Pseudo refusé (longueur, signe) | Afficher le message |
+| `not_owned` | Le trio contient une carte que le compte ne possède pas | Redemander `collection` |
+| `bad_cache_trio` | Plus de 3 cartes, ou une carte deux fois | Un bug du client |
+| `nothing_to_cache` | Aucune carte de la collection n'est au catalogue de cette variante | Choisir une autre variante |
+| `storage` | La base n'a pas pu lire ou écrire (détail dans la sortie du serveur) | Réessayer plus tard |
+| `starter_unavailable` | Le fichier du paquet de départ est mal écrit (un bug du serveur) | Réessayer plus tard |
 
 ## Limites actuelles
 
@@ -117,4 +136,6 @@ En cas de coupure, le client rouvre une WebSocket et envoie `rejoin` : il retrou
 - À faire pour la mise en ligne (E4) : une limite de salles par adresse (sinon on remplit le serveur en ouvrant des salles), et une salle « contre un humain » dont le créateur reste connecté ne ferme jamais.
 - Les bots cherchent en parallèle sur les cœurs de la machine moins un ; au-delà, leurs coups attendent leur tour.
 - Ces limites sont dans `serveur/src/limits.rs`.
-- Pas de comptes : la clé de place tient lieu d'identité.
+- Les comptes sont des comptes invités : pas d'e-mail ni de mot de passe. Un client qui perd son jeton (données du navigateur effacées, autre appareil) perd son compte. Deux comptes peuvent avoir le même pseudo.
+- La clé de place reste ce qui donne le droit de reprendre une place (`rejoin`) ; la salle retient aussi le compte de chaque joueur, pour enregistrer la partie.
+- Chaque partie finie est enregistrée en base (table `games` : joueurs, variante, graine, coups, fin), qu'elle rapporte une carte ou non. Une partie abandonnée avant sa fin ne l'est pas.

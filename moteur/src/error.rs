@@ -67,6 +67,8 @@ pub enum GameError {
     /// Cette carte ne peut pas être choisie à cette étape du draft : hors du catalogue
     /// pour la cache, ou pas parmi les cartes tirées qui restent.
     NotInDraft(Attack),
+    /// La cache serait limitée à des cartes dont aucune n'est au catalogue de la partie.
+    NoCacheChoice,
     /// Rien ne déclenche cette réaction maintenant : elle ne se joue que pendant le tour
     /// adverse, juste après son déclencheur.
     NotTriggered(Attack),
@@ -129,6 +131,10 @@ impl fmt::Display for GameError {
                     attack
                 )
             }
+            GameError::NoCacheChoice => write!(
+                f,
+                "aucune de ces cartes n'est au catalogue de la partie : la cache n'aurait aucun choix"
+            ),
             GameError::NotAReaction(attack) => write!(
                 f,
                 "{} n'est pas une réaction : pendant le tour adverse, seule une réaction se joue",

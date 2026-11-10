@@ -1,14 +1,14 @@
 //! Les salles ouvertes, et la diffusion : après chaque changement d'une partie, chaque
 //! humain connecté reçoit sa vue et les événements qu'il peut voir.
 
+use crate::collection::Collection;
 use crate::limits::{MAX_ROOMS, ROOM_IDLE_LIMIT, bot_slots};
-use crate::room::{BotMove, BotSearch, Room, Seat};
+use crate::random::{random_key, random_u64};
+use crate::room::{BotMove, BotSearch, FinishedGame, Room, Seat};
 use crate::{Opponent, ServerError, ServerMessage};
 use bots::{BotKind, ONLINE_VARIANT, variants};
 use fight_of_pions::{Action, Event, GameConfig, Player};
 use std::collections::BTreeMap;
-use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hasher};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 use tokio::sync::Semaphore;
@@ -24,6 +24,8 @@ pub type Outbox = Sender<ServerMessage>;
 /// Une salle, et les clients connectés à chacune de ses places.
 pub struct Table {
     room: Room,
+    /// Le nom de la variante jouée, pour l'enregistrement de la partie.
+    variant: String,
     outboxes: [Option<Outbox>; 2],
     /// Vrai pendant qu'une tâche fait jouer les bots de la salle : il n'y en a qu'une.
     bots_running: bool,
@@ -43,9 +45,10 @@ pub fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Table {
-    fn new(room: Room) -> Table {
+    fn new(room: Room, variant: &str) -> Table {
         Table {
             room,
+            variant: variant.to_string(),
             outboxes: [None, None],
             bots_running: false,
             last_seen: Instant::now(),
@@ -73,6 +76,20 @@ impl Table {
             *slot = None;
             self.last_seen = Instant::now();
             self.send_presence(player.opponent(), false);
+        }
+    }
+
+    /// La partie et le nom de sa variante, si elle vient de finir : rendue une seule fois,
+    /// pour être enregistrée (E4c).
+    pub fn take_finished(&mut self) -> Option<(FinishedGame, String)> {
+        let finished = self.room.take_finished()?;
+        Some((finished, self.variant.clone()))
+    }
+
+    /// Envoie ce message à ce joueur, s'il est branché.
+    pub fn send_to(&self, player: Player, message: ServerMessage) {
+        if let Some(outbox) = &self.outboxes[player.index()] {
+            let _ = outbox.try_send(message);
         }
     }
 
@@ -201,6 +218,15 @@ impl Default for Lobby {
     }
 }
 
+/// Celui qui s'assoit : son compte, et sa collection, qui limite sa cache.
+#[derive(Clone, Copy)]
+pub struct Entrant<'a> {
+    /// Son compte.
+    pub account: i64,
+    /// Ce qu'il possède.
+    pub collection: &'a Collection,
+}
+
 /// Une place prise : la salle, son code, la place et sa clé.
 pub struct Seating {
     pub table: SharedTable,
@@ -210,26 +236,33 @@ pub struct Seating {
 }
 
 impl Lobby {
-    /// Ouvre une salle contre cet adversaire, et y assied le demandeur comme joueur 1.
-    /// Ferme d'abord les salles abandonnées.
+    /// Ouvre une salle contre cet adversaire, et y assied le demandeur comme joueur 1, sa
+    /// cache limitée par sa collection (`None`, pour les tests : sans compte, la cache dans
+    /// tout le catalogue). Ferme d'abord les salles abandonnées.
     pub fn create(
         &self,
         opponent: Opponent,
         variant: Option<&str>,
+        entrant: Option<Entrant>,
     ) -> Result<Seating, ServerError> {
-        let config = config_of(variant.unwrap_or(ONLINE_VARIANT))?;
+        let variant = variant.unwrap_or(ONLINE_VARIANT);
+        let config = config_of(variant)?;
         let second = match opponent {
             Opponent::Human => Seat::Free,
             Opponent::Mcts => Seat::Bot(BotKind::Mcts),
             Opponent::Random => Seat::Bot(BotKind::Random),
         };
         let key = random_key();
-        let seats = [Seat::Human { key: key.clone() }, second];
-        let table = Arc::new(Mutex::new(Table::new(Room::new(
-            config,
-            random_u64(),
-            seats,
-        )?)));
+        let first = Seat::Human {
+            key: key.clone(),
+            account: entrant.map(|entrant| entrant.account),
+        };
+        let mut room = Room::new(config, random_u64(), [first, second])?;
+        if let Some(entrant) = entrant {
+            let choices = entrant.collection.cache_choices(&room.catalog());
+            room.limit_cache(Player::One, &choices)?;
+        }
+        let table = Arc::new(Mutex::new(Table::new(room, variant)));
         let mut tables = lock(&self.tables);
         close_abandoned(&mut tables, Instant::now());
         if tables.len() >= MAX_ROOMS {
@@ -250,14 +283,20 @@ impl Lobby {
         })
     }
 
-    /// Assied le demandeur à la place libre de la salle de ce code.
-    pub fn join(&self, code: &str) -> Result<Seating, ServerError> {
+    /// Assied le demandeur à la place libre de la salle de ce code, sa cache limitée par sa
+    /// collection (`None`, pour les tests : tout le catalogue).
+    pub fn join(&self, code: &str, entrant: Option<Entrant>) -> Result<Seating, ServerError> {
         let table = self.table(code)?;
         let key = random_key();
         let player = {
             let mut guard = lock(&table);
             let player = guard.room.free_seat().ok_or(ServerError::RoomFull)?;
-            guard.room.sit(player, key.clone())?;
+            if let Some(entrant) = entrant {
+                let choices = entrant.collection.cache_choices(&guard.room.catalog());
+                guard.room.limit_cache(player, &choices)?;
+            }
+            let account = entrant.map(|entrant| entrant.account);
+            guard.room.sit(player, key.clone(), account)?;
             player
         };
         Ok(Seating {
@@ -308,13 +347,6 @@ fn config_of(name: &str) -> Result<GameConfig, ServerError> {
         .ok_or_else(|| ServerError::UnknownVariant(name.to_string()))
 }
 
-/// Un nombre tiré par le système (le hachage aléatoire de la bibliothèque standard, une
-/// fonction pseudo-aléatoire à clé secrète tirée au démarrage) : imprévisible pour un code
-/// de salle, une graine ou une clé de place, sans dépendance.
-fn random_u64() -> u64 {
-    RandomState::new().build_hasher().finish()
-}
-
 fn random_code() -> String {
     let mut value = random_u64();
     (0..CODE_LENGTH)
@@ -327,10 +359,6 @@ fn random_code() -> String {
         .collect()
 }
 
-fn random_key() -> String {
-    format!("{:016x}{:016x}", random_u64(), random_u64())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,7 +367,7 @@ mod tests {
     #[test]
     fn an_abandoned_room_is_closed_after_the_idle_limit() {
         let lobby = Lobby::default();
-        let seating = lobby.create(Opponent::Human, None).unwrap();
+        let seating = lobby.create(Opponent::Human, None, None).unwrap();
         let (outbox, _inbox) = mpsc::channel(1);
         lock(&seating.table).connect(Player::One, outbox.clone());
         let later = Instant::now() + ROOM_IDLE_LIMIT;
@@ -365,7 +393,7 @@ mod tests {
             ..GameConfig::default()
         };
         let room = Room::new(config, 0, [Seat::Free, Seat::Free]).unwrap();
-        let mut table = Table::new(room);
+        let mut table = Table::new(room, "essai");
         let at = |row, col| fight_of_pions::Position { row, col };
         for (player, action) in [
             (Player::One, Action::Place(at(0, 0))),
@@ -393,13 +421,13 @@ mod tests {
         let lobby = Lobby::default();
         let mut outboxes = Vec::new();
         for _ in 0..MAX_ROOMS {
-            let seating = lobby.create(Opponent::Human, None).unwrap();
+            let seating = lobby.create(Opponent::Human, None, None).unwrap();
             let (outbox, inbox) = mpsc::channel(4);
             lock(&seating.table).connect(Player::One, outbox);
             outboxes.push(inbox);
         }
         assert!(matches!(
-            lobby.create(Opponent::Human, None),
+            lobby.create(Opponent::Human, None, None),
             Err(ServerError::ServerFull)
         ));
     }
@@ -407,7 +435,7 @@ mod tests {
     #[test]
     fn stopped_bots_warn_the_players_and_can_start_again() {
         let lobby = Lobby::default();
-        let seating = lobby.create(Opponent::Random, None).unwrap();
+        let seating = lobby.create(Opponent::Random, None, None).unwrap();
         let (outbox, mut inbox) = mpsc::channel(4);
         let mut table = lock(&seating.table);
         table.connect(Player::One, outbox);
@@ -426,7 +454,7 @@ mod tests {
     #[test]
     fn an_old_connection_does_not_unplug_the_new_one() {
         let lobby = Lobby::default();
-        let seating = lobby.create(Opponent::Human, None).unwrap();
+        let seating = lobby.create(Opponent::Human, None, None).unwrap();
         let (old, _old_inbox) = mpsc::channel(4);
         let (new, mut new_inbox) = mpsc::channel(4);
         let mut table = lock(&seating.table);

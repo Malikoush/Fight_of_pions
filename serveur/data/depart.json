@@ -1,0 +1,18 @@
+[
+  { "kind": "BeauteFatale", "rarity": "Common" },
+  { "kind": "SautDuLoup", "rarity": "Common" },
+  { "kind": "Reine", "rarity": "Common" },
+  { "kind": "Attila", "rarity": "Common" },
+  { "kind": "Medecin", "rarity": "Common" },
+  { "kind": "Interchange", "rarity": "Common" },
+  { "kind": "CoupDuTaureau", "rarity": "Common" },
+  { "kind": "MassacreDivin", "rarity": "Common" },
+  { "kind": "Ours", "rarity": "Common" },
+  { "kind": "Lievre", "rarity": "Common" },
+  { "kind": "Familia", "rarity": "Common" },
+  { "kind": "Sentinelle", "rarity": "Common" },
+  { "kind": "Hibou", "rarity": "Common" },
+  { "kind": "QueueDuLezard", "rarity": "Common" },
+  { "kind": "Perroquet", "rarity": "Common" },
+  { "kind": "Feintaille", "rarity": "Common" }
+]

@@ -5,8 +5,10 @@
 use crate::ServerError;
 use bots::BotKind;
 use fight_of_pions::{
-    Action, Decision, Event, Game, GameConfig, GameRecord, Player, PlayerView, Rng,
+    Action, Attack, Decision, Event, Game, GameConfig, GameEnd, GameError, GameRecord, Player,
+    PlayerView, Rng,
 };
+use std::time::SystemTime;
 
 /// Qui occupe une place.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,6 +19,8 @@ pub enum Seat {
     Human {
         /// Sa clé.
         key: String,
+        /// Son compte, s'il en a un (les tests de la salle s'en passent).
+        account: Option<i64>,
     },
     /// Un bot du serveur.
     Bot(BotKind),
@@ -31,6 +35,75 @@ pub struct Room {
     seats: [Seat; 2],
     /// Le hasard des bots, initialisé avec la graine de la partie, comme dans l'arène.
     bot_rng: Rng,
+    /// Quand la salle a été ouverte.
+    started_at: SystemTime,
+    /// Vrai une fois la partie finie rendue pour être enregistrée ([`Room::take_finished`]) :
+    /// elle ne l'est qu'une fois.
+    finished_taken: bool,
+}
+
+/// Une partie finie, à enregistrer (E4c).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FinishedGame {
+    /// Toute la partie : configuration, graine et coups.
+    pub record: GameRecord,
+    /// Sa fin.
+    pub end: GameEnd,
+    /// Qui occupait chaque place.
+    pub players: [Contestant; 2],
+    /// Les cartes du catalogue de la partie : celles qu'une victoire peut faire gagner.
+    pub catalog: Vec<Attack>,
+    /// Quand la salle a été ouverte.
+    pub started_at: SystemTime,
+}
+
+/// Qui a joué à une place, sans sa clé.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Contestant {
+    /// Personne (une place jamais prise).
+    Nobody,
+    /// Un humain, et son compte s'il en a un.
+    Human(Option<i64>),
+    /// Un bot du serveur.
+    Bot(BotKind),
+}
+
+impl Contestant {
+    /// Son nom en base : `human`, `nobody` ou le nom du bot (`mcts`, `random`…).
+    pub fn kind(self) -> &'static str {
+        match self {
+            Contestant::Nobody => "nobody",
+            Contestant::Human(_) => "human",
+            Contestant::Bot(BotKind::Mcts) => "mcts",
+            Contestant::Bot(BotKind::Random) => "random",
+            Contestant::Bot(BotKind::Greedy) => "greedy",
+            Contestant::Bot(BotKind::Banker) => "banker",
+        }
+    }
+
+    /// Son compte, si c'est un humain qui en a un.
+    pub fn account(self) -> Option<i64> {
+        match self {
+            Contestant::Human(account) => account,
+            Contestant::Nobody | Contestant::Bot(_) => None,
+        }
+    }
+}
+
+impl FinishedGame {
+    /// Le gagnant à récompenser, et son compte : un humain avec un compte qui a battu un
+    /// autre compte que le sien, ou le MCTS. Rien pour un nul, une victoire contre le bot
+    /// aléatoire (trop facile à enchaîner), ni contre soi-même.
+    pub fn rewarded(&self) -> Option<(Player, i64)> {
+        let winner = self.end.winner()?;
+        let account = self.players[winner.index()].account()?;
+        let deserved = match self.players[winner.opponent().index()] {
+            Contestant::Human(Some(loser)) => loser != account,
+            Contestant::Bot(BotKind::Mcts) => true,
+            Contestant::Human(None) | Contestant::Nobody | Contestant::Bot(_) => false,
+        };
+        deserved.then_some((winner, account))
+    }
 }
 
 /// Une recherche de bot, prête à tourner hors de la salle : une copie de la partie et du
@@ -48,6 +121,39 @@ pub struct BotMove {
     action: Option<Action>,
     rng: Rng,
     moves: usize,
+}
+
+#[cfg(test)]
+impl Room {
+    /// Une partie finie, gagnée par J1, sur un plateau de 3 cases sur 3 où 2 pions alignés
+    /// gagnent ; ces places.
+    pub fn won_by_the_first_player(seats: [Seat; 2]) -> Room {
+        let config = GameConfig {
+            board_size: 3,
+            align_to_win: 2,
+            wall_thickness: 0,
+            ..GameConfig::default()
+        };
+        let mut room = Room::new(config, 7, seats).unwrap();
+        let at = |row, col| fight_of_pions::Position { row, col };
+        for action in [
+            Action::Place(at(0, 0)),
+            Action::EndTurn,
+            Action::Place(at(2, 2)),
+            Action::EndTurn,
+            Action::Place(at(0, 1)),
+        ] {
+            room.apply(action).unwrap();
+        }
+        for _ in 0..8 {
+            if room.is_over() {
+                break;
+            }
+            room.apply(Action::EndTurn).unwrap();
+        }
+        assert_eq!(room.game.winner(), Some(Player::One));
+        room
+    }
 }
 
 #[cfg(test)]
@@ -83,6 +189,8 @@ impl Room {
             record: GameRecord::new(config, seed),
             seats,
             bot_rng: Rng::new(seed),
+            started_at: SystemTime::now(),
+            finished_taken: false,
         })
     }
 
@@ -93,20 +201,61 @@ impl Room {
             .find(|player| self.seats[player.index()] == Seat::Free)
     }
 
-    /// Assied un humain, avec cette clé, à cette place libre.
-    pub fn sit(&mut self, player: Player, key: String) -> Result<(), ServerError> {
+    /// Assied un humain, avec cette clé et son compte, à cette place libre.
+    pub fn sit(
+        &mut self,
+        player: Player,
+        key: String,
+        account: Option<i64>,
+    ) -> Result<(), ServerError> {
         let seat = &mut self.seats[player.index()];
         if *seat != Seat::Free {
             return Err(ServerError::RoomFull);
         }
-        *seat = Seat::Human { key };
+        *seat = Seat::Human { key, account };
         Ok(())
+    }
+
+    /// La partie, si elle vient de finir : rendue une seule fois, pour être enregistrée.
+    pub fn take_finished(&mut self) -> Option<FinishedGame> {
+        if self.finished_taken {
+            return None;
+        }
+        let end = self.game.end()?;
+        self.finished_taken = true;
+        Some(FinishedGame {
+            record: self.record.clone(),
+            end,
+            players: self.seats.each_ref().map(|seat| match seat {
+                Seat::Free => Contestant::Nobody,
+                Seat::Human { account, .. } => Contestant::Human(*account),
+                Seat::Bot(kind) => Contestant::Bot(*kind),
+            }),
+            catalog: self.catalog(),
+            started_at: self.started_at,
+        })
+    }
+
+    /// Les cartes du catalogue de la partie.
+    pub fn catalog(&self) -> Vec<Attack> {
+        self.game.config().catalog_attacks()
+    }
+
+    /// Limite la cache de ce joueur à ces cartes : son trio. Sans aucune
+    /// carte du catalogue de la partie, rien ne change et la demande est refusée.
+    pub fn limit_cache(&mut self, player: Player, cards: &[Attack]) -> Result<(), ServerError> {
+        self.game
+            .limit_cache_choices(player, cards)
+            .map_err(|error| match error {
+                GameError::NoCacheChoice => ServerError::NothingToCache,
+                error => ServerError::Game(error),
+            })
     }
 
     /// Vérifie que cette clé est celle de l'humain assis à cette place.
     pub fn check_key(&self, player: Player, key: &str) -> Result<(), ServerError> {
         match &self.seats[player.index()] {
-            Seat::Human { key: own } if own == key => Ok(()),
+            Seat::Human { key: own, .. } if own == key => Ok(()),
             _ => Err(ServerError::BadKey),
         }
     }
@@ -221,6 +370,7 @@ mod tests {
     fn human(key: &str) -> Seat {
         Seat::Human {
             key: key.to_string(),
+            account: None,
         }
     }
 
@@ -242,14 +392,56 @@ mod tests {
         Room::new(config, 0, seats).unwrap()
     }
 
+    fn player(account: i64) -> Seat {
+        Seat::Human {
+            key: account.to_string(),
+            account: Some(account),
+        }
+    }
+
+    #[test]
+    fn a_finished_game_is_taken_once_with_its_players() {
+        let mut room = duel();
+        assert_eq!(room.take_finished(), None, "pas encore finie");
+        let mut room = Room::won_by_the_first_player([player(1), Seat::Bot(BotKind::Mcts)]);
+        let finished = room.take_finished().unwrap();
+        assert_eq!(
+            finished.players,
+            [Contestant::Human(Some(1)), Contestant::Bot(BotKind::Mcts)]
+        );
+        assert_eq!(finished.record, room.record);
+        assert_eq!(finished.catalog, room.catalog());
+        assert_eq!(room.take_finished(), None, "une seule fois");
+    }
+
+    #[test]
+    fn only_a_deserved_victory_is_rewarded() {
+        let rewarded = |seats| {
+            Room::won_by_the_first_player(seats)
+                .take_finished()
+                .unwrap()
+                .rewarded()
+        };
+        assert_eq!(rewarded([player(1), player(2)]), Some((Player::One, 1)));
+        assert_eq!(
+            rewarded([player(1), Seat::Bot(BotKind::Mcts)]),
+            Some((Player::One, 1))
+        );
+        assert_eq!(rewarded([player(1), Seat::Bot(BotKind::Random)]), None);
+        assert_eq!(rewarded([player(1), player(1)]), None, "contre soi-même");
+        assert_eq!(rewarded([player(1), human("sans compte")]), None);
+        assert_eq!(rewarded([human("sans compte"), player(2)]), None);
+        assert_eq!(rewarded([player(1), Seat::Free]), None);
+    }
+
     #[test]
     fn a_human_takes_the_free_seat_with_a_key() {
         let mut room = duel();
         assert_eq!(room.free_seat(), Some(Player::Two));
-        room.sit(Player::Two, "deux".to_string()).unwrap();
+        room.sit(Player::Two, "deux".to_string(), None).unwrap();
         assert_eq!(room.free_seat(), None);
         assert_eq!(
-            room.sit(Player::Two, "autre".to_string()),
+            room.sit(Player::Two, "autre".to_string(), None),
             Err(ServerError::RoomFull)
         );
         assert_eq!(room.check_key(Player::Two, "deux"), Ok(()));

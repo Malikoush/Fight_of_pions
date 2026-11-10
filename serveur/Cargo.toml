@@ -11,6 +11,13 @@ serde_json = { workspace = true }
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+# La base des comptes : SQLite, compilée dans le serveur (aucune installation). Les requêtes
+# sont écrites sans les macros vérifiées à la compilation : le serveur se construit sans base
+# (Docker compris) ; ce sont les tests qui les vérifient. `macros` sert à `migrate!`, qui
+# range les migrations de `migrations/` dans le binaire.
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
+# L'empreinte des jetons de compte : la base ne garde jamais un jeton lui-même.
+sha2 = "0.11"
 
 [dev-dependencies]
 tokio-tungstenite = "0.29"

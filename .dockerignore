@@ -1,0 +1,10 @@
+# Ce que Docker n'envoie pas à la construction : seuls les sources Rust du workspace servent.
+target
+client-godot
+design
+docs
+.git
+.claude
+*.db
+*.db-shm
+*.db-wal

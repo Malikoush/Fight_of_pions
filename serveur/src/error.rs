@@ -1,4 +1,4 @@
-use fight_of_pions::GameError;
+use fight_of_pions::{Attack, GameError};
 use std::fmt;
 
 /// Pourquoi le serveur refuse une demande. Rien n'a changé ; le message est envoyé au
@@ -33,6 +33,24 @@ pub enum ServerError {
     Game(GameError),
     /// Le fichier des textes des cartes est mal écrit (un bug, que les tests empêchent).
     CardsUnavailable(String),
+    /// Il faut d'abord se connecter à son compte.
+    NotLoggedIn,
+    /// Cette connexion est déjà celle d'un compte.
+    AlreadyLoggedIn,
+    /// Aucun compte n'a ce jeton.
+    UnknownAccount,
+    /// Ce pseudo n'est pas permis, pour cette raison.
+    BadPseudo(String),
+    /// Le compte ne possède pas cette carte.
+    NotOwned(Attack),
+    /// Ce trio de cache n'est pas permis, pour cette raison.
+    BadCacheTrio(String),
+    /// Aucune carte du compte ne peut être mise en cache dans cette variante.
+    NothingToCache,
+    /// La base n'a pas pu lire ou écrire (le détail est dans la sortie du serveur).
+    Storage,
+    /// Le fichier du paquet de départ est mal écrit (un bug, que les tests empêchent).
+    StarterUnavailable(String),
 }
 
 impl fmt::Display for ServerError {
@@ -66,6 +84,23 @@ impl fmt::Display for ServerError {
             ServerError::CardsUnavailable(why) => {
                 write!(f, "les textes des cartes sont illisibles ({why})")
             }
+            ServerError::NotLoggedIn => write!(f, "il faut d'abord se connecter à son compte"),
+            ServerError::AlreadyLoggedIn => write!(f, "tu es déjà connecté à un compte"),
+            ServerError::UnknownAccount => write!(f, "ce compte n'existe pas"),
+            ServerError::BadPseudo(why) => write!(f, "pseudo refusé : {why}"),
+            ServerError::NotOwned(card) => write!(f, "tu ne possèdes pas la carte {card}"),
+            ServerError::BadCacheTrio(why) => write!(f, "trio de cache refusé : {why}"),
+            ServerError::NothingToCache => write!(
+                f,
+                "aucune de tes cartes ne peut être mise en cache dans cette variante"
+            ),
+            ServerError::Storage => write!(
+                f,
+                "le serveur n'a pas pu enregistrer ou relire tes données, réessaie plus tard"
+            ),
+            ServerError::StarterUnavailable(why) => {
+                write!(f, "le paquet de départ est illisible ({why})")
+            }
         }
     }
 }
@@ -90,6 +125,15 @@ impl ServerError {
             ServerError::BotFailed(_) => "bot_failed",
             ServerError::Game(_) => "refused_move",
             ServerError::CardsUnavailable(_) => "cards_unavailable",
+            ServerError::NotLoggedIn => "not_logged_in",
+            ServerError::AlreadyLoggedIn => "already_logged_in",
+            ServerError::UnknownAccount => "unknown_account",
+            ServerError::BadPseudo(_) => "bad_pseudo",
+            ServerError::NotOwned(_) => "not_owned",
+            ServerError::BadCacheTrio(_) => "bad_cache_trio",
+            ServerError::NothingToCache => "nothing_to_cache",
+            ServerError::Storage => "storage",
+            ServerError::StarterUnavailable(_) => "starter_unavailable",
         }
     }
 }

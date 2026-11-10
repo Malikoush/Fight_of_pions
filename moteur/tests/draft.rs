@@ -412,3 +412,88 @@ fn a_guessed_game_keeps_nothing_of_the_real_cache_in_the_history() {
     );
     assert_eq!(guessed.draft_history_seen_by(Player::Two)[0].attack, None);
 }
+
+fn card(kind: AttackKind, rarity: Rarity) -> Attack {
+    Attack { kind, rarity }
+}
+
+#[test]
+fn a_limited_cache_is_chosen_among_its_cards_only_in_catalog_order() {
+    let mut game = game_with(drafted());
+    let ours = card(AttackKind::Ours, Rarity::Epic);
+    let wolf = card(AttackKind::SautDuLoup, Rarity::Common);
+    // Le serveur limite la cache de J1 à sa collection (ici, deux cartes), pas celle de J2.
+    game.limit_cache_choices(Player::One, &[ours, wolf])
+        .unwrap();
+    draft_until_the_caches(&mut game);
+    assert_eq!(
+        game.legal_actions(),
+        [Action::Draft(wolf), Action::Draft(ours)]
+    );
+    let other = card(AttackKind::Lievre, Rarity::Common);
+    assert_eq!(
+        game.apply(Action::Draft(other)),
+        Err(GameError::NotInDraft(other))
+    );
+    play(&mut game, &[Action::Draft(ours)]);
+    assert_eq!(
+        game.legal_actions().len(),
+        game.config().catalog_attacks().len(),
+        "J2 choisit dans tout le catalogue"
+    );
+}
+
+#[test]
+fn a_cache_limit_keeps_only_catalog_cards_and_needs_one() {
+    let config = GameConfig {
+        draft: Some(DraftRules::new(0, &[DraftPhase::Caches(1)])),
+        ..GameConfig::default()
+    };
+    let mut game = game_with(config);
+    // Meilleurs amis n'existe qu'en Épique : sa Commune n'est au catalogue d'aucune partie.
+    let missing = card(AttackKind::MeilleursAmis, Rarity::Common);
+    assert_eq!(
+        game.limit_cache_choices(Player::One, &[missing]),
+        Err(GameError::NoCacheChoice)
+    );
+    assert_eq!(
+        game.legal_actions().len(),
+        game.config().catalog_attacks().len(),
+        "un refus ne change rien"
+    );
+    game.limit_cache_choices(Player::One, &[missing, hare()])
+        .unwrap();
+    assert_eq!(game.legal_actions(), [Action::Draft(hare())]);
+}
+
+#[test]
+fn without_a_draft_there_is_no_cache_to_limit() {
+    let mut game = game_with(GameConfig::default());
+    assert_eq!(game.limit_cache_choices(Player::One, &[hare()]), Ok(()));
+}
+
+#[test]
+fn a_guessed_game_forgets_the_opponent_cache_limit_but_not_its_own() {
+    let config = GameConfig {
+        draft: Some(DraftRules::new(0, &[DraftPhase::Caches(1)])),
+        ..GameConfig::default()
+    };
+    let mut game = game_with(config);
+    let ours = card(AttackKind::Ours, Rarity::Rare);
+    game.limit_cache_choices(Player::One, &[hare()]).unwrap();
+    game.limit_cache_choices(Player::Two, &[ours]).unwrap();
+    // J2 se représente la partie : la limite de J1 dirait ce qu'il possède.
+    let seen_by_two = game.with_secrets_guessed(Player::Two, || ours);
+    assert_eq!(
+        seen_by_two.legal_actions().len(),
+        game.config().catalog_attacks().len()
+    );
+    let mut seen_by_one = game.with_secrets_guessed(Player::One, hare);
+    assert_eq!(seen_by_one.legal_actions(), [Action::Draft(hare())]);
+    play(&mut seen_by_one, &[Action::Draft(hare())]);
+    assert_eq!(
+        seen_by_one.legal_actions().len(),
+        game.config().catalog_attacks().len(),
+        "J1 ne connaît pas la limite de J2"
+    );
+}

@@ -1,7 +1,9 @@
 //! Le draft (B9a, carnet « Draft et cache secrète ») : avant la partie, les joueurs font
 //! leurs choix dans l'ordre de [`crate::DraftRules::steps`]. La cache se choisit dans tout
-//! le catalogue ; les bans et les picks, parmi des cartes tirées avec la graine à la
-//! création de la partie. Pendant le draft, seul [`crate::Action::Draft`] est permis.
+//! le catalogue, ou parmi les cartes auxquelles le serveur l'a limitée
+//! ([`Game::limit_cache_choices`] : le trio du joueur) ; les bans et
+//! les picks, parmi des cartes tirées avec la graine à la création de la partie. Pendant le
+//! draft, seul [`crate::Action::Draft`] est permis.
 
 use super::arsenal::ArsenalSlot;
 use super::state::Game;
@@ -18,6 +20,9 @@ pub(super) struct DraftState {
     banned: Vec<Attack>,
     /// L'indice de l'étape en cours dans `DraftRules::steps`.
     next_step: usize,
+    /// Pour chaque joueur, les cartes parmi lesquelles il choisit sa cache, dans l'ordre du
+    /// catalogue ; `None` : tout le catalogue.
+    cache_choices: [Option<Vec<Attack>>; 2],
 }
 
 impl DraftState {
@@ -51,6 +56,7 @@ impl DraftState {
                 .collect(),
             banned: Vec::new(),
             next_step: 0,
+            cache_choices: [None, None],
         })
     }
 }
@@ -127,12 +133,54 @@ impl Game {
         history
     }
 
-    /// Les cartes que l'étape en cours permet de choisir : tout le catalogue pour la cache,
-    /// les cartes tirées qui restent pour un ban ou un pick.
+    /// Limite la cache de `player` à ces cartes : le trio qu'il a préparé, ou tiré pour
+    /// lui. Ce n'est pas une règle du jeu mais une donnée du joueur, que le serveur
+    /// donne en ouvrant la partie ; sans elle, la cache se choisit dans tout le catalogue.
+    ///
+    /// Seules comptent les cartes du catalogue de la partie (une collection peut en avoir
+    /// d'autres) ; il doit en rester au moins une, sinon rien ne change
+    /// ([`GameError::NoCacheChoice`]). Sans draft en cours, il n'y a rien à limiter. La
+    /// limite n'est connue que de ce joueur : un bot qui cherche ne la lit pas
+    /// ([`Game::with_secrets_guessed`]).
+    pub fn limit_cache_choices(
+        &mut self,
+        player: Player,
+        cards: &[Attack],
+    ) -> Result<(), GameError> {
+        let catalog = self.config.catalog_attacks();
+        let Some(draft) = self.draft.as_mut() else {
+            return Ok(());
+        };
+        let choices: Vec<Attack> = catalog
+            .into_iter()
+            .filter(|card| cards.contains(card))
+            .collect();
+        if choices.is_empty() {
+            return Err(GameError::NoCacheChoice);
+        }
+        draft.cache_choices[player.index()] = Some(choices);
+        Ok(())
+    }
+
+    /// Oublie la limite de la cache de `player` : celui qui ne la connaît pas suppose qu'il
+    /// choisit dans tout le catalogue.
+    pub(super) fn forget_cache_choices(&mut self, player: Player) {
+        if let Some(draft) = self.draft.as_mut() {
+            draft.cache_choices[player.index()] = None;
+        }
+    }
+
+    /// Les cartes que l'étape en cours permet de choisir : tout le catalogue pour la cache
+    /// (ou les cartes auxquelles elle est limitée), les cartes tirées qui restent pour un
+    /// ban ou un pick.
     fn draft_choices(&self) -> Vec<Attack> {
         match self.draft_step() {
             Some(step) if step.uses_the_pool() => self.draft_pool().to_vec(),
-            Some(_) => self.config.catalog_attacks(),
+            Some(step) => self
+                .draft
+                .as_ref()
+                .and_then(|draft| draft.cache_choices[step.player().index()].clone())
+                .unwrap_or_else(|| self.config.catalog_attacks()),
             None => Vec::new(),
         }
     }

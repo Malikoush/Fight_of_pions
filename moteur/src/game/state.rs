@@ -236,9 +236,11 @@ impl Game {
 
     /// Cette partie telle que `viewer` peut se la représenter : chaque carte secrète de son
     /// adversaire est remplacée par la carte que donne `guess` (un bot qui cherche ne doit
-    /// pas lire la cache adverse). Le reste est identique.
+    /// pas lire la cache adverse), et la limite de la cache adverse est oubliée (elle dirait
+    /// quelles cartes il possède). Le reste est identique.
     pub fn with_secrets_guessed(&self, viewer: Player, mut guess: impl FnMut() -> Attack) -> Game {
         let mut copy = self.clone();
+        copy.forget_cache_choices(viewer.opponent());
         for slot in &mut copy.arsenals[viewer.opponent().index()] {
             if slot.is_secret() {
                 slot.replace_attack(guess());
