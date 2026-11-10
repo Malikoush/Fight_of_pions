@@ -24,6 +24,8 @@ const TABS := [
 const PLAY_TAB := preload("res://ui/menu/play_tab.tscn")
 
 var _tab := Tab.PLAY
+## Le serveur est complet (maquettes) : « RÉGLAGES », ou « RÉESSAYER » la demande.
+var _server_full := AlertDialog.new(Labels.SERVER_FULL_TITLE, Labels.SERVER_FULL_TEXT, Labels.NAV_SETTINGS, Labels.RETRY, "connexion", true)
 var _pages: Dictionary[Tab, Control] = {}
 ## Le catalogue que montre la page Cartes, pour la refaire quand il arrive.
 var _shown_catalog: CardCatalog
@@ -37,6 +39,11 @@ func _ready() -> void:
 	_nav.setup(TABS)
 	_nav.tab_selected.connect(func(index: int) -> void: open_tab(index as Tab))
 	_nav.player_pressed.connect(open_tab.bind(Tab.SETTINGS))
+	_server_full.declined.connect(open_tab.bind(Tab.SETTINGS))
+	_server_full.confirmed.connect(func() -> void:
+		open_tab(Tab.PLAY)
+		(_pages[Tab.PLAY] as PlayTab).retry())
+	add_child(_server_full)
 	resized.connect(_arrange)
 	_arrange()
 	open_tab(_tab)
@@ -59,22 +66,32 @@ func on_connection(status: ServerLink.Status) -> void:
 		(_pages[Tab.PLAY] as PlayTab).on_connection_lost()
 
 
-## Un refus (serveur complet, code inconnu…) répond à un geste de l'accueil : il s'y affiche.
+## Un refus répond à un geste de l'accueil : le serveur complet, en fenêtre ; les autres
+## (code inconnu…), sur l'accueil.
 func on_refused(category: ServerErrors.Category, message: String) -> Reply:
 	if not _pages.has(Tab.PLAY):
 		return Reply.IGNORED
-	(_pages[Tab.PLAY] as PlayTab).show_refusal(category, message)
+	var play := _pages[Tab.PLAY] as PlayTab
+	if category == ServerErrors.Category.SERVER_FULL:
+		play.on_connection_lost()
+		_server_full.ask()
+	else:
+		play.show_refusal(category, message)
 	return Reply.HANDLED
 
 
-## Le catalogue est arrivé : la page Cartes, déjà ouverte, est refaite avec lui.
+## Le catalogue est arrivé : les pages qui montrent des cartes (Cartes, Règles), déjà
+## construites, sont refaites avec lui.
 func on_session_changed() -> void:
-	if not _pages.has(Tab.CARDS) or session.catalog == _shown_catalog:
+	if session.catalog == _shown_catalog:
 		return
-	_pages[Tab.CARDS].queue_free()
-	_pages.erase(Tab.CARDS)
-	if _tab == Tab.CARDS:
-		open_tab(Tab.CARDS)
+	_shown_catalog = session.catalog
+	for tab: Tab in [Tab.CARDS, Tab.RULES]:
+		if _pages.has(tab):
+			_pages[tab].queue_free()
+			_pages.erase(tab)
+	if _tab in [Tab.CARDS, Tab.RULES]:
+		open_tab(_tab)
 
 
 ## Échap (ou le retour d'Android) ramène à l'accueil.
@@ -90,10 +107,22 @@ func _build(tab: Tab) -> Control:
 			_shown_catalog = session.catalog
 			return CardsPage.new(_shown_catalog)
 		Tab.RULES:
-			return RulesPage.new()
+			_shown_catalog = session.catalog
+			var rules := RulesPage.new(_shown_catalog)
+			rules.play_requested.connect(open_tab.bind(Tab.PLAY))
+			return rules
 		Tab.SETTINGS:
-			return SettingsPage.new()
+			var settings := SettingsPage.new()
+			settings.player_name_changed.connect(_refresh_player)
+			return settings
 	return _build_play()
+
+
+## Le pseudo a changé : les pastilles du joueur (barre du haut, accueil) le reprennent.
+func _refresh_player() -> void:
+	_nav.refresh_player()
+	if _pages.has(Tab.PLAY):
+		(_pages[Tab.PLAY] as PlayTab).refresh_player()
 
 
 ## L'accueil : ses gestes deviennent ceux du menu, que la racine écoute.

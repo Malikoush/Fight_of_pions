@@ -7,6 +7,12 @@ extends Button
 ##
 ## Tout ce qu'elle montre lui est donné : le coût vient de la configuration de la partie, le
 ## nom du catalogue, et « jouable » de la présence de son coup dans les coups permis.
+##
+## Un clic droit, ou un appui long au doigt, demande sa fiche (`details_requested`) : l'appui
+## long ne la joue pas.
+
+## Le joueur veut la fiche de cette carte.
+signal details_requested
 
 const FRAME_DIR := "res://assets/elements/cartes/"
 const FRAMES := {
@@ -42,6 +48,11 @@ var _tag_label: Label
 var _outline: Panel
 var _lift: Tween
 var _selected := false
+## L'appui en cours (pour reconnaître un appui long), et si la carte est jouable : c'est ce
+## que l'appui long, qui la désactive le temps du relâcher, lui rend ensuite.
+var _press := 0
+var _long_pressed := false
+var _playable := false
 
 
 func _init(width: float = Look.CARD_WIDTH) -> void:
@@ -90,6 +101,8 @@ func _init(width: float = Look.CARD_WIDTH) -> void:
 ## Montre cette carte. `attack` vaut `{"kind", "rarity"}`, ou `null` pour une carte qu'on ne
 ## peut pas voir (le dos).
 func show_card(attack: Variant, display_name: String, cost: int, reaction: bool, cooldown_left: int, secret: bool, playable: bool) -> void:
+	_long_pressed = false
+	_playable = attack is Dictionary and playable
 	if not (attack is Dictionary):
 		_frame.texture = load(FRAME_DIR + HIDDEN_FRAME + ".svg")
 		_name.text = ""
@@ -140,6 +153,31 @@ func show_slot(view: ViewData, player: String, index: int, catalog: CardCatalog,
 	)
 
 
+func _gui_input(event: InputEvent) -> void:
+	var button := event as InputEventMouseButton
+	if button == null:
+		return
+	if button.button_index == MOUSE_BUTTON_RIGHT and button.pressed:
+		details_requested.emit()
+		accept_event()
+	elif button.button_index == MOUSE_BUTTON_LEFT and button.pressed:
+		_press += 1
+		get_tree().create_timer(Look.LONG_PRESS).timeout.connect(_on_long_press.bind(_press))
+	elif button.button_index == MOUSE_BUTTON_LEFT and _long_pressed:
+		_long_pressed = false
+		disabled = not _playable
+
+
+## Toujours appuyée après ce délai : la fiche s'ouvre, et le relâcher ne jouera pas la carte
+## (elle est désactivée jusque-là).
+func _on_long_press(press: int) -> void:
+	if press != _press or not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or not get_global_rect().has_point(get_global_mouse_position()):
+		return
+	_long_pressed = true
+	disabled = true
+	details_requested.emit()
+
+
 ## L'étiquette au-dessus du coin de la carte, de cette sorte ; vide : aucune.
 func set_tag(text: String, kind := Tag.GOLD) -> void:
 	_tag.visible = text != ""
@@ -155,6 +193,7 @@ func set_tag(text: String, kind := Tag.GOLD) -> void:
 ## Une carte qu'on ne peut plus choisir (prise, bannie) : son dessin assombri de cette
 ## teinte ; son étiquette reste vive.
 func dim(shade: Color) -> void:
+	_playable = false
 	disabled = true
 	for part: Node in _face.get_children():
 		if part != _tag and part is CanvasItem:
@@ -180,12 +219,15 @@ func _build_cooldown(window: Rect2) -> Control:
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	shade.position = window.position
 	shade.size = window.size
-	var column := Ui.vbox(Look.GAP_XS)
+	# Le sablier et le nombre de tours suivent la taille de la carte : ils tiennent dans sa
+	# fenêtre, en petit (l'adversaire) comme en grand.
+	var column := Ui.vbox(0)
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	var hourglass := Ui.icon(Ui.HOURGLASS, Look.CREAM)
+	var hourglass := Ui.icon(Ui.HOURGLASS, Look.CREAM, window.size.x * Look.CARD_COOLDOWN_ICON_SHARE)
 	hourglass.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	column.add_child(hourglass)
 	_cooldown_turns = Ui.centered_label("", ThemeBuilder.NUMBER_LABEL)
+	_cooldown_turns.add_theme_font_size_override(&"font_size", maxi(1, roundi(window.size.y * Look.CARD_COOLDOWN_NUMBER_SHARE)))
 	column.add_child(_cooldown_turns)
 	shade.add_child(column)
 	shade.visible = false

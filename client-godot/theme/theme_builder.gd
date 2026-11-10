@@ -17,6 +17,7 @@ const NAME_LABEL := &"NameLabel"
 const STRONG_LABEL := &"StrongLabel"
 const MUTED_LABEL := &"MutedLabel"
 const NUMBER_LABEL := &"NumberLabel"
+const STAT_LABEL := &"StatLabel"
 const PILL_LABEL := &"PillLabel"
 const PRIMARY_BUTTON := &"PrimaryButton"
 const WAITING_PANEL := &"WaitingPanel"
@@ -91,6 +92,19 @@ const SNAKE_SLOT_CURRENT := &"SnakeSlotCurrent"
 const SLOT_LABEL := &"SlotLabel"
 const CARD_GRID := &"CardGrid"
 const CARD_GRID_INSET := &"CardGridInset"
+const SHEET := &"Sheet"
+## Les fenêtres de coupure : une plaque crème bordée d'or, la pastille sombre de leur icône,
+## leur titre et leur texte d'encre, le bouton « non » bordé d'encre. La fin : le bandeau
+## sombre d'une défaite ou d'un match nul, et son texte crème.
+const ALERT_PANEL := &"AlertPanel"
+const ALERT_BADGE := &"AlertBadge"
+const ALERT_TITLE_LABEL := &"AlertTitleLabel"
+const ALERT_TEXT_LABEL := &"AlertTextLabel"
+const ALERT_SECONDARY := &"AlertSecondary"
+const BANNER_DARK := &"BannerDark"
+const BANNER_LIGHT_LABEL := &"BannerLightLabel"
+## Les réglages : un champ de texte crème (le pseudo).
+const TEXT_INPUT := &"TextInput"
 ## Les boîtes des scènes : l'écart entre leurs enfants (colonne ou rangée), et une marge
 ## intérieure. Une scène n'écrit ainsi aucun nombre : elle choisit une variante.
 const STACK := &"Stack"
@@ -133,6 +147,7 @@ static func build() -> Theme:
 	_label(theme, STRONG_LABEL, strong, Look.FONT_BODY, Look.CREAM, false)
 	_label(theme, MUTED_LABEL, body, Look.FONT_BODY, Look.MUTED, false)
 	_label(theme, NUMBER_LABEL, caps, Look.FONT_NUMBER, Look.CREAM, false)
+	_label(theme, STAT_LABEL, caps, Look.FONT_STAT, Look.CREAM, false)
 	_label(theme, PILL_LABEL, caps, Look.FONT_BODY, Look.CREAM, false)
 	_label(theme, WAITING_LABEL, caps, Look.FONT_BUTTON, Look.MUTED, false)
 	# Leur taille suit celle de la carte (`CardView`, `Look.CARD_TEXT_SHARE`).
@@ -153,6 +168,7 @@ static func build() -> Theme:
 	_menu(theme, display, caps)
 	_rooms(theme, display, caps)
 	_draft(theme, caps)
+	_alerts(theme, display, caps)
 	_boxes(theme)
 	_journal(theme, strong)
 	_icon_button(theme)
@@ -598,6 +614,13 @@ static func _draft(theme: Theme, caps: Font) -> void:
 	theme.set_constant(&"margin_top", CARD_GRID_INSET, Look.GAP_L)
 	for side in [&"margin_left", &"margin_right", &"margin_bottom"]:
 		theme.set_constant(side, CARD_GRID_INSET, Look.CARD_GRID_SIDE)
+	# La fiche d'une carte : une feuille bordée d'or.
+	theme.set_type_variation(SHEET, &"PanelContainer")
+	var sheet := _rounded(Look.FOREST_PANEL, Look.RADIUS_PANEL)
+	sheet.set_border_width_all(Look.BORDER)
+	sheet.border_color = Look.GOLD
+	sheet.set_content_margin_all(Look.GAP_XL)
+	theme.set_stylebox(&"panel", SHEET, sheet)
 	# Une place de l'ordre des picks : le pick en cours est bordé d'or.
 	for variation: StringName in [SNAKE_SLOT, SNAKE_SLOT_CURRENT]:
 		theme.set_type_variation(variation, &"PanelContainer")
@@ -606,6 +629,55 @@ static func _draft(theme: Theme, caps: Font) -> void:
 		slot.border_color = Look.GOLD if variation == SNAKE_SLOT_CURRENT else Look.FOREST_RAISED
 		slot.set_content_margin_all(Look.GAP_XS)
 		theme.set_stylebox(&"panel", variation, slot)
+
+
+## Les fenêtres de coupure (maquettes 12-17, p. 14 à 17) et le bandeau de fin.
+static func _alerts(theme: Theme, display: Font, caps: Font) -> void:
+	theme.set_type_variation(ALERT_PANEL, &"PanelContainer")
+	var panel := _rounded(Look.CREAM, Look.RADIUS_PANEL)
+	panel.set_border_width_all(Look.BORDER_STRONG)
+	panel.border_color = Look.GOLD
+	panel.set_content_margin_all(Look.GAP_XL)
+	theme.set_stylebox(&"panel", ALERT_PANEL, panel)
+	theme.set_type_variation(ALERT_BADGE, &"PanelContainer")
+	theme.set_stylebox(&"panel", ALERT_BADGE, _rounded(Look.FOREST, Look.ALERT_BADGE_SIZE))
+	_label(theme, ALERT_TITLE_LABEL, display, Look.FONT_ALERT_TITLE, Look.INK, false)
+	_label(theme, ALERT_TEXT_LABEL, load(STRONG_FONT), Look.FONT_FACT, Look.INK, false)
+	# Le bouton « non », sur la plaque crème : crème, bordé d'encre.
+	theme.set_type_variation(ALERT_SECONDARY, &"Button")
+	theme.set_stylebox(&"normal", ALERT_SECONDARY, _outlined(Look.CREAM, Look.FOREST))
+	theme.set_stylebox(&"hover", ALERT_SECONDARY, _outlined(Look.CREAM.darkened(Look.HOVER_LIGHTEN), Look.FOREST))
+	theme.set_stylebox(&"pressed", ALERT_SECONDARY, _outlined(Look.CASE_ALT_TOP, Look.FOREST))
+	theme.set_stylebox(&"hover_pressed", ALERT_SECONDARY, _outlined(Look.CASE_ALT_TOP, Look.FOREST))
+	theme.set_stylebox(&"focus", ALERT_SECONDARY, _focus())
+	_button_text(theme, ALERT_SECONDARY, caps, Look.FOREST)
+	# Le bandeau d'une défaite ou d'un match nul : sombre, sa tranche d'or.
+	theme.set_type_variation(BANNER_DARK, &"PanelContainer")
+	var dark := _hex(Look.FOREST_PANEL, Look.GOLD, false)
+	dark.content_margin_left = Look.GAP_XXL
+	dark.content_margin_right = Look.GAP_XXL
+	theme.set_stylebox(&"panel", BANNER_DARK, dark)
+	_label(theme, BANNER_LIGHT_LABEL, display, Look.FONT_DISPLAY, Look.CREAM, false)
+	# Un champ de texte : une plaque crème, du texte d'encre, bord d'or quand on tape.
+	theme.set_type_variation(TEXT_INPUT, &"LineEdit")
+	for state in [&"normal", &"focus", &"read_only"]:
+		var field := _rounded(Look.CREAM, Look.RADIUS_CONTROL)
+		field.set_border_width_all(Look.BORDER_STRONG if state == &"focus" else Look.BORDER)
+		field.border_color = Look.GOLD if state == &"focus" else Look.CASE_SIDE_A
+		field.set_content_margin_all(Look.GAP_M)
+		theme.set_stylebox(state, TEXT_INPUT, field)
+	theme.set_font(&"font", TEXT_INPUT, load(STRONG_FONT))
+	theme.set_font_size(&"font_size", TEXT_INPUT, Look.FONT_BODY)
+	theme.set_color(&"font_color", TEXT_INPUT, Look.INK)
+	theme.set_color(&"caret_color", TEXT_INPUT, Look.INK)
+	# Un curseur de volume : une piste sombre, la part réglée en or.
+	var track := _rounded(Look.FOREST_DEEP, Look.RADIUS_PILL)
+	track.content_margin_top = Look.SLIDER_TRACK / 2.0
+	track.content_margin_bottom = Look.SLIDER_TRACK / 2.0
+	theme.set_stylebox(&"slider", &"HSlider", track)
+	var filled := _rounded(Look.GOLD, Look.RADIUS_PILL)
+	theme.set_stylebox(&"grabber_area", &"HSlider", filled)
+	theme.set_stylebox(&"grabber_area_highlight", &"HSlider", filled)
 
 
 ## La plaque sombre d'une étiquette, bordée de cette couleur.

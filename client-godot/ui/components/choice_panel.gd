@@ -1,16 +1,16 @@
 class_name ChoicePanel
 extends PanelContainer
 ## Le panneau du choix d'une carte, à la place de la barre de jeu (maquettes) : la carte,
-## l'étape (lanceur, puis cibles), ce qu'il faut choisir, l'effet de la carte, et les
-## boutons « ANNULER », « VISER LES JETONS » et « JOUER LA CARTE ». Les boutons ne
-## s'allument que si le serveur propose le coup correspondant.
+## les étapes en losanges (lanceur, puis cibles), ce qu'il faut choisir, l'effet de la
+## carte, et les boutons « ANNULER », « VISER LES JETONS » et « JOUER LA CARTE ». Les
+## boutons ne s'allument que si le serveur propose le coup correspondant.
 
 signal cancel_requested
 signal finish_requested
 signal tokens_requested
 
 var _card: CardView
-var _step: Label
+var _steps: StepBar
 var _title: Label
 var _effect: Label
 var _count: Label
@@ -28,9 +28,9 @@ func _init() -> void:
 	top.add_child(_card)
 	var text := Ui.vbox(Look.GAP_XS)
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_step = Ui.label("", ThemeBuilder.CAPS_LABEL)
-	text.add_child(_step)
-	_title = Ui.label("", ThemeBuilder.NAME_LABEL)
+	_steps = StepBar.new()
+	text.add_child(_steps)
+	_title = Ui.label("", ThemeBuilder.HEADING_LABEL)
 	_title.autowrap_mode = TextServer.AUTOWRAP_WORD
 	text.add_child(_title)
 	_effect = Ui.label("", ThemeBuilder.MUTED_LABEL)
@@ -69,7 +69,14 @@ func show_choice(session: CardChoice, attack: Dictionary, catalog: CardCatalog, 
 
 	var choices := session.choices
 	var deciding := "" if choices == null else choices.decision_kind()
-	_step.text = Labels.STEP_LAUNCHER if deciding == "ChooseLauncher" else Labels.STEP_TARGETS
+	# Les étapes : le lanceur, puis les cibles ; toutes faites quand la carte est prête.
+	var steps: Array[String] = [Labels.STEP_LAUNCHER, Labels.STEP_TARGETS]
+	var current := steps.size()
+	if deciding == "ChooseLauncher":
+		current = 0
+	elif deciding == "ChooseTarget":
+		current = 1
+	_steps.show_phases(steps, current)
 	match deciding:
 		"ChooseLauncher":
 			_title.text = Labels.CHOOSE_LAUNCHER

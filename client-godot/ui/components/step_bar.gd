@@ -1,9 +1,9 @@
-class_name DraftSteps
+class_name StepBar
 extends HBoxContainer
-## La barre des étapes du draft (maquettes) : un losange numéroté par phase, dans l'ordre du
-## format (bans, picks, cache), relié au suivant par un trait. Une phase faite a son losange
-## bordé d'or et le trait qui la suit d'or ; celle en cours, son losange d'or plein ; les
-## suivantes sont ternes.
+## Une barre d'étapes (maquettes) : un losange numéroté par étape, relié au suivant par un
+## trait. Une étape faite a son losange bordé d'or et le trait qui la suit d'or ; celle en
+## cours, son losange d'or plein ; les suivantes sont ternes. Au draft : bans, picks, cache ;
+## pendant le choix d'une carte : lanceur, cibles.
 
 enum State { DONE, CURRENT, NEXT }
 

@@ -42,16 +42,17 @@ var _selected: Variant = null
 var _filter := ALL
 ## Le catalogue avec lequel l'écran a été dessiné.
 var _shown_catalog: CardCatalog
-var _quit_dialog: ConfirmDialog
+var _quit_dialog: AlertDialog
+var _card_sheet := CardSheet.new()
 
 @onready var _page: MarginContainer = %Page
 @onready var _back: Button = %Back
-@onready var _steps: DraftSteps = %Steps
+@onready var _steps: StepBar = %Steps
 @onready var _opponent_chip: TextureRect = %OpponentChip
 @onready var _opponent_name: Label = %OpponentName
 @onready var _hourglass: TextureRect = %Hourglass
 @onready var _status: Label = %Status
-@onready var _opponent_cards: DraftArsenal = %OpponentCards
+@onready var _opponent_cards: MiniArsenal = %OpponentCards
 @onready var _title: Label = %Title
 @onready var _help: Label = %Help
 @onready var _snake: SnakeOrder = %Snake
@@ -61,7 +62,7 @@ var _quit_dialog: ConfirmDialog
 @onready var _grid: GridContainer = %Grid
 @onready var _mine_title: Label = %MineTitle
 @onready var _mine_plan: Label = %MinePlan
-@onready var _my_cards: DraftArsenal = %MyCards
+@onready var _my_cards: MiniArsenal = %MyCards
 @onready var _play: Button = %Play
 
 
@@ -81,7 +82,8 @@ func _ready() -> void:
 	_play.pressed.connect(_on_play)
 	_build_filters()
 	_cards.resized.connect(_fit_columns)
-	_quit_dialog = ConfirmDialog.quit_game()
+	add_child(_card_sheet)
+	_quit_dialog = AlertDialog.quit_game()
 	_quit_dialog.confirmed.connect(home_requested.emit)
 	add_child(_quit_dialog)
 
@@ -164,7 +166,7 @@ func _show_opponent(view: ViewData) -> void:
 	var thinking: bool = Wire.content(step) == opponent
 	_hourglass.visible = thinking
 	_status.text = Labels.DRAFT_THINKING.get(Wire.tag(step), "") if thinking else _last_choices(view, opponent)
-	_opponent_cards.show_arsenal(view, opponent, catalog, _remaining(view, opponent), Look.DRAFT_OPPONENT_CARD, false)
+	_opponent_cards.show_arsenal(view, opponent, catalog, _remaining(view, opponent), Look.OPPONENT_CARD_WIDTH, false)
 
 
 ## Ce que ce joueur vient de faire : ses derniers choix d'une même sorte, à la suite
@@ -226,20 +228,11 @@ func _opponent_tag() -> String:
 
 
 func _build_filters() -> void:
-	var group := ButtonGroup.new()
 	var choices := {ALL: Labels.ALL_RARITIES}
 	choices.merge(Labels.RARITY_FILTERS)
-	for rarity: String in choices:
-		var pill := Ui.button(choices[rarity], ThemeBuilder.FILTER_PILL)
-		pill.custom_minimum_size.y = Look.FILTER_HEIGHT
-		pill.toggle_mode = true
-		pill.button_group = group
-		pill.button_pressed = rarity == _filter
-		pill.focus_mode = Control.FOCUS_NONE
-		pill.pressed.connect(func() -> void:
-			_filter = rarity
-			_redraw(_view))
-		_filter_row.add_child(pill)
+	Ui.add_filter_pills(_filter_row, choices, _filter, func(rarity: String) -> void:
+		_filter = rarity
+		_redraw(_view))
 
 
 ## La grille. Pendant la cache, mon choix : tout le catalogue (les coups permis), filtré par
@@ -248,10 +241,17 @@ func _build_filters() -> void:
 func _show_cards(view: ViewData, kind: String, mine: bool) -> void:
 	Ui.clear(_grid)
 	if kind == "Cache" and mine:
+		# Le trio de cache, choisi dans la page Cartes, passe en tête, étiqueté.
+		var shown: Array = []
 		for action: Variant in view.legal_actions():
 			var attack: Variant = Wire.content(action) if Wire.tag(action) == DRAFT else null
 			if attack is Dictionary and (_filter == ALL or attack.get("rarity") == _filter):
-				_add_card(view, attack, true)
+				shown.append(attack)
+		var trio := shown.filter(func(attack: Dictionary) -> bool: return Settings.in_trio(attack))
+		for attack: Dictionary in trio + shown.filter(func(attack: Dictionary) -> bool: return not Settings.in_trio(attack)):
+			var card := _add_card(view, attack, true)
+			if Settings.in_trio(attack):
+				card.set_tag(Labels.SHEET_YOUR_CACHE)
 		return
 	# Les cartes tirées déjà choisies, et l'étape qui les a choisies, par carte.
 	var drawn: Array = view.draft_pool().duplicate()
@@ -292,6 +292,7 @@ func _add_card(view: ViewData, attack: Dictionary, choosable: bool) -> CardView:
 	card.disabled = not choosable
 	card.set_meta(ATTACK_META, attack)
 	card.pressed.connect(_select.bind(attack, card))
+	card.details_requested.connect(func() -> void: _card_sheet.show_card(attack, catalog, _view.stats_of(attack), false))
 	_grid.add_child(card)
 	return card
 
@@ -347,8 +348,10 @@ func _select(attack: Dictionary, card: CardView) -> void:
 		if other.disabled:
 			continue
 		other.set_selected(other == card)
-		# Une carte à bannir le dit au-dessus d'elle (maquettes : « BANNIR ? »).
-		other.set_tag(Labels.TAG_TO_BAN if other == card and kind == "Ban" else "", CardView.Tag.THREAT)
+		# Une carte à bannir le dit au-dessus d'elle (maquettes : « BANNIR ? ») ; aux autres
+		# étapes, les étiquettes restent (le trio de cache).
+		if kind == "Ban":
+			other.set_tag(Labels.TAG_TO_BAN if other == card else "", CardView.Tag.THREAT)
 	_refresh_button(kind)
 
 

@@ -10,14 +10,10 @@ const FAILURES_BEFORE_WARNING := 3
 
 signal retry_requested
 
-var _loop: Tween
-
 @onready var _page: MarginContainer = %Page
 @onready var _top_space: Control = %TopSpace
 @onready var _art: ElementArt = %Art
 @onready var _title: Label = %Title
-@onready var _track: Panel = %Track
-@onready var _runner: Panel = %Runner
 @onready var _status: Label = %Status
 @onready var _retry: Button = %Retry
 
@@ -30,11 +26,7 @@ func _ready() -> void:
 	_retry.text = Labels.RETRY
 	_retry.custom_minimum_size.y = Look.BUTTON_HEIGHT
 	_retry.pressed.connect(retry_requested.emit)
-	_track.custom_minimum_size = Look.PROGRESS_SIZE
-	_runner.size = Vector2(Look.PROGRESS_SIZE.x * Look.PROGRESS_RUNNER_SHARE, Look.PROGRESS_SIZE.y)
 	_draw_art()
-	_loop = create_tween().set_loops()
-	_loop.tween_property(_runner, "position:x", Look.PROGRESS_SIZE.x, Look.PROGRESS_LOOP).from(-_runner.size.x)
 
 
 func on_connection(status: ServerLink.Status) -> void:

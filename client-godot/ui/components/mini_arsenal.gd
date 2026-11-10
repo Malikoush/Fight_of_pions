@@ -1,8 +1,9 @@
-class_name DraftArsenal
+class_name MiniArsenal
 extends HBoxContainer
-## L'arsenal d'un joueur pendant le draft (maquettes) : ses cartes en petit (la cache
-## adverse en dos), puis une place en pointillés pour chaque carte qu'il lui reste à
-## choisir, nommée par sa sorte (« PICK », « CACHE ») si on le demande.
+## L'arsenal d'un joueur en petit (maquettes) : ses cartes (la cache adverse en dos) ; au
+## draft, puis une place en pointillés pour chaque carte qu'il lui reste à choisir, nommée
+## par sa sorte (« PICK », « CACHE ») si on le demande. Dans la partie, le panneau de
+## l'adversaire montre ainsi ses cartes.
 
 
 func _ready() -> void:

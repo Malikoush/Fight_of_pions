@@ -94,6 +94,7 @@ func _open_game() -> GameScreen:
 	game.play_requested.connect(ServerLink.play)
 	game.home_requested.connect(_on_leave)
 	game.replay_requested.connect(_on_replay)
+	game.reconnect_requested.connect(ServerLink.retry_now)
 	_router.show(game)
 	return game
 
@@ -101,7 +102,7 @@ func _open_game() -> GameScreen:
 ## Une autre connexion a repris la place : la reprendre ici (la place gardée), ou revenir
 ## à l'accueil en l'oubliant.
 func _open_seat_taken() -> void:
-	var page := MessageScreen.new(Labels.SEAT_TAKEN_TITLE, Labels.SEAT_TAKEN_TEXT, Labels.RESUME_HERE, Labels.HOME)
+	var page := MessageScreen.new(Labels.SEAT_TAKEN_TITLE, Labels.SEAT_TAKEN_TEXT, Labels.RESUME_HERE, Labels.HOME, "partager")
 	page.primary_pressed.connect(ServerLink.connect_to_server)
 	page.secondary_pressed.connect(func() -> void:
 		ServerLink.forget_seat()

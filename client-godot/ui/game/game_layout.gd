@@ -4,13 +4,14 @@ extends Control
 ## Elle ne décide de rien : l'écran de partie (`GameScreen`) lui dit quoi montrer, et écoute
 ## ses boutons.
 ##
-## En portrait (téléphone) : l'adversaire en haut, le tour, le plateau, l'arsenal, sa barre,
-## et le bouton d'action sur toute la largeur, sous le pouce. En paysage (PC) : le journal à
+## En portrait (téléphone) : l'adversaire en haut (avec ses cartes en petit), le tour, le
+## plateau, l'arsenal, et en bas ma barre avec le bouton d'action à droite, sous le pouce
+## (maquettes). En paysage (PC) : une barre du haut (flèche, logo, tour), puis le journal à
 ## gauche, le plateau et l'arsenal au milieu, une colonne à droite. Pendant le choix d'une
 ## carte, la réaction au coup adverse ou la fin, leur panneau prend la place de l'arsenal
 ## (et, en portrait, de la barre). Par-dessus tout : le bandeau du tour, le menu de case, la
-## page du journal (portrait), l'annonce d'une carte adverse, la cache révélée, la question
-## pour quitter.
+## page du journal (portrait), l'annonce d'une carte adverse, la cache révélée, la fiche
+## d'une carte, les fenêtres de coupure, la question pour quitter.
 
 ## Le bouton d'action, la flèche de retour (en haut à gauche).
 signal main_pressed
@@ -31,7 +32,12 @@ var journal_panel := JournalPanel.new()
 var action_menu := ActionMenu.new()
 var attack_banner := AttackBanner.new()
 var reveal := RevealOverlay.new()
-var quit_dialog := ConfirmDialog.quit_game()
+var quit_dialog := AlertDialog.quit_game()
+## Les coupures (maquettes) : la connexion perdue (elle reste jusqu'au retour de la
+## connexion), le bot qui ne répond plus.
+var connection_dialog := AlertDialog.new(Labels.CONNECTION_LOST_TITLE, Labels.CONNECTION_LOST_TEXT, Labels.HOME, Labels.RETRY, "connexion", false)
+var bot_dialog := AlertDialog.new(Labels.BOT_DOWN_TITLE, Labels.BOT_DOWN_TEXT, Labels.QUIT, Labels.WAIT, Ui.HOURGLASS, true)
+var card_sheet := CardSheet.new()
 
 var _landscape := false
 var _arranged := false
@@ -46,6 +52,8 @@ var _main_button: Button
 ## La place du bouton d'action : le bouton, ou le cadre « EN ATTENTE ».
 var _action_slot: MarginContainer
 var _waiting: PanelContainer
+## « Raccourci : Entrée », sous le bouton d'action, en paysage.
+var _shortcut: Label
 ## La place du plateau : le plateau 3D est cadré dans son rectangle.
 var _board_area: Control
 var _banner: PanelContainer
@@ -65,12 +73,17 @@ func _ready() -> void:
 	_notice.visible = false
 	thinking.visible = false
 	_build_action_slot()
+	_shortcut = Ui.centered_label(Labels.ENTER_SHORTCUT, ThemeBuilder.CAPTION_LABEL)
 	_board_area = Ui.spacer()
 	_board_area.resized.connect(_on_board_area_resized)
 	_build_banner()
 	_build_journal()
 	_build_attack_banner()
 	add_child(reveal)
+	add_child(card_sheet)
+	connection_dialog.keep_on_cancel = true
+	add_child(connection_dialog)
+	add_child(bot_dialog)
 	add_child(quit_dialog)
 	resized.connect(_on_resized)
 	_on_resized()
@@ -105,6 +118,7 @@ func apply_mode(choosing: bool, reacting: bool, ending: bool) -> void:
 	var busy := choosing or reacting or ending
 	arsenal.visible = not busy
 	_action_slot.visible = not busy
+	_refresh_shortcut()
 	my_panel.visible = _landscape or not busy
 
 
@@ -121,12 +135,27 @@ func show_main_button(text: String, enabled: bool) -> void:
 	_main_button.visible = true
 	_main_button.text = text
 	_main_button.disabled = not enabled
+	_refresh_shortcut()
+
+
+## Vrai si le bouton d'action est montré, permis, et qu'aucun calque ne le couvre (la
+## fiche d'une carte, la question pour quitter, la cache révélée, la page du journal) : le
+## raccourci Entrée le suit.
+func is_main_button_ready() -> bool:
+	var covered := card_sheet.visible or quit_dialog.visible or reveal.visible or _journal_page.visible or connection_dialog.visible or bot_dialog.visible
+	return not covered and _main_button.is_visible_in_tree() and not _main_button.disabled
 
 
 ## À la place du bouton d'action, le cadre en pointillés : on attend l'adversaire.
 func show_waiting() -> void:
 	_main_button.visible = false
 	_waiting.visible = true
+	_refresh_shortcut()
+
+
+## « Raccourci : Entrée » : en paysage, sous le bouton d'action, seulement quand il est là.
+func _refresh_shortcut() -> void:
+	_shortcut.visible = _landscape and _action_slot.visible and _main_button.visible
 
 
 ## Ouvre ou ferme la page du journal (portrait seulement).
@@ -245,7 +274,7 @@ func _on_board_area_resized() -> void:
 func _arrange(landscape: bool) -> void:
 	_arranged = true
 	_landscape = landscape
-	for item: Control in [opponent_panel, my_panel, turn_pill, thinking, _notice, _action_slot, _board_area, arsenal, choice_panel, reaction, end_panel, journal_panel, _journal_button, _back_button]:
+	for item: Control in [opponent_panel, my_panel, turn_pill, thinking, _notice, _action_slot, _shortcut, _board_area, arsenal, choice_panel, reaction, end_panel, journal_panel, _journal_button, _back_button]:
 		if item.get_parent() != null:
 			item.get_parent().remove_child(item)
 	if _top_row.get_parent() != null:
@@ -261,12 +290,26 @@ func _arrange(landscape: bool) -> void:
 	# Ce qui passe par-dessus la page, dans cet ordre.
 	if action_menu.get_parent() == null:
 		add_child(action_menu)
-	for overlay: Control in [_banner, action_menu, _journal_page, attack_banner, reveal, quit_dialog]:
+	for overlay: Control in [_banner, action_menu, _journal_page, attack_banner, reveal, card_sheet, connection_dialog, bot_dialog, quit_dialog]:
 		move_child(overlay, -1)
 
 
 func _landscape_page() -> Control:
+	# La barre du haut : la flèche et le logo à gauche, le tour au milieu.
+	var top := Ui.hbox(Look.GAP_M)
+	var left_side := Ui.hbox(Look.GAP_M)
+	left_side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_side.add_child(_back_button)
+	var logo := Ui.label(Labels.GAME_NAME, ThemeBuilder.LOGO_LABEL)
+	logo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	left_side.add_child(logo)
+	top.add_child(left_side)
+	top.add_child(turn_pill)
+	top.add_child(Ui.spacer())
+	my_panel.set_trailing(null)
+	_action_slot.custom_minimum_size.x = 0.0
 	var row := Ui.hbox(Look.GAP_XL)
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	journal_panel.custom_minimum_size.x = Look.JOURNAL_WIDTH
 	row.add_child(journal_panel)
 	var left := Ui.vbox(Look.GAP_M)
@@ -276,11 +319,14 @@ func _landscape_page() -> Control:
 	row.add_child(left)
 	var column := Ui.vbox(Look.GAP_M)
 	column.custom_minimum_size.x = Look.SIDE_COLUMN_WIDTH
-	for item: Control in [_back_button, turn_pill, thinking, _notice, opponent_panel, my_panel, Ui.spacer(), _action_slot]:
+	for item: Control in [thinking, _notice, opponent_panel, my_panel, Ui.spacer(), _action_slot, _shortcut]:
 		column.add_child(item)
 	row.add_child(column)
 	my_panel.set_identity_visible(true)
-	return Ui.page(row)
+	var page := Ui.vbox(Look.GAP_M)
+	page.add_child(top)
+	page.add_child(row)
+	return Ui.page(page)
 
 
 func _portrait_page() -> Control:
@@ -297,8 +343,11 @@ func _portrait_page() -> Control:
 	_top_row.add_child(left)
 	_top_row.add_child(turn_pill)
 	_top_row.add_child(right)
-	for item: Control in [_top_row, thinking, _notice, _board_area, arsenal, my_panel, _action_slot, choice_panel, reaction, end_panel]:
+	for item: Control in [_top_row, thinking, _notice, _board_area, arsenal, my_panel, choice_panel, reaction, end_panel]:
 		column.add_child(item)
+	# Ma barre porte le bouton d'action, à droite (maquettes).
+	_action_slot.custom_minimum_size.x = Look.BAR_BUTTON_WIDTH
+	my_panel.set_trailing(_action_slot)
 	my_panel.set_identity_visible(false)
 	journal_panel.custom_minimum_size.x = 0.0
 	_journal_page_column.add_child(journal_panel)

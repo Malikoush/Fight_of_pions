@@ -23,7 +23,7 @@ func _ready() -> void:
 
 ## Joue ce son (`place`, `attack`, `kill`, `turn`), si le son est permis.
 static func play(kind: String) -> void:
-	if _instance == null or not Settings.sound or not _instance._players.has(kind):
+	if _instance == null or not Settings.effects_on() or not _instance._players.has(kind):
 		return
 	var player: AudioStreamPlayer = _instance._players[kind]
 	player.volume_db = linear_to_db(maxf(Settings.volume, Look.MIN_VOLUME))

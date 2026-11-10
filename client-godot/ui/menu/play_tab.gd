@@ -22,6 +22,8 @@ signal player_pressed
 var _waiting := false
 var _landscape := false
 var _arranged := false
+## La dernière demande faite au serveur, à refaire si le serveur était complet.
+var _last_request := Callable()
 var _create_card: RoomCard
 var _join_card: RoomCard
 
@@ -87,6 +89,11 @@ func _ready() -> void:
 	_refresh_buttons()
 
 
+## Le pseudo a changé : la pastille le reprend.
+func refresh_player() -> void:
+	_pill.refresh()
+
+
 ## Une coupure a pu perdre la demande : les boutons se réactivent.
 func on_connection_lost() -> void:
 	_set_waiting(false)
@@ -121,8 +128,15 @@ func _fill_texts() -> void:
 	_tip_text.text = Labels.RESUME_TIP
 
 
+## Refait la dernière demande (le serveur était complet).
+func retry() -> void:
+	if _last_request.is_valid():
+		_last_request.call()
+
+
 ## Un geste qui attend le serveur : les boutons se grisent jusqu'à sa réponse.
 func _request(request: Signal) -> void:
+	_last_request = _request.bind(request)
 	_error.visible = false
 	_set_waiting(true)
 	request.emit()
@@ -131,6 +145,7 @@ func _request(request: Signal) -> void:
 func _join() -> void:
 	if _waiting or not _code.is_complete():
 		return
+	_last_request = _join
 	_join_error.visible = false
 	_set_waiting(true)
 	join_requested.emit(_code.code())

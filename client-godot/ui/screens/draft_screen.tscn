@@ -1,8 +1,8 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://ui/screens/draft_screen.gd" id="1_draft"]
-[ext_resource type="Script" path="res://ui/components/draft_steps.gd" id="2_steps"]
-[ext_resource type="Script" path="res://ui/components/draft_arsenal.gd" id="3_arsenal"]
+[ext_resource type="Script" path="res://ui/components/step_bar.gd" id="2_steps"]
+[ext_resource type="Script" path="res://ui/components/mini_arsenal.gd" id="3_arsenal"]
 [ext_resource type="Script" path="res://ui/components/snake_order.gd" id="4_snake"]
 
 [node name="DraftScreen" type="Control"]

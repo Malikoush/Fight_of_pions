@@ -14,7 +14,6 @@ avant ton adversaire."
 const TAGLINE := "Morpion géant, cartes d'attaque, en 1 contre 1."
 
 const CONNECTING := "Connexion au serveur…"
-const RECONNECTING := "Reconnexion…"
 const UNREACHABLE := "Serveur injoignable, nouvel essai…"
 const RETRY := "RÉESSAYER"
 
@@ -125,6 +124,13 @@ const GAME_OVER := "Partie finie"
 
 ## Les cartes et leur choix.
 const SECRET_TAG := "CACHE"
+## La fiche d'une carte.
+const SHEET_COST := "COÛT"
+const SHEET_COOLDOWN := "RECHARGE"
+const SHEET_YOUR_CACHE := "TA CACHE"
+const SHEET_NO_COOLDOWN := "aucune"
+## Sous le bouton d'action, en paysage (PC).
+const ENTER_SHORTCUT := "Raccourci : Entrée"
 const STEP_LAUNCHER := "LANCEUR"
 const STEP_TARGETS := "CIBLES"
 const CHOOSE_LAUNCHER := "Choisis le lanceur"
@@ -148,28 +154,54 @@ const NAV_CARDS := "CARTES"
 const NAV_RULES := "RÈGLES"
 const NAV_SETTINGS := "RÉGLAGES"
 const CARDS_TITLE := "Cartes"
+## Le compte des cartes (« 12 familles · 5 réactions »), le filtre des réactions.
+const CARDS_COUNT := "%d familles · %d réactions"
+const REACTIONS_FILTER := "RÉACTIONS"
+## Le trio de cache, choisi dans la page Cartes, gardé sur l'appareil et mis en avant au
+## draft : le bouton de la fiche, et où il en est.
+const TRIO_ADD := "AJOUTER À MA CACHE"
+const TRIO_REMOVE := "RETIRER DE MA CACHE"
+const TRIO_FULL := "TRIO COMPLET"
+const TRIO_COUNT := "Ma cache : %d / %d"
+const TRIO_HELP := "Touche une carte pour la voir, et la mettre dans ta cache."
 const CARDS_LOADING := "Le catalogue des cartes arrive du serveur…"
 const RULES_TITLE := "Règles"
+## Le carrousel des règles : la page (« 1 / 6 »), les boutons, et ce que montrent ses dessins.
+const RULES_PAGE := "%d / %d"
+const PREVIOUS := "PRÉCÉDENT"
+const NEXT := "SUIVANT"
+const PLAY := "JOUER"
+const RULES_ONE_PLACE := "1 POSE"
+const RULES_ONE_POINT := "1 POINT"
+const RULES_BANK := "BANQUE"
+const RULES_DRAFT_PLAN := "3 PICKS + 1 CACHE"
 const SETTINGS_TITLE := "Réglages"
-const SETTING_SOUND := "Son"
-const SETTING_VOLUME := "Volume"
+## Les réglages (maquettes) : ses sections et ses lignes.
+const SETTINGS_PROFILE := "PROFIL"
+const SETTING_NAME := "Pseudo"
+const SETTING_NAME_NOTE := "Gardé sur cet appareil."
+const SETTINGS_SOUND := "SON"
+const SETTING_MUSIC := "Musique"
+const SETTING_EFFECTS := "Effets"
 const SETTING_VIBRATION := "Vibrations (téléphone)"
+const SETTINGS_ABOUT := "À PROPOS"
+const ABOUT_TEXT := "Fight of Pions, version de développement.\nUn jeu de Martin Ouedraogo et Théo Da Costa."
 const SETTINGS_NOTE := "Les réglages sont gardés sur cet appareil."
+## Une valeur en pourcentage (« 60 »).
+const PERCENT := "%d"
 ## L'essentiel des règles, section par section (`[titre, texte]`), d'après le carnet de
 ## règles (docs/REGLES.md) ; le détail des cartes est dans la page Cartes.
 const RULES := [
-	["LE BUT", "Aligne 6 pions de ta couleur, en ligne, en colonne ou en diagonale, avant ton adversaire."],
-	["TON TOUR", "Tu peux poser un pion gratuitement. Tu gagnes 1 point d'action par tour ; ceux que tu ne dépenses pas restent en banque, jusqu'à 3. Touche « FINIR LE TOUR » quand tu as fini."],
-	["LES CARTES", "Une carte coûte des points d'action, puis se recharge quelques tours. Elle part d'un de tes pions, le lanceur, posé avant ce tour, et vise souvent des cases. Tant que tu n'as pas tout choisi, tu peux annuler sans rien payer."],
-	["LES RÉACTIONS", "Certaines cartes se jouent pendant le tour adverse, juste après un coup qui les déclenche, payées avec ta banque. Une seule par tour adverse."],
-	["LA RÈGLE D'OR", "Une ligne gagne au début de ton tour, si elle est encore là : ton adversaire a son tour pour la casser."],
-	["LES PIONS TUÉS", "Un pion tué part à l'infirmerie quelques tours, puis revient dans ta réserve ; sa tombe reste sur sa case. Certaines cartes l'envoient au cimetière, d'où il ne revient jamais."],
-	["LE DRAFT", "Avant la partie, 10 cartes sont tirées : chacun en bannit une, puis en prend 3 en serpent. Enfin, chacun choisit une carte cachée dans tout le catalogue : l'adversaire ne la découvre que lorsque tu la lances."],
-	["LA FIN", "Une ligne gagne la partie. Si plus personne ne peut jouer, ou après la limite de tours, c'est match nul."],
+	["Aligne 6 pions", "Aligne 6 pions de ta couleur, en ligne, en colonne ou en diagonale, avant ton adversaire. Si plus personne ne peut jouer, ou après la limite de tours, c'est match nul."],
+	["Ton tour", "Tu peux poser un pion gratuitement. Tu gagnes 1 point d'action par tour ; ceux que tu ne dépenses pas restent en banque, jusqu'à 3. Touche « FINIR LE TOUR » quand tu as fini."],
+	["Cartes et points", "Une carte coûte des points d'action, puis se recharge quelques tours. Elle part d'un de tes pions, le lanceur, posé avant ce tour. Un pion tué part à l'infirmerie quelques tours, puis revient dans ta réserve."],
+	["Réactions", "Certaines cartes se jouent pendant le tour adverse, juste après un coup qui les déclenche, payées avec ta banque. Une seule par tour adverse."],
+	["La règle d'or", "Une ligne gagne au début de ton tour, si elle est encore là : ton adversaire a son tour pour la casser."],
+	["Le draft", "Avant la partie, 10 cartes sont tirées : chacun en bannit une, puis en prend 3 en serpent. Enfin, chacun choisit une carte cachée dans tout le catalogue : l'adversaire ne la découvre que lorsque tu la lances."],
 ]
 
 ## La fin de partie, les coupures et les départs (E3g).
-const RESULT_WIN := "Victoire !"
+const RESULT_WIN := "Victoire"
 const RESULT_LOSS := "Défaite"
 const RESULT_DRAW := "Match nul"
 ## La raison de la fin, par raison du moteur (`EndReason`) ; `%d` : les pions à aligner.
@@ -180,9 +212,19 @@ const END_REASONS := {
 	"TooFewPions": "Plus assez de pions pour aligner.",
 }
 const REPLAY := "REJOUER"
+## Sous la raison de la fin : contre qui, et à quel tour.
+const END_CAPTION := "Contre %s · tour %d"
 const SEAT_TAKEN_TITLE := "Partie ouverte ailleurs"
-const SEAT_TAKEN_TEXT := "Cette partie a été reprise sur un autre appareil ou dans une autre fenêtre."
-const RESUME_HERE := "REPRENDRE ICI"
+const SEAT_TAKEN_TEXT := "Ta place a été reprise par une autre connexion : un autre appareil ou un autre onglet."
+const RESUME_HERE := "JOUER ICI"
+## Les fenêtres de coupure (maquettes) : connexion perdue, bot muet, serveur complet.
+const CONNECTION_LOST_TITLE := "Connexion perdue"
+const CONNECTION_LOST_TEXT := "Reconnexion en cours… Ta place dans la partie est gardée."
+const BOT_DOWN_TITLE := "Le bot ne répond plus"
+const BOT_DOWN_TEXT := "La partie est en pause. Tu peux attendre qu'il revienne ou quitter la partie."
+const WAIT := "ATTENDRE"
+const SERVER_FULL_TITLE := "Serveur complet"
+const SERVER_FULL_TEXT := "Trop de parties sont en cours. Réessaie dans un instant."
 const BOT_FAILED := "Le bot ne répond plus, nouvel essai…"
 const FRIEND_LEFT := "Ton ami s'est déconnecté : la partie attend son retour."
 const QUIT_TITLE := "Quitter la partie ?"
@@ -275,6 +317,11 @@ static func token_pile(tokens: int, reward: Variant) -> String:
 	if points is int:
 		return "%s · +%s" % [count, _plural(points, "point")]
 	return "%s · cimetière" % count
+
+
+## « 1 tour », « 2 tours » (la recharge d'une carte).
+static func turns(count: int) -> String:
+	return _plural(count, "tour")
 
 
 ## « 1 jeton », « 3 jetons ».

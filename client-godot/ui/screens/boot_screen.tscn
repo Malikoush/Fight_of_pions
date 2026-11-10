@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://ui/screens/boot_screen.gd" id="1_boot"]
 [ext_resource type="Script" path="res://ui/components/element_art.gd" id="2_art"]
+[ext_resource type="Script" path="res://ui/components/progress_runner.gd" id="3_progress"]
 
 [node name="BootScreen" type="Control"]
 layout_mode = 3
@@ -53,19 +54,9 @@ layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="Track" type="Panel" parent="Page/Column"]
-unique_name_in_owner = true
-clip_contents = true
+[node name="Progress" type="Panel" parent="Page/Column"]
 layout_mode = 2
-size_flags_horizontal = 4
-mouse_filter = 2
-theme_type_variation = &"ProgressTrack"
-
-[node name="Runner" type="Panel" parent="Page/Column/Track"]
-unique_name_in_owner = true
-layout_mode = 0
-mouse_filter = 2
-theme_type_variation = &"ProgressFill"
+script = ExtResource("3_progress")
 
 [node name="Status" type="Label" parent="Page/Column"]
 unique_name_in_owner = true

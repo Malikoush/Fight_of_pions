@@ -56,6 +56,11 @@ func select(index: int) -> void:
 	queue_redraw()
 
 
+## Le pseudo a changé : la pastille le reprend.
+func refresh_player() -> void:
+	_pill.refresh()
+
+
 ## En haut, en paysage (`true`), ou en bas, en portrait.
 func set_wide(wide: bool) -> void:
 	_wide = wide

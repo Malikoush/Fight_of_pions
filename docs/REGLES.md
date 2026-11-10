@@ -467,7 +467,7 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B8 | Le Perroquet peut-il copier le tir d'un garde (« une attaque de 1 point ») ? | Non : il ne copie que des cartes | **2026-11-03** : non (réponse par défaut). |
 | B8b | Queue du lézard Rare : exactement 2 pions, ou jusqu'à 2 ? | Jusqu'à 2, comme le Hibou Rare ; réserve vide, elle pose ce qu'elle peut | **2026-11-03** : jusqu'à 2 (réponse par défaut). |
 | Règles cibles | Le mot-clé « Charge » (ignorer le mal du débarquement), prévu le 2026-10-28, a disparu des fiches : abandonné ? | Oui, abandonné | |
-| B9 | Les Légendaires peuvent-elles sortir au draft ? | Non (comme le GDD actuel) | **2026-11-03** : oui, le tirage et la cache se font dans tout le catalogue. |
+| B9 | Les Légendaires peuvent-elles sortir au draft ? | Non (comme le GDD actuel) | **2026-11-03** : oui, le tirage et la cache se font dans tout le catalogue. Depuis R8 (2026-11-10), le client garde un « trio de cache » choisi dans la page Cartes et le met en avant au draft : c'est une préférence du joueur, pas une règle ; le moteur laisse toujours choisir la cache dans tout le catalogue. |
 | B9 | Comment se déclenche la révélation d'une carte de la cache adverse ? | À définir | **2026-11-03** : quand elle est jouée pour la première fois. |
 | B9 | Le format : combien en cache, combien au draft ? | 1 en cache, 3 au draft | **2026-11-03** : oui, réglable ; 10 cartes tirées, 1 ban chacun, picks en serpent (J2 d'abord). |
 | B9 | La fenêtre de réaction révèle qu'on a une réaction : ouvrir une fenêtre même sans réaction ? | Oui, pour un humain | **2026-11-03** : non, l'indice donné à l'adversaire fait partie du jeu. |

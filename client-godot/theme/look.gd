@@ -127,6 +127,11 @@ const FONT_HEADING := 22
 const FONT_BODY := 17
 const FONT_BUTTON := 21
 const FONT_NUMBER := 32
+## Les nombres d'un panneau de joueur (réserve, points), plus petits : le panneau porte aussi
+## les cartes de l'adversaire, ou le bouton d'action (maquettes).
+const FONT_STAT := 22
+## Le losange des points d'action dans un panneau de joueur.
+const STAT_DIAMOND := 18.0
 ## Les faits d'un panneau de joueur (infirmerie, jetons…).
 const FONT_FACT := 14
 ## Le graissage de la police gothique des titres (police variable).
@@ -169,8 +174,7 @@ const CHIP_SIZE := Vector2(40, 30)
 ## où se trouve le palet d'un pion.
 const ELEMENT_CANVAS := Vector2(128, 144)
 const CHIP_REGION := Rect2(20, 58, 90, 62)
-## Le losange des points d'action, et les petits losanges de la banque.
-const POINT_DIAMOND := 22.0
+## Les petits losanges de la banque.
 const BANK_PIP := 12.0
 const DIAMOND_OUTLINE := 2.0
 
@@ -188,8 +192,16 @@ const CARD_GAP := 8
 const CARD_UNPLAYABLE := Color(0.55, 0.58, 0.56)
 const CARD_LIFT := 10.0
 const CARD_LIFT_TIME := 0.12
+## Un appui plus long que ça (secondes) ouvre la fiche d'une carte au lieu de la jouer.
+const LONG_PRESS := 0.45
+## La fiche d'une carte : la largeur de sa carte, et les losanges de son coût.
+const SHEET_CARD_WIDTH := 150.0
+const SHEET_COST_DIAMOND := 18.0
 ## Le voile d'une carte en recharge, sous le sablier.
 const CARD_COOLDOWN_SHADE := Color(FOREST_DEEP, 0.78)
+## Sous ce voile, le sablier et le nombre de tours, en part de la fenêtre de la carte.
+const CARD_COOLDOWN_ICON_SHARE := 0.35
+const CARD_COOLDOWN_NUMBER_SHARE := 0.4
 ## Sur une carte, le nom et le coût prennent cette part de la hauteur de leur zone (le
 ## ruban, le losange) : ils grandissent et rapetissent avec la carte.
 const CARD_TEXT_SHARE := 0.8
@@ -231,8 +243,8 @@ const PLAY_BUTTON_STRETCH := 2.0
 ## la largeur maximale de l'écran sur un PC ; la hauteur des boutons de filtre.
 const DRAFT_CARD_WIDTH := 76.0
 const DRAFT_MINI_CARD := 38.0
-## Les cartes de l'adversaire, plus petites que les miennes (maquettes).
-const DRAFT_OPPONENT_CARD := 26.0
+## Les cartes de l'adversaire en petit (draft, panneau de l'adversaire en partie).
+const OPPONENT_CARD_WIDTH := 26.0
 const DRAFT_MAX_WIDTH := 760
 const FILTER_HEIGHT := 40
 ## Le draft (maquettes 1-5, p. 7 à 9) :
@@ -260,10 +272,38 @@ const END_PANEL_DELAY := 0.6
 const BOT_RETRY_DELAY := 3.0
 ## Le voile derrière une question (« Quitter la partie ? »).
 const DIALOG_DIM := Color(FOREST_DEEP, 0.8)
+## Les fenêtres de coupure (maquettes 12-17, p. 14 à 17) : la taille de la pastille ronde de
+## leur icône, et celle de l'icône ; leur titre.
+const ALERT_BADGE_SIZE := 52
+const ALERT_ICON_SIZE := 26
+const FONT_ALERT_TITLE := 26
 ## Les sons, fabriqués dans le code : le volume par défaut, le plus bas (le zéro n'a pas de
 ## décibels), le pas du réglage, la force d'une note, et chaque note (hauteur en Hz, durée
 ## en secondes, glissement final en part de la hauteur).
 const DEFAULT_VOLUME := 0.8
+## La musique (pas encore de morceau : le réglage est prêt), et son volume par défaut.
+const DEFAULT_MUSIC := 0.6
+## Le plus long pseudo.
+const PLAYER_NAME_MAX := 16
+## L'épaisseur de la piste d'un curseur de volume.
+const SLIDER_TRACK := 8.0
+## Une ligne de réglage : la largeur de son nom, et celle de sa valeur en pour cent.
+const SETTING_LABEL_WIDTH := 90
+const SETTING_VALUE_WIDTH := 40
+## Un volume de 0 à 1, montré de 0 à 100.
+const PERCENT_SCALE := 100.0
+## Le carrousel des règles : la hauteur de son dessin, ses points (celui de la page, plus
+## long), et dans ses dessins : un palet, le losange d'un point, les losanges de la banque,
+## la largeur d'une carte.
+const RULES_PICTURE_HEIGHT := 220
+const RULES_DOT := Vector2(8, 8)
+const RULES_DOT_CURRENT := Vector2(22, 8)
+const RULES_CHIP := Vector2(64, 46)
+const RULES_DIAMOND := 40.0
+const RULES_BANK_PIPS := 3
+const RULES_CARD_WIDTH := 60.0
+## Le dessin du draft : les cartes prises qu'il montre avant la cache.
+const RULES_DRAFT_PICKS := 3
 const MIN_VOLUME := 0.001
 const VOLUME_STEP := 0.05
 const SOUND_LEVEL := 0.35
@@ -367,6 +407,8 @@ const CONTENT_MAX_WIDTH := 400
 
 ## En paysage (PC), la colonne de droite.
 const SIDE_COLUMN_WIDTH := 340
+## En portrait, la largeur du bouton d'action, dans ma barre (maquettes).
+const BAR_BUTTON_WIDTH := 150
 
 # --- Mouvement (secondes) ---
 

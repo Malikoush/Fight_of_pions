@@ -1,35 +1,25 @@
 class_name MessageScreen
 extends Screen
-## Une page qui dit ce qui se passe et propose quoi faire (« Partie ouverte ailleurs » :
-## « REPRENDRE ICI » ou « ACCUEIL »).
+## Un écran qui n'est qu'une fenêtre (maquettes : « Partie ouverte ailleurs ») : ce qui se
+## passe, sur le fond, et deux choix (« JOUER ICI » ou « ACCUEIL »). Échap ne la ferme pas :
+## il n'y a rien dessous.
 
 signal primary_pressed
 signal secondary_pressed
 
-var _title := ""
-var _text := ""
-var _primary := ""
-var _secondary := ""
+var _dialog: AlertDialog
 
 
-func _init(title: String, text: String, primary: String, secondary: String) -> void:
-	_title = title
-	_text = text
-	_primary = primary
-	_secondary = secondary
+## `icon` : le nom d'une icône des éléments fournis, de braise.
+func _init(title: String, text: String, primary: String, secondary: String, icon: String) -> void:
+	_dialog = AlertDialog.new(title, text, secondary, primary, icon, true)
+	_dialog.keep_on_cancel = true
+	_dialog.confirmed.connect(primary_pressed.emit)
+	_dialog.declined.connect(secondary_pressed.emit)
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var column := Ui.vbox(Look.GAP_L)
-	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	column.add_child(Ui.centered_label(_title, ThemeBuilder.HEADING_LABEL))
-	column.add_child(Ui.centered_label(_text, ThemeBuilder.MUTED_LABEL))
-	var primary := Ui.button(_primary, ThemeBuilder.PRIMARY_BUTTON)
-	primary.pressed.connect(primary_pressed.emit)
-	column.add_child(primary)
-	var secondary := Ui.button(_secondary, ThemeBuilder.SECONDARY_BUTTON)
-	secondary.pressed.connect(secondary_pressed.emit)
-	column.add_child(secondary)
-	add_child(Ui.page(Ui.limit_width(column, Look.CONTENT_MAX_WIDTH)))
+	add_child(_dialog)
+	_dialog.ask()

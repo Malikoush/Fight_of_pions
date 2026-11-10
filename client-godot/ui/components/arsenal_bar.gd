@@ -7,6 +7,8 @@ extends ScrollContainer
 
 ## Le joueur touche la carte de cet emplacement, et elle est jouable.
 signal card_chosen(slot: int)
+## Le joueur veut la fiche de la carte de cet emplacement (clic droit, appui long).
+signal card_details(slot: int)
 
 var _row: HBoxContainer
 var _cards: Array[CardView] = []
@@ -31,6 +33,7 @@ func show_arsenal(view: ViewData, player: String, catalog: CardCatalog) -> void:
 		var card := CardView.new()
 		card.slot = _cards.size()
 		card.pressed.connect(card_chosen.emit.bind(card.slot))
+		card.details_requested.connect(card_details.emit.bind(card.slot))
 		_row.add_child(card)
 		_cards.append(card)
 	for index in _cards.size():

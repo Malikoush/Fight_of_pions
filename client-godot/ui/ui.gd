@@ -112,6 +112,22 @@ static func limit_width(child: Control, max_width: float) -> CenterContainer:
 	return center
 
 
+## Remplit cette rangée de filtres en pastilles (maquettes) : un choix à la fois, dans
+## l'ordre de `choices` (`{valeur: texte}`), celui de `current` allumé ; `chosen` reçoit la
+## valeur touchée.
+static func add_filter_pills(row: HBoxContainer, choices: Dictionary, current: Variant, chosen: Callable) -> void:
+	var group := ButtonGroup.new()
+	for value: Variant in choices:
+		var pill := button(choices[value], ThemeBuilder.FILTER_PILL)
+		pill.custom_minimum_size.y = Look.FILTER_HEIGHT
+		pill.toggle_mode = true
+		pill.button_group = group
+		pill.button_pressed = value == current
+		pill.focus_mode = Control.FOCUS_NONE
+		pill.pressed.connect(chosen.bind(value))
+		row.add_child(pill)
+
+
 ## Retire et libère tous les enfants de ce nœud, tout de suite hors de sa mise en page.
 static func clear(node: Node) -> void:
 	for child in node.get_children():

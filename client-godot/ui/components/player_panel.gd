@@ -5,6 +5,9 @@ extends PanelContainer
 ## et ce qui dure (Terre brûlée, infirmerie, cimetière, jetons, gardes de sa reine). Bordé
 ## d'or quand c'est à lui de décider, de braise en pointillés quand il attend sous Terre
 ## brûlée. Tout vient de la vue.
+##
+## À droite, une place (maquettes) : les cartes de l'adversaire en petit, sa cache en dos ;
+## pour soi, en portrait, le bouton d'action (`set_trailing`).
 
 var _identity: HBoxContainer
 var _chip_slot: Control
@@ -18,13 +21,25 @@ var _bank: DiamondStrip
 var _detail: Label
 var _facts: HFlowContainer
 var _chip_player := ""
+## La place de droite, et les cartes de l'adversaire qu'on y montre.
+var _trailing: HBoxContainer
+var _cards: MiniArsenal
 
 
 func _init() -> void:
 	theme_type_variation = ThemeBuilder.PANEL
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var row := Ui.hbox(Look.GAP_M)
+	add_child(row)
 	var column := Ui.vbox(Look.GAP_XS)
-	add_child(column)
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(column)
+	_trailing = Ui.hbox(0)
+	_trailing.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_trailing)
+	_cards = MiniArsenal.new()
+	_cards.visible = false
+	_trailing.add_child(_cards)
 
 	_identity = Ui.hbox(Look.GAP_S)
 	_chip_slot = Ui.hbox(0)
@@ -35,17 +50,19 @@ func _init() -> void:
 	_identity.add_child(_status)
 	column.add_child(_identity)
 
-	var stats := Ui.hbox(Look.GAP_S)
-	stats.add_child(Ui.icon("reserve", Look.CREAM))
-	_reserve = Ui.label("", ThemeBuilder.NUMBER_LABEL)
+	# Une rangée serrée (maquettes) : le panneau porte aussi, à droite, les cartes de
+	# l'adversaire ou le bouton d'action.
+	var stats := Ui.hbox(Look.GAP_XS)
+	stats.add_child(Ui.icon("reserve", Look.CREAM, Look.FACT_ICON_SIZE))
+	_reserve = Ui.label("", ThemeBuilder.STAT_LABEL)
 	stats.add_child(_reserve)
-	_reserve_total = Ui.label("", ThemeBuilder.MUTED_LABEL)
+	_reserve_total = Ui.label("", ThemeBuilder.CAPTION_LABEL)
 	stats.add_child(_reserve_total)
-	stats.add_child(Ui.gap(Vector2(Look.GAP_M, 0)))
+	stats.add_child(Ui.gap(Vector2(Look.GAP_S, 0)))
 	_points = DiamondStrip.new()
-	_points.diamond = Look.POINT_DIAMOND
+	_points.diamond = Look.STAT_DIAMOND
 	stats.add_child(_points)
-	_points_number = Ui.label("", ThemeBuilder.NUMBER_LABEL)
+	_points_number = Ui.label("", ThemeBuilder.STAT_LABEL)
 	stats.add_child(_points_number)
 	_bank = DiamondStrip.new()
 	stats.add_child(_bank)
@@ -61,9 +78,22 @@ func _init() -> void:
 	column.add_child(_facts)
 
 
+## Met ce contrôle dans la place de droite (le bouton d'action, en portrait), ou l'en retire
+## (`null`).
+func set_trailing(item: Control) -> void:
+	for child in _trailing.get_children():
+		if child != _cards:
+			_trailing.remove_child(child)
+	if item != null:
+		if item.get_parent() != null:
+			item.get_parent().remove_child(item)
+		_trailing.add_child(item)
+
+
 ## Montre ce joueur, tel que la vue le décrit. `deciding_text` dit ce qu'il fait quand c'est
-## à l'adversaire de décider (« joue », ou « réfléchit… » pour un bot).
-func show_side(view: ViewData, player: String, display_name: String, deciding_text: String = Labels.PLAYS) -> void:
+## à l'adversaire de décider (« joue », ou « réfléchit… » pour un bot). Les cartes de
+## l'adversaire se montrent en petit ; le catalogue leur donne leur nom.
+func show_side(view: ViewData, player: String, display_name: String, deciding_text: String = Labels.PLAYS, catalog: CardCatalog = null) -> void:
 	if player != _chip_player:
 		_chip_player = player
 		for old in _chip_slot.get_children():
@@ -90,6 +120,9 @@ func show_side(view: ViewData, player: String, display_name: String, deciding_te
 	_detail.visible = _detail.text != ""
 	var scorched := view.scorched_until(player)
 	_show_facts(view, player, scorched)
+	_cards.visible = not mine
+	if not mine:
+		_cards.show_arsenal(view, player, catalog, [] as Array[String], Look.OPPONENT_CARD_WIDTH, false)
 	if deciding:
 		theme_type_variation = ThemeBuilder.PANEL_ACTIVE
 	else:
