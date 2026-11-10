@@ -1,10 +1,13 @@
 class_name LobbyScreen
 extends Screen
-## La salle d'attente d'une partie entre amis (maquettes 1-5, p. 4) : le code de la salle en
-## cases, « COPIER » et « PARTAGER », les deux joueurs (toi prêt sur ta case ; ton ami en
-## attente, sa place en pointillés, puis prêt), et « LANCER LA PARTIE », permis quand ton ami
-## est là. La partie (son draft) ne s'affiche qu'une fois lancée. « FERMER LA SALLE » (ou la
-## flèche) revient à l'accueil.
+## La salle d'attente d'une partie entre amis (maquettes 1-5, p. 4), chez ses deux joueurs :
+## le code de la salle en cases, les deux joueurs (toi prêt sur ta case ; ton ami en attente,
+## sa place en pointillés, puis prêt), qui commence (tiré au sort par le serveur), et :
+## - chez son créateur : « COPIER », « PARTAGER », et « LANCER LA PARTIE », permis quand son
+##   ami est là ; « FERMER LA SALLE » ;
+## - chez son ami : l'attente du lancement ; « QUITTER LA SALLE ».
+## La partie (son draft) ne s'affiche qu'une fois lancée, chez les deux. La flèche revient à
+## l'accueil.
 ##
 ## Le téléphone n'a pas encore de partage natif (R9) : « PARTAGER » copie un message
 ## d'invitation, prêt à coller.
@@ -34,7 +37,8 @@ var code := ""
 
 func _ready() -> void:
 	Ui.fit_page(_page, Look.CONTENT_MAX_WIDTH)
-	_header.set_title(Labels.LOBBY_TITLE)
+	var hosting := session.hosting()
+	_header.set_title(Labels.LOBBY_TITLE if hosting else Labels.LOBBY_GUEST_TITLE)
 	_header.back_pressed.connect(home_requested.emit)
 	_code_title.text = Labels.ROOM_CODE
 	_code.show_code(code)
@@ -43,7 +47,10 @@ func _ready() -> void:
 	_share.text = Labels.SHARE
 	_versus.text = Labels.VERSUS
 	_launch.text = Labels.LAUNCH
-	_close.text = Labels.CLOSE_ROOM
+	_close.text = Labels.CLOSE_ROOM if hosting else Labels.LEAVE_ROOM
+	# Seul le créateur partage le code et lance la partie.
+	for button: Button in [_copy, _share, _launch]:
+		button.visible = hosting
 	for button: Button in [_copy, _share, _launch]:
 		button.custom_minimum_size.y = Look.BUTTON_HEIGHT
 	_copy.pressed.connect(_copy_to_clipboard.bind(_copy, code, Labels.COPY, Labels.COPIED))
@@ -57,9 +64,15 @@ func _ready() -> void:
 func on_session_changed() -> void:
 	var present := session.opponent_present
 	var mine := ServerLink.seat_player()
-	_me.show_seat(mine, Settings.player_name, true)
+	_me.show_seat(mine, session.pseudo, true)
 	_friend.show_seat(ViewData.other(mine), Labels.FRIEND, present)
-	_help.text = Labels.LOBBY_READY if present else Labels.LOBBY_WAITING
+	var status: String
+	if session.hosting():
+		status = Labels.LOBBY_READY if present else Labels.LOBBY_WAITING
+	else:
+		status = Labels.LOBBY_GUEST_READY if present else Labels.LOBBY_GUEST_ALONE
+	var first := Labels.LOBBY_YOU_START if mine == ViewData.PLAYER_ONE else Labels.LOBBY_FRIEND_STARTS
+	_help.text = "%s\n%s" % [status, first]
 	_launch.disabled = not present
 
 

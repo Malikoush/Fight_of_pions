@@ -25,6 +25,13 @@ func family_name(kind: String) -> String:
 	return _families.get(kind, {}).get("name", kind)
 
 
+## Une carte (`{"kind", "rarity"}`) en clé de dictionnaire : « Ours/Rare ».
+static func key(attack: Variant) -> String:
+	if not (attack is Dictionary):
+		return ""
+	return "%s/%s" % [attack.get("kind", ""), attack.get("rarity", "")]
+
+
 ## Le nom complet d'une carte (`{"kind", "rarity"}`) : « Ours Rare ». Sans catalogue (pas
 ## encore reçu), ses identifiants.
 static func card_name(catalog: CardCatalog, attack: Variant) -> String:

@@ -10,6 +10,10 @@ extends VBoxContainer
 ## La scène (`play_tab.tscn`) porte les deux mises en page : selon l'orientation, des
 ## éléments se montrent ou se cachent, et deux grilles passent d'une à deux colonnes. Un
 ## geste qui attend le serveur grise les boutons jusqu'à sa réponse.
+##
+## Au-dessus de « JOUER CONTRE LE BOT », des pastilles choisissent le bot (facile : le bot
+## aléatoire ; difficile : le MCTS, qui fait gagner une carte), gardé sur l'appareil
+## (`Settings.bot_opponent`) ; la racine le lit pour créer la salle.
 
 signal play_bot_requested
 signal create_room_requested
@@ -73,6 +77,8 @@ func _ready() -> void:
 	for button: Button in [_play_button, _join_button]:
 		button.custom_minimum_size.y = Look.BUTTON_HEIGHT
 
+	_play_box.add_child(_bot_choice())
+	_play_box.move_child(_play_box.get_child(-1), 0)
 	_play_button.pressed.connect(_request.bind(play_bot_requested))
 	_create_card.pressed.connect(_request.bind(create_room_requested))
 	_create_button.pressed.connect(_request.bind(create_room_requested))
@@ -90,8 +96,8 @@ func _ready() -> void:
 
 
 ## Le pseudo a changé : la pastille le reprend.
-func refresh_player() -> void:
-	_pill.refresh()
+func refresh_player(pseudo: String) -> void:
+	_pill.show_pseudo(pseudo)
 
 
 ## Une coupure a pu perdre la demande : les boutons se réactivent.
@@ -116,7 +122,7 @@ func _fill_texts() -> void:
 	_slogan.text = Labels.SLOGAN
 	_tagline.text = Labels.TAGLINE
 	_play_button.text = Labels.PLAY_BOT
-	_play_caption.text = Labels.PLAY_BOT_DETAIL
+	_play_caption.text = Labels.BOT_DETAILS[Settings.bot_opponent]
 	_friends_title.text = Labels.FRIENDS_SECTION
 	_panel_title.text = Labels.FRIENDS_TITLE
 	_intro.text = Labels.FRIENDS_INTRO
@@ -126,6 +132,21 @@ func _fill_texts() -> void:
 	_hint.text = Labels.CODE_HINT
 	_join_button.text = Labels.JOIN
 	_tip_text.text = Labels.RESUME_TIP
+
+
+## Les pastilles du bot à affronter, centrées ; le choix est gardé, la phrase sous le
+## bouton le suit.
+func _bot_choice() -> HBoxContainer:
+	var row := Ui.hbox(Look.GAP_S)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var choices := {}
+	for bot: String in Settings.BOT_OPPONENTS:
+		choices[bot] = Labels.BOT_LEVELS[bot]
+	Ui.add_filter_pills(row, choices, Settings.bot_opponent, func(bot: String) -> void:
+		Settings.bot_opponent = bot
+		Settings.save()
+		_play_caption.text = Labels.BOT_DETAILS[bot])
+	return row
 
 
 ## Refait la dernière demande (le serveur était complet).

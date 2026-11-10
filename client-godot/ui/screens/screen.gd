@@ -45,6 +45,11 @@ func on_refused(_category: ServerErrors.Category, _message: String) -> Reply:
 
 
 ## La session a changé : l'adversaire est arrivé ou parti, le bot ne joue plus, le
-## catalogue est arrivé.
+## catalogue, le pseudo ou la collection sont arrivés.
 func on_session_changed() -> void:
+	pass
+
+
+## La partie vient de finir et la victoire a fait gagner cette carte (`{"kind", "rarity"}`).
+func on_reward(_card: Dictionary) -> void:
 	pass

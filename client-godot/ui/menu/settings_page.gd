@@ -1,31 +1,45 @@
 class_name SettingsPage
 extends MenuPage
-## Les réglages (maquettes 12-17, p. 13), gardés sur l'appareil (`Settings`), par sections :
-## le profil (le pseudo), le son (le volume de la musique et celui des effets, à zéro
-## coupés), les vibrations du téléphone, et « À propos ». Pas d'adresse du serveur (choix
-## de Martin) ; pas encore de musique : son réglage est prêt.
+## Les réglages (maquettes 12-17, p. 13), par sections : le profil (le pseudo du compte,
+## gardé par le serveur), le son (le volume de la musique et celui des effets, à zéro
+## coupés) et les vibrations du téléphone, gardés sur l'appareil (`Settings`), et
+## « À propos ». Pas d'adresse du serveur (choix de Martin) ; pas encore de musique : son
+## réglage est prêt.
 
-## Le pseudo a changé (la pastille du joueur le reprend).
-signal player_name_changed
+## Le joueur valide ce pseudo (Entrée, ou en quittant le champ) : à demander au serveur,
+## qui le vérifie. Sa réponse revient par `show_pseudo`, ou son refus par `show_refusal`.
+signal pseudo_submitted(pseudo: String)
+
+var _pseudo_field: LineEdit
+var _pseudo_error: Label
+## Le pseudo du compte, tel que le serveur l'a donné.
+var _pseudo := ""
+## Le dernier pseudo demandé, tant qu'on n'y a rien retapé : Entrée puis la sortie du champ
+## ne le demandent qu'une fois.
+var _asked := ""
 
 
-func _init() -> void:
+func _init(pseudo: String) -> void:
 	super(Labels.SETTINGS_TITLE)
+	_pseudo = pseudo
 
 
 func _fill() -> void:
 	var profile := _section(Labels.SETTINGS_PROFILE)
 	profile.add_child(Ui.label(Labels.SETTING_NAME, ThemeBuilder.STRONG_LABEL))
-	var name_field := LineEdit.new()
-	name_field.theme_type_variation = ThemeBuilder.TEXT_INPUT
-	name_field.max_length = Look.PLAYER_NAME_MAX
-	name_field.text = Settings.player_name
-	name_field.text_changed.connect(func(text: String) -> void:
-		var cleaned := text.strip_edges()
-		Settings.player_name = cleaned if cleaned != "" else Labels.DEFAULT_PLAYER_NAME
-		Settings.save()
-		player_name_changed.emit())
-	profile.add_child(name_field)
+	_pseudo_field = LineEdit.new()
+	_pseudo_field.theme_type_variation = ThemeBuilder.TEXT_INPUT
+	_pseudo_field.max_length = Look.PLAYER_NAME_MAX
+	_pseudo_field.text = _pseudo
+	_pseudo_field.text_submitted.connect(func(_text: String) -> void: _submit_pseudo())
+	_pseudo_field.focus_exited.connect(_submit_pseudo)
+	_pseudo_field.text_changed.connect(func(_text: String) -> void:
+		_asked = ""
+		_pseudo_error.visible = false)
+	profile.add_child(_pseudo_field)
+	_pseudo_error = _paragraph("", ThemeBuilder.THREAT_LABEL)
+	_pseudo_error.visible = false
+	profile.add_child(_pseudo_error)
 	profile.add_child(_paragraph(Labels.SETTING_NAME_NOTE, ThemeBuilder.CAPTION_LABEL))
 
 	var sound := _section(Labels.SETTINGS_SOUND)
@@ -48,6 +62,29 @@ func _fill() -> void:
 	var about := _section(Labels.SETTINGS_ABOUT)
 	about.add_child(_paragraph(Labels.ABOUT_TEXT, ThemeBuilder.STRONG_LABEL))
 	body.add_child(_paragraph(Labels.SETTINGS_NOTE, ThemeBuilder.CAPTION_LABEL))
+
+
+## Le pseudo du compte a changé (ou vient d'arriver) : le champ le reprend, sauf pendant
+## qu'on y tape.
+func show_pseudo(pseudo: String) -> void:
+	_pseudo = pseudo
+	if _pseudo_field != null and not _pseudo_field.has_focus():
+		_pseudo_field.text = pseudo
+		_pseudo_error.visible = false
+
+
+## Le serveur refuse le pseudo demandé : son message, sous le champ.
+func show_refusal(message: String) -> void:
+	_pseudo_error.text = Labels.sentence(message)
+	_pseudo_error.visible = true
+
+
+## Demande le pseudo tapé, s'il a changé (sans espace autour, comme le serveur le garde).
+func _submit_pseudo() -> void:
+	var typed := _pseudo_field.text.strip_edges()
+	if typed != _pseudo and typed != _asked:
+		_asked = typed
+		pseudo_submitted.emit(typed)
 
 
 ## Une section : un panneau, son nom en petites capitales d'or ; rend sa colonne.

@@ -16,19 +16,41 @@ func test_each_start_resets_the_previous_game() -> bool:
 	return true
 
 
-func test_a_hosted_room_holds_its_last_view_until_launch() -> bool:
+func test_the_account_outlives_each_game() -> bool:
 	var session := Session.new()
-	session.start_host()
-	check(session.waiting_launch(), "la salle attend")
-	var first := view_of("draft_view")
-	var last := view_of("draft_view")
-	session.hold(first, [])
-	session.hold(last, ["x"])
-	var held := session.launch()
-	equal(held[0], last, "seule la dernière vue compte")
-	equal(held[1], ["x"], "avec ses événements")
-	check(not session.waiting_launch(), "lancée")
-	equal(session.launch(), [], "rien de plus à rendre")
+	equal(session.pseudo, Labels.DEFAULT_PLAYER_NAME, "avant le compte")
+	check(session.collection == null, "pas encore de collection")
+	var owned := CardCollection.new([{"kind": "Ours", "rarity": "Common"}])
+	session.note_account("Martin")
+	session.note_collection(owned)
+	session.start_bot()
+	session.reset()
+	equal(session.pseudo, "Martin", "le pseudo reste")
+	equal(session.collection, owned, "la collection reste")
+	return true
+
+
+func test_a_friends_room_holds_its_last_view_until_launch() -> bool:
+	for start: String in ["start_host", "start_guest"]:
+		var session := Session.new()
+		session.call(start)
+		check(session.waiting_launch(), "%s : la salle attend" % start)
+		equal(session.hosting(), start == "start_host", "%s : seul le créateur lance" % start)
+		var first := view_of("draft_view")
+		var last := view_of("draft_view")
+		session.hold(first, [])
+		session.hold(last, ["x"])
+		equal(session.note_launched(false), [], "%s : pas encore lancée" % start)
+		check(session.waiting_launch(), "%s : elle attend encore" % start)
+		var held := session.note_launched(true)
+		equal(held[0], last, "%s : seule la dernière vue compte" % start)
+		equal(held[1], ["x"], "%s : avec ses événements" % start)
+		check(not session.waiting_launch(), "%s : lancée" % start)
+		equal(session.note_launched(true), [], "%s : rien de plus à rendre" % start)
+	var against_bot := Session.new()
+	against_bot.start_bot()
+	against_bot.note_launched(false)
+	check(not against_bot.waiting_launch(), "contre le bot, rien n'attend")
 	return true
 
 
@@ -55,7 +77,7 @@ func test_a_saved_session_comes_back_after_a_restart() -> bool:
 	equal(restarted.mode, Session.Mode.HOST, "le mode revient")
 	equal(restarted.opponent_name, Labels.FRIEND, "contre un ami")
 	check(restarted.waiting_launch(), "la salle attend encore son lancement")
-	first.launch()
+	first.note_launched(true)
 	restarted.restore()
 	check(not restarted.waiting_launch(), "une salle lancée ne l'attend plus")
 	first.start_bot()

@@ -14,7 +14,11 @@ async fn start_server() -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let database = Database::in_memory().await.unwrap();
-    tokio::spawn(async move { axum::serve(listener, serveur::app(database)).await.unwrap() });
+    tokio::spawn(async move {
+        axum::serve(listener, serveur::app(database, None))
+            .await
+            .unwrap()
+    });
     format!("ws://{address}/ws")
 }
 
@@ -89,8 +93,18 @@ impl Client {
     /// Le prochain message, qui doit être une place.
     async fn seated(&mut self) -> (String, Player, String) {
         match self.receive().await {
-            ServerMessage::Seated { code, player, key } => (code, player, key),
+            ServerMessage::Seated {
+                code, player, key, ..
+            } => (code, player, key),
             other => panic!("une place était attendue, reçu : {other:?}"),
+        }
+    }
+
+    /// Le prochain message, qui doit être l'annonce du lancement de la partie.
+    async fn launched(&mut self) {
+        match self.receive().await {
+            ServerMessage::Launched => {}
+            other => panic!("le lancement était attendu, reçu : {other:?}"),
         }
     }
 
@@ -115,6 +129,43 @@ impl Client {
     }
 }
 
+/// Une salle entre amis : `host` la crée (à une place tirée au sort), `guest` la rejoint
+/// (l'autre place), puis `host` la lance. Rend les deux clients rangés par place (J1, J2),
+/// la première vue de chacun, et vrai si l'hôte est J1.
+async fn friends_room(
+    mut host: Client,
+    mut guest: Client,
+) -> (Client, Client, PlayerView, PlayerView, bool) {
+    host.send(ClientMessage::Create {
+        opponent: Opponent::Human,
+        variant: None,
+    })
+    .await;
+    let (code, host_seat, _) = host.seated().await;
+    let (host_view, _) = host.state().await;
+    guest
+        .send(ClientMessage::Join {
+            code: code.to_lowercase(),
+        })
+        .await;
+    let (_, guest_seat, _) = guest.seated().await;
+    assert_ne!(guest_seat, host_seat, "la place laissée libre");
+    let (guest_view, _) = guest.state().await;
+    // Personne ne joue avant le lancement.
+    host.play(Action::EndTurn).await;
+    assert_eq!(host.error_kind().await, "not_launched");
+    guest.send(ClientMessage::Launch).await;
+    assert_eq!(guest.error_kind().await, "not_host");
+    host.send(ClientMessage::Launch).await;
+    host.launched().await;
+    guest.launched().await;
+    if host_seat == Player::One {
+        (host, guest, host_view, guest_view, true)
+    } else {
+        (guest, host, guest_view, host_view, false)
+    }
+}
+
 /// Le coup qu'un client sans règle choisit : passer ou finir son tour s'il le peut, sinon
 /// le premier coup permis (une carte au draft, une pose…).
 fn simple_choice(view: &PlayerView) -> Action {
@@ -128,29 +179,15 @@ fn simple_choice(view: &PlayerView) -> Action {
 #[tokio::test]
 async fn two_humans_play_and_each_sees_only_its_own_cache() {
     let url = start_server().await;
-    let mut one = Client::registered(&url).await;
-    one.send(ClientMessage::Create {
-        opponent: Opponent::Human,
-        variant: None,
-    })
-    .await;
-    let (code, player, _) = one.seated().await;
-    assert_eq!(player, Player::One);
-    let (mut view_of_one, _) = one.state().await;
+    let host = Client::registered(&url).await;
+    let guest = Client::registered(&url).await;
+    let (mut one, mut two, mut view_of_one, mut view_of_two, _) = friends_room(host, guest).await;
     assert_eq!(
         view_of_one.decision,
         Some(Decision::Draft {
             step: DraftStep::Ban(Player::One)
         })
     );
-
-    let mut two = Client::registered(&url).await;
-    two.send(ClientMessage::Join {
-        code: code.to_lowercase(),
-    })
-    .await;
-    assert_eq!(two.seated().await.1, Player::Two);
-    let (mut view_of_two, _) = two.state().await;
     assert!(view_of_two.legal_actions.is_empty(), "ce n'est pas à J2");
 
     // Les bans et les picks, publics, jusqu'à la cache de J1 (choisie en dernier).
@@ -218,20 +255,12 @@ async fn requests_out_of_turn_or_out_of_a_room_are_refused() {
         .unwrap();
     assert!(client.error().await.contains("illisible"));
 
-    client
-        .send(ClientMessage::Create {
-            opponent: Opponent::Human,
-            variant: None,
-        })
-        .await;
-    let (code, _, _) = client.seated().await;
-    client.state().await;
-    let mut other = Client::registered(&url).await;
-    other.send(ClientMessage::Join { code }).await;
-    other.seated().await;
-    other.state().await;
-    other.play(Action::EndTurn).await;
-    assert_eq!(other.error().await, "ce n'est pas à toi de jouer");
+    client.send(ClientMessage::Launch).await;
+    assert!(client.error().await.contains("salle"));
+    let other = Client::registered(&url).await;
+    let (_, mut second, _, _, _) = friends_room(client, other).await;
+    second.play(Action::EndTurn).await;
+    assert_eq!(second.error().await, "ce n'est pas à toi de jouer");
 }
 
 #[tokio::test]
@@ -356,22 +385,15 @@ async fn each_player_learns_when_the_other_arrives_and_leaves() {
     );
 }
 
-/// Une partie entre deux humains, jouée au plus simple jusqu'à la cache de J1 (choisie en
-/// dernier) ; rend les deux clients et la vue de chacun.
+/// Une partie entre deux humains (`host` crée la salle, `guest` la rejoint), jouée au plus
+/// simple jusqu'à la cache de J1 (choisie en dernier) ; rend les deux clients rangés par
+/// place (J1, J2), la vue de chacun, et vrai si l'hôte est J1.
 async fn draft_until_the_first_cache(
-    mut one: Client,
-    mut two: Client,
-) -> (Client, Client, PlayerView, PlayerView) {
-    one.send(ClientMessage::Create {
-        opponent: Opponent::Human,
-        variant: None,
-    })
-    .await;
-    let (code, _, _) = one.seated().await;
-    let (mut view_of_one, _) = one.state().await;
-    two.send(ClientMessage::Join { code }).await;
-    two.seated().await;
-    let (mut view_of_two, _) = two.state().await;
+    host: Client,
+    guest: Client,
+) -> (Client, Client, PlayerView, PlayerView, bool) {
+    let (mut one, mut two, mut view_of_one, mut view_of_two, host_is_one) =
+        friends_room(host, guest).await;
     loop {
         let step = match view_of_one.decision {
             Some(Decision::Draft {
@@ -388,7 +410,7 @@ async fn draft_until_the_first_cache(
         view_of_one = one.state().await.0;
         view_of_two = two.state().await.0;
     }
-    (one, two, view_of_one, view_of_two)
+    (one, two, view_of_one, view_of_two, host_is_one)
 }
 
 /// Les cartes que ce joueur peut choisir au draft, triées.
@@ -511,35 +533,53 @@ async fn a_trio_holds_up_to_three_owned_cards() {
 #[tokio::test]
 async fn each_player_caches_one_of_its_own_cards() {
     let url = start_server().await;
-    // J1 a rangé un trio ; J2 non : le serveur lui tire 3 de ses cartes au hasard.
-    let mut one = Client::connect(&url).await;
-    one.send(ClientMessage::Register { pseudo: None }).await;
-    one.account().await;
-    let (cards, _) = one.collection().await;
-    let trio = vec![cards[5], cards[1]];
-    one.send(ClientMessage::SetCacheTrio {
+    // L'hôte a rangé un trio ; son invité non : le serveur lui tire 3 de ses cartes au hasard.
+    let mut host = Client::connect(&url).await;
+    host.send(ClientMessage::Register { pseudo: None }).await;
+    host.account().await;
+    let (cards_of_host, _) = host.collection().await;
+    let mut trio = vec![cards_of_host[5], cards_of_host[1]];
+    host.send(ClientMessage::SetCacheTrio {
         cards: trio.clone(),
     })
     .await;
-    one.collection().await;
-    let mut two = Client::connect(&url).await;
-    two.send(ClientMessage::Register { pseudo: None }).await;
-    two.account().await;
-    let (cards_of_two, _) = two.collection().await;
+    host.collection().await;
+    trio.sort_unstable();
+    let mut guest = Client::connect(&url).await;
+    guest.send(ClientMessage::Register { pseudo: None }).await;
+    guest.account().await;
+    let (cards_of_guest, _) = guest.collection().await;
+    // Les choix de cache de l'hôte, puis de son invité.
+    let check = |choices: &[Attack], is_host: bool| {
+        if is_host {
+            assert_eq!(choices, trio.as_slice(), "le trio de l'hôte");
+        } else {
+            assert_eq!(choices.len(), 3);
+            assert!(choices.iter().all(|card| cards_of_guest.contains(card)));
+        }
+    };
+    let owned_by = |is_host: bool| {
+        if is_host {
+            &cards_of_host
+        } else {
+            &cards_of_guest
+        }
+    };
 
-    let (mut one, mut two, view_of_one, _) = draft_until_the_first_cache(one, two).await;
-    assert_eq!(draft_choices(&view_of_one), [cards[1], cards[5]]);
-    let not_in_trio = Action::Draft(cards[0]);
-    one.play(not_in_trio).await;
+    // J1 choisit sa cache le premier, puis J2.
+    let (mut one, mut two, view_of_one, _, host_is_one) =
+        draft_until_the_first_cache(host, guest).await;
+    let choices = draft_choices(&view_of_one);
+    check(&choices, host_is_one);
+    let outside = owned_by(host_is_one)
+        .iter()
+        .find(|card| !choices.contains(card))
+        .copied()
+        .unwrap();
+    one.play(Action::Draft(outside)).await;
     assert!(one.error().await.contains("draft"));
-    one.play(Action::Draft(cards[5])).await;
+    one.play(Action::Draft(choices[0])).await;
     one.state().await;
     let (view_of_two, _) = two.state().await;
-    let choices_of_two = draft_choices(&view_of_two);
-    assert_eq!(choices_of_two.len(), 3);
-    assert!(
-        choices_of_two
-            .iter()
-            .all(|card| cards_of_two.contains(card))
-    );
+    check(&draft_choices(&view_of_two), !host_is_one);
 }

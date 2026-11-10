@@ -19,7 +19,13 @@ const RETRY := "RÉESSAYER"
 
 const PLAY_BOT := "JOUER CONTRE LE BOT"
 ## Le temps des essais, le client joue contre le bot aléatoire, qui ne charge pas la machine.
-const PLAY_BOT_DETAIL := "Bot aléatoire · draft, puis partie"
+## Le bot à affronter (`Settings.bot_opponent`) : son nom sur sa pastille, et ce qu'il
+## promet sous le bouton.
+const BOT_LEVELS := {"random": "FACILE", "mcts": "DIFFICILE"}
+const BOT_DETAILS := {
+	"random": "Bot aléatoire · pour s'entraîner, sans carte à gagner",
+	"mcts": "Bot MCTS · une carte à gagner par victoire",
+}
 const FRIENDS_SECTION := "PARTIE ENTRE AMIS"
 const CREATE_ROOM := "CRÉER UNE SALLE"
 const CREATE_ROOM_DETAIL := "Un code à envoyer"
@@ -32,7 +38,7 @@ const OR := "ou"
 const JOIN_WITH_CODE := "Rejoindre avec un code"
 const CODE_HINT := "Tape le code au clavier, il se remplit tout seul."
 const RESUME_TIP := "Coupé en pleine partie ? Relance le jeu : ta place t'attend."
-## Le pseudo, tant que le joueur n'en a pas choisi.
+## Le pseudo, tant que le compte n'est pas connu.
 const DEFAULT_PLAYER_NAME := "Joueur"
 const JOIN_TITLE := "Rejoindre une salle"
 const JOIN_HELP := "Entre le code à 5 caractères que ton ami t'a envoyé."
@@ -42,11 +48,18 @@ const FRIEND := "Ton ami"
 const LOBBY_TITLE := "Créer une salle"
 const LOBBY_WAITING := "Envoie ce code à ton ami. Tu lanceras la partie quand il sera là."
 const LOBBY_READY := "Ton ami est là : tu peux lancer la partie."
+## La salle d'attente chez l'ami qui l'a rejointe, et qui commence (tiré au sort).
+const LOBBY_GUEST_TITLE := "Salle de ton ami"
+const LOBBY_GUEST_READY := "Tu es prêt : ton ami va lancer la partie."
+const LOBBY_GUEST_ALONE := "Ton ami s'est déconnecté : la partie attend son retour."
+const LOBBY_YOU_START := "Tirage au sort : tu commences."
+const LOBBY_FRIEND_STARTS := "Tirage au sort : ton ami commence."
 const PLAYER_READY := "PRÊT"
 const PLAYER_WAITING := "EN ATTENTE"
 const VERSUS := "contre"
 const LAUNCH := "LANCER LA PARTIE"
 const CLOSE_ROOM := "FERMER LA SALLE"
+const LEAVE_ROOM := "QUITTER LA SALLE"
 
 ## Le draft.
 const ROOM_CODE := "CODE DE LA SALLE"
@@ -62,7 +75,6 @@ const SHARE := "PARTAGER"
 const INVITE_COPIED := "INVITATION COPIÉE"
 const INVITE := "Rejoins-moi sur Fight of Pions avec le code %s."
 const ROOM_WAITING := "Envoie ce code à ton ami : il rejoint la salle avec lui."
-const LEAVE_ROOM := "QUITTER LA SALLE"
 const MY_ARSENAL := "MON ARSENAL"
 const DRAFT_CHOOSE := "CHOISIS UNE CARTE"
 const DRAFT_WAIT := "%s choisit…"
@@ -157,14 +169,24 @@ const CARDS_TITLE := "Cartes"
 ## Le compte des cartes (« 12 familles · 5 réactions »), le filtre des réactions.
 const CARDS_COUNT := "%d familles · %d réactions"
 const REACTIONS_FILTER := "RÉACTIONS"
-## Le trio de cache, choisi dans la page Cartes, gardé sur l'appareil et mis en avant au
-## draft : le bouton de la fiche, et où il en est.
+## Le filtre de la collection : ses cartes seulement (par défaut), ou tout le catalogue ;
+## avec leur nombre. Une carte pas encore gagnée est grisée, étiquetée.
+const OWNED_FILTER := "MES CARTES · %d"
+const CATALOG_FILTER := "TOUTES · %d"
+const TAG_NOT_OWNED := "À GAGNER"
+const NO_CARD_MATCHES := "Aucune de tes cartes ne passe ce filtre. Gagne des parties pour en obtenir."
+## Le trio de cache, choisi dans la page Cartes et gardé par le serveur : au draft, la cache
+## se choisit dans ce trio. Le bouton de la fiche, et où il en est.
 const TRIO_ADD := "AJOUTER À MA CACHE"
 const TRIO_REMOVE := "RETIRER DE MA CACHE"
 const TRIO_FULL := "TRIO COMPLET"
-const TRIO_COUNT := "Ma cache : %d / %d"
-const TRIO_HELP := "Touche une carte pour la voir, et la mettre dans ta cache."
+const TRIO_NOT_OWNED := "PAS ENCORE GAGNÉE"
+const TRIO_TITLE := "MA CACHE"
+const TRIO_SLOTS := "%d / %d"
+const TRIO_FREE := "LIBRE"
+const TRIO_HELP := "Touche une de tes cartes pour la mettre dans ta cache. Sans trio, ta cache est tirée au hasard parmi tes cartes à chaque partie."
 const CARDS_LOADING := "Le catalogue des cartes arrive du serveur…"
+const COLLECTION_LOADING := "Ta collection arrive du serveur…"
 const RULES_TITLE := "Règles"
 ## Le carrousel des règles : la page (« 1 / 6 »), les boutons, et ce que montrent ses dessins.
 const RULES_PAGE := "%d / %d"
@@ -179,14 +201,14 @@ const SETTINGS_TITLE := "Réglages"
 ## Les réglages (maquettes) : ses sections et ses lignes.
 const SETTINGS_PROFILE := "PROFIL"
 const SETTING_NAME := "Pseudo"
-const SETTING_NAME_NOTE := "Gardé sur cet appareil."
+const SETTING_NAME_NOTE := "Gardé avec ton compte. Valide avec Entrée."
 const SETTINGS_SOUND := "SON"
 const SETTING_MUSIC := "Musique"
 const SETTING_EFFECTS := "Effets"
 const SETTING_VIBRATION := "Vibrations (téléphone)"
 const SETTINGS_ABOUT := "À PROPOS"
 const ABOUT_TEXT := "Fight of Pions, version de développement.\nUn jeu de Martin Ouedraogo et Théo Da Costa."
-const SETTINGS_NOTE := "Les réglages sont gardés sur cet appareil."
+const SETTINGS_NOTE := "Le son et les vibrations sont gardés sur cet appareil."
 ## Une valeur en pourcentage (« 60 »).
 const PERCENT := "%d"
 ## L'essentiel des règles, section par section (`[titre, texte]`), d'après le carnet de
@@ -241,6 +263,10 @@ const REVEAL_TAG := "CACHE RÉVÉLÉE"
 const REVEAL_TITLE := "%s lance sa carte cachée"
 const REVEAL_DETAIL := "%s · coût %d"
 const TAP_TO_CONTINUE := "Toucher pour continuer"
+## La carte gagnée par une victoire, montrée comme la cache révélée.
+const REWARD_TAG := "NOUVELLE CARTE"
+const REWARD_TITLE := "Ta victoire te rapporte une carte"
+const REWARD_DETAIL := "%s · ajoutée à ta collection"
 const REACT_QUESTION := "Réagir ?"
 const REACT_DEFAULT_TITLE := "L'adversaire vient de jouer"
 const PLAY_REACTION := "JOUER %s"

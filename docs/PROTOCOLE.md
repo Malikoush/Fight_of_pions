@@ -11,6 +11,7 @@ Ce que doit savoir un client (Godot, sur le web, le PC ou le mobile) pour jouer 
 - Une vue complète (configuration et catalogue compris) peut approcher la mémoire de réception par défaut de Godot (64 Kio) : le client Godot en prend 1 Mio.
 - Les coups reçus se renvoient tels quels. Un client dont le JSON lit les nombres en flottants (Godot) doit les réécrire en entiers : le serveur refuse `{"row":3.0}`.
 - `GET /health` répond `ok` (pour l'hébergeur).
+- **Le client web est servi par le serveur**, sur `/`, depuis le dossier de la variable `WEB_DIR` (par défaut `client-godot/export/web`, `/web` dans le conteneur), compressé en gzip ; sans `index.html` dans ce dossier, le serveur ne sert que la WebSocket. La page et le jeu ont ainsi la même adresse : dans un navigateur, le client Godot déduit celle de la WebSocket de la page (`https://hôte:port/` → `wss://hôte:port/ws`, `ServerLink.server_url`) ; hors navigateur, il vise `ws://127.0.0.1:3000/ws`.
 - **Un compte d'abord** : créer ou rejoindre une salle demande d'être connecté à son compte. La première fois, le client envoie `register` et garde le jeton reçu (`account.token`) ; ensuite, à chaque connexion (et après chaque coupure), il envoie `login` avec ce jeton, avant ses autres demandes. `cards` et `rejoin` n'en ont pas besoin.
 - La base des comptes est le fichier de `DATABASE_URL` (par défaut `sqlite://fight_of_pions.db`, dans le dossier où le serveur est lancé), créé au premier lancement.
 
@@ -25,8 +26,9 @@ Chaque message a un champ `type`.
 | Changer de pseudo | `{"type":"set_pseudo","pseudo":"Martin"}` | Réponse : `account`. |
 | Sa collection | `{"type":"collection"}` | Redemande ses cartes et son trio (réponse `collection`). |
 | Ranger son trio de cache | `{"type":"set_cache_trio","cards":[{"kind":"Ours","rarity":"Common"}]}` | De 0 à 3 cartes différentes de sa collection, dans l'ordre voulu. Au draft, la cache se choisit dans le trio ; si le trio est vide, le serveur tire 3 cartes de la collection au hasard, à chaque partie. Compte pour les salles créées ou rejointes ensuite. Réponse : `collection`. |
-| Créer une salle | `{"type":"create","opponent":"mcts"}` | Le client est joueur 1. `opponent` : `"human"` (un ami rejoint avec le code), `"mcts"` (le bot du serveur) ou `"random"`. `variant` (facultatif) : le nom d'une variante du labo ; par défaut « règles actuelles avec draft ». |
-| Rejoindre | `{"type":"join","code":"K7QXM"}` | Le client prend la place libre (joueur 2). Majuscules ou minuscules. |
+| Créer une salle | `{"type":"create","opponent":"mcts"}` | Le client s'assoit à une place tirée au sort (J1 commence le draft et la partie). Contre un bot, la partie est lancée tout de suite ; contre un ami, elle attend `launch`. `opponent` : `"human"` (un ami rejoint avec le code), `"mcts"` (le bot du serveur) ou `"random"`. `variant` (facultatif) : le nom d'une variante du labo ; par défaut « règles actuelles avec draft ». |
+| Rejoindre | `{"type":"join","code":"K7QXM"}` | Le client prend la place laissée libre par le créateur. Majuscules ou minuscules. |
+| Lancer la partie | `{"type":"launch"}` | Seul le créateur d'une salle entre amis, une fois son ami assis. Les deux joueurs reçoivent `launched` ; avant, `play` et `preview` sont refusés (`not_launched`). Une partie déjà lancée le reste. |
 | Reprendre sa place | `{"type":"rejoin","code":"K7QXM","player":"One","key":"…"}` | Après une déconnexion, avec la clé reçue en s'asseyant. |
 | Jouer | `{"type":"play","action":…}` | Un coup de `legal_actions` de sa dernière vue, **recopié tel quel**. |
 | Se remettre à jour | `{"type":"sync"}` | Redemande la vue actuelle (`state`, avec `events` vide). À envoyer si le client pense avoir manqué une vue. |
@@ -55,7 +57,8 @@ Les coups (`action`) ont la forme du moteur. Le client n'a pas à les construire
 
 | Message | Exemple | Quand |
 |---|---|---|
-| Place | `{"type":"seated","code":"K7QXM","player":"One","key":"…"}` | Après `create`, `join` ou `rejoin`. Garder `code` (à donner à l'ami) et `key` (secrète, pour revenir). |
+| Place | `{"type":"seated","code":"K7QXM","player":"One","key":"…","launched":false}` | Après `create`, `join` ou `rejoin`. Garder `code` (à donner à l'ami) et `key` (secrète, pour revenir). `launched` : la partie est-elle lancée ? Sinon, attendre `launched` (salle d'attente). |
+| Partie lancée | `{"type":"launched"}` | Le créateur de la salle l'a lancée : aux deux joueurs. On peut jouer. |
 | Vue | `{"type":"state","view":{…},"events":[…]}` | Juste après s'être assis, puis à chaque coup de n'importe qui. |
 | Aperçu | `{"type":"preview","view":{…}}` ou `{"type":"preview","view":null}` | Réponse à un `preview` : la vue après ces coups, ou `null` si le dernier coup finit les choix de la carte (la suite est prête à être jouée). Rien n'est joué, l'adversaire ne voit rien. |
 | Catalogue | `{"type":"cards","cards":[{"kind":"Ours","name":"Ours","reaction":false,"summary":"…","rules":["…"],"rarities":[{"rarity":"Rare","name":"Rare","effect":"…"}]}]}` | Réponse à `cards` : toutes les familles, dans l'ordre des fiches attaques, avec leurs raretés jouables. Les textes viennent de `serveur/data/cartes.json`, les noms du moteur. Le coût et la recharge sont dans la configuration de la partie (`config.attack_catalog` de la vue). |
@@ -91,7 +94,7 @@ Ce qui s'est passé depuis la vue précédente, pour animer et tenir un journal 
 ## Le déroulé d'une partie
 
 1. Le client se connecte et envoie `create` (ou `join` avec un code).
-2. Il reçoit `seated`, puis une première vue.
+2. Il reçoit `seated`, puis une première vue. Entre amis, la partie attend son lancement : le créateur envoie `launch` quand son ami est là, et les deux reçoivent `launched` ; jusque-là, le client montre la salle d'attente.
 3. À chaque vue : si `legal_actions` n'est pas vide, c'est à lui. Il affiche les choix et envoie le coup choisi. Sinon, il attend la vue suivante (l'adversaire ou le bot joue).
 4. Une carte se joue en plusieurs coups (`UseAttack`, puis des `Choose`…). Pour qu'on puisse l'annuler, le client garde ses choix en cours et demande à chaque étape un `preview` avec la liste des choix déjà faits : la réponse donne les choix suivants (`legal_actions`). Quand la réponse est `"view":null`, la carte est complète : il envoie les coups un par un avec `play`. Annuler, c'est simplement oublier la liste : rien n'a été joué. Tout coup autre que `UseAttack` (poser, pas de la reine ou du Lièvre, tir, passer, finir son tour, le draft) s'envoie directement avec `play` ; un `preview` d'un seul de ces coups répond `null`, ce qui revient au même.
    - Pourquoi l'aperçu s'arrête là : ce qui suit une carte jouée (une Feintaille adverse qui attend sa réponse, une Sentinelle qui répond à une pose) dépend de la cache de l'adversaire. Le montrer sans rien jouer la dévoilerait. Un aperçu qui continue après ce coup est refusé.
@@ -108,6 +111,8 @@ En cas de coupure, le client rouvre une WebSocket et envoie `rejoin` : il retrou
 | `room_full` | Les deux places sont prises | Revenir au menu |
 | `bad_key` | La clé ne correspond pas à cette place | Revenir au menu |
 | `not_seated`, `already_seated` | Demande hors d'une salle, ou deuxième salle sur la même connexion | Un bug du client |
+| `not_launched` | Un coup ou un aperçu avant le lancement de la partie | Attendre `launched` |
+| `not_host`, `opponent_missing` | `launch` par l'ami (seul le créateur lance), ou avant que l'ami soit assis | Un bug du client |
 | `unknown_variant` | Aucune variante n'a ce nom | Un bug du client |
 | `not_your_turn` | Ce n'est pas à ce joueur de décider | Envoyer `sync` |
 | `seat_taken` | Une autre connexion a repris cette place | Fermer cette connexion |

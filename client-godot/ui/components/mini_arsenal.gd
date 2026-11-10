@@ -22,12 +22,4 @@ func show_arsenal(view: ViewData, player: String, catalog: CardCatalog, remainin
 		card.show_slot(view, player, index, catalog, true)
 		add_child(card)
 	for kind in remaining:
-		var place := PanelContainer.new()
-		place.theme_type_variation = ThemeBuilder.WAITING_PANEL
-		place.custom_minimum_size = CardView.footprint(width)
-		place.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if named:
-			var label := Ui.centered_label(Labels.DRAFT_SLOTS.get(kind, ""), ThemeBuilder.SLOT_LABEL)
-			label.size_flags_vertical = Control.SIZE_SHRINK_END
-			place.add_child(label)
-		add_child(place)
+		add_child(CardView.placeholder(width, Labels.DRAFT_SLOTS.get(kind, "") if named else ""))

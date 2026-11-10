@@ -235,23 +235,17 @@ func _build_filters() -> void:
 		_redraw(_view))
 
 
-## La grille. Pendant la cache, mon choix : tout le catalogue (les coups permis), filtré par
-## rareté. Sinon, toutes les cartes tirées à leur place (l'ordre du catalogue) : celles qui
+## La grille. Pendant la cache, mon choix : les cartes que le serveur propose (les coups
+## permis : mon trio de cache, ou 3 de mes cartes tirées au hasard), filtrées par rareté.
+## Sinon, toutes les cartes tirées à leur place (l'ordre du catalogue) : celles qui
 ## restent, et celles déjà bannies ou prises, assombries et étiquetées.
 func _show_cards(view: ViewData, kind: String, mine: bool) -> void:
 	Ui.clear(_grid)
 	if kind == "Cache" and mine:
-		# Le trio de cache, choisi dans la page Cartes, passe en tête, étiqueté.
-		var shown: Array = []
 		for action: Variant in view.legal_actions():
 			var attack: Variant = Wire.content(action) if Wire.tag(action) == DRAFT else null
 			if attack is Dictionary and (_filter == ALL or attack.get("rarity") == _filter):
-				shown.append(attack)
-		var trio := shown.filter(func(attack: Dictionary) -> bool: return Settings.in_trio(attack))
-		for attack: Dictionary in trio + shown.filter(func(attack: Dictionary) -> bool: return not Settings.in_trio(attack)):
-			var card := _add_card(view, attack, true)
-			if Settings.in_trio(attack):
-				card.set_tag(Labels.SHEET_YOUR_CACHE)
+				_add_card(view, attack, true)
 		return
 	# Les cartes tirées déjà choisies, et l'étape qui les a choisies, par carte.
 	var drawn: Array = view.draft_pool().duplicate()
@@ -260,23 +254,18 @@ func _show_cards(view: ViewData, kind: String, mine: bool) -> void:
 		var attack: Variant = entry.get("attack")
 		if attack is Dictionary and Wire.tag(entry.get("step")) in POOL_STEPS:
 			drawn.append(attack)
-			taken[_key(attack)] = entry.get("step")
+			taken[CardCatalog.key(attack)] = entry.get("step")
 	drawn.sort_custom(func(a: Variant, b: Variant) -> bool: return view.catalog_index(a) < view.catalog_index(b))
 	# Une carte se choisit si son coup est permis, et seulement alors.
 	var allowed := {}
 	for action: Variant in view.legal_actions():
 		if Wire.tag(action) == DRAFT and Wire.content(action) is Dictionary:
-			allowed[_key(Wire.content(action))] = true
+			allowed[CardCatalog.key(Wire.content(action))] = true
 	for attack: Variant in drawn:
-		var key := _key(attack)
+		var key := CardCatalog.key(attack)
 		var card := _add_card(view, attack, allowed.has(key))
 		if taken.has(key):
 			_mark_taken(card, taken[key], view.viewer())
-
-
-## Une carte (`{"kind", "rarity"}`), en clé de dictionnaire.
-static func _key(attack: Dictionary) -> String:
-	return "%s/%s" % [attack.get("kind", ""), attack.get("rarity", "")]
 
 
 ## Le nom de la famille d'une carte (« Familia »), comme sur le bouton et l'étiquette.

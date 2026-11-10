@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClientMessage {
-    /// Créer une salle et s'y asseoir comme joueur 1.
+    /// Créer une salle et s'y asseoir, à une place tirée au sort (J1 commence le draft et
+    /// la partie). Contre un bot, la partie est lancée tout de suite ; contre un humain,
+    /// elle attend que le créateur la lance ([`ClientMessage::Launch`]).
     Create {
         /// Contre qui jouer.
         opponent: Opponent,
@@ -22,7 +24,7 @@ pub enum ClientMessage {
         #[serde(default)]
         variant: Option<String>,
     },
-    /// Rejoindre la salle de ce code, comme joueur 2.
+    /// Rejoindre la salle de ce code, à la place laissée libre par son créateur.
     Join {
         /// Le code donné à celui qui a créé la salle.
         code: String,
@@ -36,6 +38,9 @@ pub enum ClientMessage {
         /// La clé reçue en s'asseyant ([`ServerMessage::Seated`]).
         key: String,
     },
+    /// Lancer la partie de la salle qu'on a créée, une fois l'adversaire assis : les deux
+    /// joueurs reçoivent [`ServerMessage::Launched`]. Avant, personne ne peut jouer.
+    Launch,
     /// Redemander sa vue actuelle ([`ServerMessage::State`], sans événement) : pour se
     /// remettre à jour si une vue a été perdue.
     Sync,
@@ -109,7 +114,12 @@ pub enum ServerMessage {
         player: Player,
         /// Sa clé de place, secrète.
         key: String,
+        /// Vrai si la partie est lancée ; sinon, elle attend que le créateur la lance
+        /// ([`ServerMessage::Launched`]).
+        launched: bool,
     },
+    /// Le créateur de la salle a lancé la partie : on peut jouer. Envoyé aux deux joueurs.
+    Launched,
     /// La partie a changé : sa vue entière, et ce qui s'est passé depuis la précédente
     /// (pour animer et tenir un journal), filtré pour lui.
     State {

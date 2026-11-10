@@ -1,0 +1,22 @@
+# Le serveur de Fight of Pions sur une machine à soi (docs/FEUILLE_DE_ROUTE.md, E4e).
+#
+#   docker compose up -d --build     lancer, ou mettre à jour après un `git pull`
+#   docker compose logs -f           suivre ce qu'il écrit
+#
+# - La base des comptes vit dans le volume `donnees` : elle survit aux mises à jour.
+# - L'export web du client (client-godot/export/web, fait avec Godot, jamais commité) est
+#   servi sur `/` : le remplacer suffit, sans reconstruire ni relancer.
+# - Le port n'est ouvert qu'à la machine elle-même : c'est Tailscale Funnel (ou un autre
+#   tunnel) qui l'expose, en https.
+services:
+  serveur:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - donnees:/data
+      - ./client-godot/export/web:/web:ro
+
+volumes:
+  donnees:

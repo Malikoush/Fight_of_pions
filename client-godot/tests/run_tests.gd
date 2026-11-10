@@ -16,6 +16,7 @@ const SUITES := [
 	"res://tests/test_board_timeline.gd",
 	"res://tests/test_pion_status.gd",
 	"res://tests/test_card_catalog.gd",
+	"res://tests/test_card_collection.gd",
 	"res://tests/test_session.gd",
 	"res://tests/test_server_link.gd",
 	"res://tests/test_menu.gd",

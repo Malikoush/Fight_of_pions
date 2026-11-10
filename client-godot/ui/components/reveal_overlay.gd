@@ -1,12 +1,15 @@
 class_name RevealOverlay
 extends Control
-## La cache adverse révélée (maquettes) : par-dessus tout, un voile, des rayons d'or qui
-## tournent lentement derrière la carte en grand, son nom, sa rareté et son coût. Un toucher
-## n'importe où la ferme ; l'écran de partie attend ce toucher pour continuer.
+## Une carte mise en lumière (maquettes, la cache adverse révélée) : par-dessus tout, un
+## voile, des rayons d'or qui tournent lentement derrière la carte en grand, une étiquette,
+## un titre, son nom et une précision. Elle sert à la cache adverse révélée (`reveal` :
+## l'écran de partie attend le toucher pour continuer) et à la carte gagnée (`reward`). Un
+## toucher n'importe où la ferme.
 
 ## Le joueur a touché l'écran : la page est fermée.
 signal dismissed
 
+var _tag: Label
 var _title: Label
 var _card: CardView
 var _name: Label
@@ -31,7 +34,8 @@ func _init() -> void:
 
 	var column := Ui.vbox(Look.GAP_M)
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	column.add_child(Ui.centered_label(Labels.REVEAL_TAG, ThemeBuilder.GOLD_CAPS_LABEL))
+	_tag = Ui.centered_label("", ThemeBuilder.GOLD_CAPS_LABEL)
+	column.add_child(_tag)
 	_title = Ui.centered_label("", ThemeBuilder.HEADING_LABEL)
 	column.add_child(_title)
 	_card = CardView.new(Look.REVEAL_CARD_WIDTH)
@@ -50,12 +54,22 @@ func _init() -> void:
 
 ## Montre la carte cachée (`{"kind", "rarity"}`) que ce joueur vient de lancer.
 func reveal(attack: Dictionary, who: String, catalog: CardCatalog, cost: int) -> void:
+	var rarity := _rarity_name(attack, catalog)
+	_spotlight(Labels.REVEAL_TAG, Labels.REVEAL_TITLE % who, attack, catalog, cost, Labels.REVEAL_DETAIL % [rarity, cost])
+
+
+## Montre la carte (`{"kind", "rarity"}`) que la victoire vient de faire gagner.
+func reward(attack: Dictionary, catalog: CardCatalog) -> void:
+	_spotlight(Labels.REWARD_TAG, Labels.REWARD_TITLE, attack, catalog, 0, Labels.REWARD_DETAIL % _rarity_name(attack, catalog))
+
+
+func _spotlight(tag: String, title: String, attack: Dictionary, catalog: CardCatalog, cost: int, detail: String) -> void:
 	var kind: String = attack.get("kind", "")
-	var rarity: String = attack.get("rarity", "")
-	_title.text = Labels.REVEAL_TITLE % who
+	_tag.text = tag
+	_title.text = title
 	_card.show_attack(attack, catalog, cost)
 	_name.text = catalog.family_name(kind) if catalog != null else kind
-	_detail.text = Labels.REVEAL_DETAIL % [catalog.rarity_name(kind, rarity) if catalog != null else rarity, cost]
+	_detail.text = detail
 	visible = true
 	grab_focus()
 	modulate.a = 0.0
@@ -63,6 +77,11 @@ func reveal(attack: Dictionary, who: String, catalog: CardCatalog, cost: int) ->
 		_fade.kill()
 	_fade = create_tween()
 	_fade.tween_property(self, "modulate:a", 1.0, Look.REVEAL_IN)
+
+
+static func _rarity_name(attack: Dictionary, catalog: CardCatalog) -> String:
+	var rarity: String = attack.get("rarity", "")
+	return catalog.rarity_name(attack.get("kind", ""), rarity) if catalog != null else rarity
 
 
 func _gui_input(event: InputEvent) -> void:

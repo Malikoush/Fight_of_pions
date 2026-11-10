@@ -18,6 +18,11 @@ enum Category {
 	BOT_DOWN,
 	## Le serveur n'accepte plus de nouvelle salle.
 	SERVER_FULL,
+	## Le pseudo demandé est refusé (ou n'a pas pu être gardé) : le dire sous le champ.
+	PSEUDO_REFUSED,
+	## Le trio de cache demandé est refusé : la collection du client est sans doute en retard,
+	## la redemander.
+	TRIO_REFUSED,
 	## Un autre refus (un bug du client, le plus souvent) : rien de particulier à faire.
 	OTHER,
 }
@@ -31,14 +36,26 @@ const _CATEGORIES := {
 	"refused_move": Category.STALE_VIEW,
 	"bot_failed": Category.BOT_DOWN,
 	"server_full": Category.SERVER_FULL,
+	"bad_pseudo": Category.PSEUDO_REFUSED,
+	"not_owned": Category.TRIO_REFUSED,
+	"bad_cache_trio": Category.TRIO_REFUSED,
 }
-## Les refus d'un code tapé à la main : les mêmes `kind` que la place perdue, mais pendant
-## une demande `join`, ils disent seulement que ce code ne va pas.
-const _JOIN_KINDS := ["unknown_room", "room_full"]
+## Le refus d'un jeton de compte que le serveur ne connaît pas : le lien le traite lui-même
+## (il crée un compte neuf), sans catégorie.
+const UNKNOWN_ACCOUNT := "unknown_account"
+
+## Les refus qui, pendant qu'une de ces demandes attend sa réponse, ne parlent que d'elle
+## (par le `type` de la demande) : un code tapé qui ne mène nulle part n'est pas une place
+## perdue ; une base indisponible refuse le pseudo ou le trio demandé.
+const _REQUEST_REFUSALS := {
+	"join": {"unknown_room": Category.JOIN_REFUSED, "room_full": Category.JOIN_REFUSED},
+	"set_pseudo": {"storage": Category.PSEUDO_REFUSED},
+	"set_cache_trio": {"storage": Category.TRIO_REFUSED},
+}
 
 
-## La catégorie de ce refus. `joining` : la demande en cours était un `join`.
-static func category(kind: String, joining: bool = false) -> Category:
-	if joining and kind in _JOIN_KINDS:
-		return Category.JOIN_REFUSED
-	return _CATEGORIES.get(kind, Category.OTHER)
+## La catégorie de ce refus. `pending` : le `type` de la demande qui attend sa réponse
+## (`join`, `set_pseudo`, `set_cache_trio`), ou vide.
+static func category(kind: String, pending: String = "") -> Category:
+	var during: Dictionary = _REQUEST_REFUSALS.get(pending, {})
+	return during.get(kind, _CATEGORIES.get(kind, Category.OTHER))

@@ -29,6 +29,11 @@ pub struct Table {
     outboxes: [Option<Outbox>; 2],
     /// Vrai pendant qu'une tâche fait jouer les bots de la salle : il n'y en a qu'une.
     bots_running: bool,
+    /// La place de celui qui a créé la salle : lui seul la lance.
+    host: Player,
+    /// Vrai une fois la partie lancée (tout de suite contre un bot) : avant, personne ne
+    /// joue.
+    launched: bool,
     /// Le dernier branchement ou débranchement d'un client : une salle abandonnée depuis
     /// trop longtemps est fermée.
     last_seen: Instant,
@@ -45,12 +50,14 @@ pub fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Table {
-    fn new(room: Room, variant: &str) -> Table {
+    fn new(room: Room, variant: &str, host: Player, launched: bool) -> Table {
         Table {
             room,
             variant: variant.to_string(),
             outboxes: [None, None],
             bots_running: false,
+            host,
+            launched,
             last_seen: Instant::now(),
         }
     }
@@ -110,8 +117,28 @@ impl Table {
         }
     }
 
+    /// Lance la partie, à la demande de ce joueur : le créateur de la salle, une fois son
+    /// adversaire assis. Les deux joueurs l'apprennent ; une partie déjà lancée le reste.
+    pub fn launch(&mut self, player: Player) -> Result<(), ServerError> {
+        if self.launched {
+            return Ok(());
+        }
+        if player != self.host {
+            return Err(ServerError::NotHost);
+        }
+        if self.room.free_seat().is_some() {
+            return Err(ServerError::OpponentMissing);
+        }
+        self.launched = true;
+        for outbox in self.outboxes.iter().flatten() {
+            let _ = outbox.try_send(ServerMessage::Launched);
+        }
+        Ok(())
+    }
+
     /// Joue le coup de cet humain, puis l'envoie à tous.
     pub fn play(&mut self, player: Player, action: Action) -> Result<(), ServerError> {
+        self.check_launched()?;
         let events = self.room.play(player, action)?;
         self.broadcast(&events);
         Ok(())
@@ -123,6 +150,7 @@ impl Table {
         player: Player,
         actions: &[Action],
     ) -> Result<ServerMessage, ServerError> {
+        self.check_launched()?;
         let view = self.room.preview(player, actions)?;
         Ok(ServerMessage::Preview {
             view: view.map(Box::new),
@@ -133,7 +161,7 @@ impl Table {
     /// déjà jouer les bots de la salle. La tâche qui la reçoit les fait jouer jusqu'au
     /// bout ([`Table::finish_bot`]).
     pub fn start_bots(&mut self) -> Option<BotSearch> {
-        if self.bots_running {
+        if self.bots_running || !self.launched {
             return None;
         }
         let search = self.room.bot_search()?;
@@ -165,6 +193,14 @@ impl Table {
         self.bots_running = false;
         for outbox in self.outboxes.iter().flatten() {
             let _ = outbox.try_send(ServerMessage::error(error));
+        }
+    }
+
+    fn check_launched(&self) -> Result<(), ServerError> {
+        if self.launched {
+            Ok(())
+        } else {
+            Err(ServerError::NotLaunched)
         }
     }
 
@@ -207,6 +243,8 @@ impl Table {
 pub struct Lobby {
     tables: Mutex<BTreeMap<String, SharedTable>>,
     bot_slots: Arc<Semaphore>,
+    /// La place donnée au créateur d'une salle ; `None` : tirée au sort (le jeu).
+    creator_seat: Option<Player>,
 }
 
 impl Default for Lobby {
@@ -214,6 +252,7 @@ impl Default for Lobby {
         Lobby {
             tables: Mutex::default(),
             bot_slots: Arc::new(Semaphore::new(bot_slots())),
+            creator_seat: None,
         }
     }
 }
@@ -227,18 +266,20 @@ pub struct Entrant<'a> {
     pub collection: &'a Collection,
 }
 
-/// Une place prise : la salle, son code, la place et sa clé.
+/// Une place prise : la salle, son code, la place et sa clé, et si la partie est lancée.
 pub struct Seating {
     pub table: SharedTable,
     pub code: String,
     pub player: Player,
     pub key: String,
+    pub launched: bool,
 }
 
 impl Lobby {
-    /// Ouvre une salle contre cet adversaire, et y assied le demandeur comme joueur 1, sa
-    /// cache limitée par sa collection (`None`, pour les tests : sans compte, la cache dans
-    /// tout le catalogue). Ferme d'abord les salles abandonnées.
+    /// Ouvre une salle contre cet adversaire, et y assied le demandeur à une place tirée au
+    /// sort (J1 commence), sa cache limitée par sa collection (`None`, pour les tests : sans
+    /// compte, la cache dans tout le catalogue). Contre un bot, la partie est lancée tout de
+    /// suite. Ferme d'abord les salles abandonnées.
     pub fn create(
         &self,
         opponent: Opponent,
@@ -247,22 +288,28 @@ impl Lobby {
     ) -> Result<Seating, ServerError> {
         let variant = variant.unwrap_or(ONLINE_VARIANT);
         let config = config_of(variant)?;
-        let second = match opponent {
+        let other = match opponent {
             Opponent::Human => Seat::Free,
             Opponent::Mcts => Seat::Bot(BotKind::Mcts),
             Opponent::Random => Seat::Bot(BotKind::Random),
         };
+        let launched = !matches!(other, Seat::Free);
         let key = random_key();
-        let first = Seat::Human {
+        let host = Seat::Human {
             key: key.clone(),
             account: entrant.map(|entrant| entrant.account),
         };
-        let mut room = Room::new(config, random_u64(), [first, second])?;
+        let player = self.creator_seat();
+        let seats = match player {
+            Player::One => [host, other],
+            Player::Two => [other, host],
+        };
+        let mut room = Room::new(config, random_u64(), seats)?;
         if let Some(entrant) = entrant {
             let choices = entrant.collection.cache_choices(&room.catalog());
-            room.limit_cache(Player::One, &choices)?;
+            room.limit_cache(player, &choices)?;
         }
-        let table = Arc::new(Mutex::new(Table::new(room, variant)));
+        let table = Arc::new(Mutex::new(Table::new(room, variant, player, launched)));
         let mut tables = lock(&self.tables);
         close_abandoned(&mut tables, Instant::now());
         if tables.len() >= MAX_ROOMS {
@@ -278,8 +325,9 @@ impl Lobby {
         Ok(Seating {
             table,
             code,
-            player: Player::One,
+            player,
             key,
+            launched,
         })
     }
 
@@ -288,7 +336,7 @@ impl Lobby {
     pub fn join(&self, code: &str, entrant: Option<Entrant>) -> Result<Seating, ServerError> {
         let table = self.table(code)?;
         let key = random_key();
-        let player = {
+        let (player, launched) = {
             let mut guard = lock(&table);
             let player = guard.room.free_seat().ok_or(ServerError::RoomFull)?;
             if let Some(entrant) = entrant {
@@ -297,25 +345,42 @@ impl Lobby {
             }
             let account = entrant.map(|entrant| entrant.account);
             guard.room.sit(player, key.clone(), account)?;
-            player
+            (player, guard.launched)
         };
         Ok(Seating {
             table,
             code: code.to_uppercase(),
             player,
             key,
+            launched,
         })
     }
 
     /// Rend sa place à un joueur qui revient avec sa clé.
     pub fn rejoin(&self, code: &str, player: Player, key: &str) -> Result<Seating, ServerError> {
         let table = self.table(code)?;
-        lock(&table).room.check_key(player, key)?;
+        let launched = {
+            let guard = lock(&table);
+            guard.room.check_key(player, key)?;
+            guard.launched
+        };
         Ok(Seating {
             table,
             code: code.to_uppercase(),
             player,
             key: key.to_string(),
+            launched,
+        })
+    }
+
+    /// La place du créateur d'une salle : tirée au sort, ou fixée (les tests).
+    fn creator_seat(&self) -> Player {
+        self.creator_seat.unwrap_or_else(|| {
+            if random_u64().is_multiple_of(2) {
+                Player::One
+            } else {
+                Player::Two
+            }
         })
     }
 
@@ -364,18 +429,78 @@ mod tests {
     use super::*;
     use tokio::sync::mpsc;
 
+    /// Un hall où le créateur d'une salle est toujours J1.
+    fn lobby_seating_the_creator_first() -> Lobby {
+        Lobby {
+            creator_seat: Some(Player::One),
+            ..Lobby::default()
+        }
+    }
+
+    #[test]
+    fn the_creator_seat_is_drawn_at_random() {
+        let lobby = Lobby::default();
+        let seats: Vec<Player> = (0..64)
+            .map(|_| lobby.create(Opponent::Random, None, None).unwrap().player)
+            .collect();
+        assert!(seats.contains(&Player::One) && seats.contains(&Player::Two));
+    }
+
+    #[test]
+    fn a_friends_room_waits_for_its_creator_to_launch_it() {
+        let lobby = lobby_seating_the_creator_first();
+        let host = lobby.create(Opponent::Human, None, None).unwrap();
+        assert!(!host.launched, "entre amis, la partie attend");
+        let (host_outbox, mut host_inbox) = mpsc::channel(8);
+        lock(&host.table).connect(host.player, host_outbox);
+        assert_eq!(
+            lock(&host.table).launch(host.player),
+            Err(ServerError::OpponentMissing)
+        );
+        let guest = lobby.join(&host.code, None).unwrap();
+        assert_eq!(guest.player, Player::Two, "la place laissée libre");
+        assert!(!guest.launched);
+        let (guest_outbox, mut guest_inbox) = mpsc::channel(8);
+        let mut table = lock(&host.table);
+        table.connect(guest.player, guest_outbox);
+        assert_eq!(
+            table.play(Player::One, Action::EndTurn),
+            Err(ServerError::NotLaunched)
+        );
+        assert_eq!(table.launch(guest.player), Err(ServerError::NotHost));
+        while host_inbox.try_recv().is_ok() {}
+        while guest_inbox.try_recv().is_ok() {}
+        assert_eq!(table.launch(host.player), Ok(()));
+        assert!(table.launched);
+        assert_eq!(host_inbox.try_recv(), Ok(ServerMessage::Launched));
+        assert_eq!(guest_inbox.try_recv(), Ok(ServerMessage::Launched));
+        assert_eq!(table.launch(host.player), Ok(()), "déjà lancée");
+        drop(table);
+        let back = lobby.rejoin(&host.code, guest.player, &guest.key).unwrap();
+        assert!(back.launched, "qui revient apprend qu'elle est lancée");
+    }
+
+    #[test]
+    fn a_room_against_a_bot_is_launched_at_once() {
+        let seating = Lobby::default()
+            .create(Opponent::Random, None, None)
+            .unwrap();
+        assert!(seating.launched);
+        assert!(lock(&seating.table).launched);
+    }
+
     #[test]
     fn an_abandoned_room_is_closed_after_the_idle_limit() {
         let lobby = Lobby::default();
         let seating = lobby.create(Opponent::Human, None, None).unwrap();
         let (outbox, _inbox) = mpsc::channel(1);
-        lock(&seating.table).connect(Player::One, outbox.clone());
+        lock(&seating.table).connect(seating.player, outbox.clone());
         let later = Instant::now() + ROOM_IDLE_LIMIT;
         let mut tables = lock(&lobby.tables);
         close_abandoned(&mut tables, later);
         assert_eq!(tables.len(), 1, "un joueur est connecté");
 
-        lock(&seating.table).disconnect(Player::One, &outbox);
+        lock(&seating.table).disconnect(seating.player, &outbox);
         close_abandoned(&mut tables, Instant::now());
         assert_eq!(tables.len(), 1, "on peut encore revenir");
         close_abandoned(&mut tables, later + ROOM_IDLE_LIMIT);
@@ -393,7 +518,7 @@ mod tests {
             ..GameConfig::default()
         };
         let room = Room::new(config, 0, [Seat::Free, Seat::Free]).unwrap();
-        let mut table = Table::new(room, "essai");
+        let mut table = Table::new(room, "essai", Player::One, true);
         let at = |row, col| fight_of_pions::Position { row, col };
         for (player, action) in [
             (Player::One, Action::Place(at(0, 0))),
@@ -423,7 +548,7 @@ mod tests {
         for _ in 0..MAX_ROOMS {
             let seating = lobby.create(Opponent::Human, None, None).unwrap();
             let (outbox, inbox) = mpsc::channel(4);
-            lock(&seating.table).connect(Player::One, outbox);
+            lock(&seating.table).connect(seating.player, outbox);
             outboxes.push(inbox);
         }
         assert!(matches!(
@@ -434,13 +559,13 @@ mod tests {
 
     #[test]
     fn stopped_bots_warn_the_players_and_can_start_again() {
-        let lobby = Lobby::default();
+        let lobby = lobby_seating_the_creator_first();
         let seating = lobby.create(Opponent::Random, None, None).unwrap();
         let (outbox, mut inbox) = mpsc::channel(4);
         let mut table = lock(&seating.table);
-        table.connect(Player::One, outbox);
+        table.connect(seating.player, outbox);
         let _view = inbox.try_recv();
-        // Le draft commence par la cache de J1 : ce n'est pas au bot.
+        // Le draft commence par un choix de J1, le joueur : ce n'est pas au bot.
         assert!(table.start_bots().is_none());
         table.bots_running = true;
         table.stop_bots(&ServerError::BotFailed("essai".to_string()));

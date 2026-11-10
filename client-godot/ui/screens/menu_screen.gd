@@ -11,6 +11,9 @@ signal play_bot_requested
 signal create_room_requested
 signal join_screen_requested
 signal join_requested(code: String)
+## Les demandes du compte, faites dans Réglages et Cartes, à envoyer au serveur.
+signal pseudo_submitted(pseudo: String)
+signal cache_trio_submitted(cards: Array)
 
 enum Tab { PLAY, CARDS, RULES, SETTINGS }
 
@@ -29,6 +32,8 @@ var _server_full := AlertDialog.new(Labels.SERVER_FULL_TITLE, Labels.SERVER_FULL
 var _pages: Dictionary[Tab, Control] = {}
 ## Le catalogue que montre la page Cartes, pour la refaire quand il arrive.
 var _shown_catalog: CardCatalog
+## La collection que montre la page Cartes, pour ne la redessiner que quand elle change.
+var _shown_collection: CardCollection
 
 @onready var _layout: VBoxContainer = %Layout
 @onready var _content: MarginContainer = %Content
@@ -56,6 +61,7 @@ func open_tab(tab: Tab) -> void:
 	if not _pages.has(tab):
 		_pages[tab] = _build(tab)
 		_content.add_child(_pages[tab])
+		_refresh_account()
 	for shown: Tab in _pages:
 		_pages[shown].visible = shown == tab
 
@@ -66,9 +72,18 @@ func on_connection(status: ServerLink.Status) -> void:
 		(_pages[Tab.PLAY] as PlayTab).on_connection_lost()
 
 
-## Un refus répond à un geste de l'accueil : le serveur complet, en fenêtre ; les autres
-## (code inconnu…), sur l'accueil.
+## Un refus répond au geste d'une page : le pseudo, sous son champ ; le trio, sur la page
+## Cartes ; le serveur complet, en fenêtre ; les autres (code inconnu…), sur l'accueil.
 func on_refused(category: ServerErrors.Category, message: String) -> Reply:
+	match category:
+		ServerErrors.Category.PSEUDO_REFUSED:
+			if _pages.has(Tab.SETTINGS):
+				(_pages[Tab.SETTINGS] as SettingsPage).show_refusal(message)
+			return Reply.HANDLED
+		ServerErrors.Category.TRIO_REFUSED:
+			if _pages.has(Tab.CARDS):
+				(_pages[Tab.CARDS] as CardsPage).show_refusal(message)
+			return Reply.HANDLED
 	if not _pages.has(Tab.PLAY):
 		return Reply.IGNORED
 	var play := _pages[Tab.PLAY] as PlayTab
@@ -80,9 +95,10 @@ func on_refused(category: ServerErrors.Category, message: String) -> Reply:
 	return Reply.HANDLED
 
 
-## Le catalogue est arrivé : les pages qui montrent des cartes (Cartes, Règles), déjà
-## construites, sont refaites avec lui.
+## La session a changé : le pseudo et la collection sont repris par les pages construites ;
+## un nouveau catalogue refait les pages qui montrent des cartes (Cartes, Règles).
 func on_session_changed() -> void:
+	_refresh_account()
 	if session.catalog == _shown_catalog:
 		return
 	_shown_catalog = session.catalog
@@ -105,24 +121,34 @@ func _build(tab: Tab) -> Control:
 	match tab:
 		Tab.CARDS:
 			_shown_catalog = session.catalog
-			return CardsPage.new(_shown_catalog)
+			var cards := CardsPage.new(session)
+			cards.cache_trio_submitted.connect(cache_trio_submitted.emit)
+			return cards
 		Tab.RULES:
 			_shown_catalog = session.catalog
 			var rules := RulesPage.new(_shown_catalog)
 			rules.play_requested.connect(open_tab.bind(Tab.PLAY))
 			return rules
 		Tab.SETTINGS:
-			var settings := SettingsPage.new()
-			settings.player_name_changed.connect(_refresh_player)
+			var settings := SettingsPage.new(session.pseudo)
+			settings.pseudo_submitted.connect(pseudo_submitted.emit)
 			return settings
 	return _build_play()
 
 
-## Le pseudo a changé : les pastilles du joueur (barre du haut, accueil) le reprennent.
-func _refresh_player() -> void:
-	_nav.refresh_player()
+## Le compte, tel que la session le connaît : les pastilles du joueur (barre, accueil) et le
+## champ des réglages reprennent son pseudo ; la page Cartes, sa collection si elle a
+## changé (une page construite après l'a lue elle-même).
+func _refresh_account() -> void:
+	_nav.refresh_player(session.pseudo)
 	if _pages.has(Tab.PLAY):
-		(_pages[Tab.PLAY] as PlayTab).refresh_player()
+		(_pages[Tab.PLAY] as PlayTab).refresh_player(session.pseudo)
+	if _pages.has(Tab.SETTINGS):
+		(_pages[Tab.SETTINGS] as SettingsPage).show_pseudo(session.pseudo)
+	if session.collection != _shown_collection:
+		_shown_collection = session.collection
+		if _pages.has(Tab.CARDS):
+			(_pages[Tab.CARDS] as CardsPage).refresh()
 
 
 ## L'accueil : ses gestes deviennent ceux du menu, que la racine écoute.

@@ -57,8 +57,8 @@ func select(index: int) -> void:
 
 
 ## Le pseudo a changé : la pastille le reprend.
-func refresh_player() -> void:
-	_pill.refresh()
+func refresh_player(pseudo: String) -> void:
+	_pill.show_pseudo(pseudo)
 
 
 ## En haut, en paysage (`true`), ou en bas, en portrait.

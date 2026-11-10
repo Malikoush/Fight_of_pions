@@ -1,12 +1,15 @@
 class_name Session
 extends RefCounted
-## Ce que le client sait de la partie en cours, au-delà de la vue : contre qui il joue (un
-## bot ou un ami, son nom, s'il est branché), s'il attend de lancer la salle qu'il a créée,
-## si le bot du serveur ne joue plus, et le catalogue des cartes.
+## Ce que le client sait au-delà de la vue :
+## - de la partie en cours : contre qui il joue (un bot ou un ami, son nom, s'il est
+##   branché), s'il attend de lancer la salle qu'il a créée, si le bot du serveur ne joue
+##   plus ;
+## - de ce qui vaut pour toutes les parties, tel que le serveur le dit : le catalogue des
+##   cartes, le pseudo du compte et sa collection.
 ##
 ## Une seule session vit pendant tout le jeu. Ses champs se lisent partout mais ne
 ## s'écrivent que par ses méthodes : `start_*` et `reset` (une nouvelle partie), `hold` et
-## `launch` (la salle à lancer), `note_*` (ce que le serveur annonce). Les écrans la lisent ;
+## `note_launched` (la salle à lancer), `note_*` (ce que le serveur annonce). Les écrans la lisent ;
 ## seule la racine l'écrit.
 ##
 ## Avec un fichier (`SAVE_PATH`), elle y garde comment la partie a commencé et si la salle
@@ -50,12 +53,26 @@ var catalog: CardCatalog:
 		return _catalog
 	set(_value):
 		push_error("Session.catalog s'écrit par note_catalog")
+## Le pseudo du compte (message `account`) ; celui par défaut tant qu'il n'est pas connu.
+var pseudo: String:
+	get:
+		return _pseudo
+	set(_value):
+		push_error("Session.pseudo s'écrit par note_account")
+## Ce que possède le compte (message `collection`) ; `null` tant qu'elle n'est pas reçue.
+var collection: CardCollection:
+	get:
+		return _collection
+	set(_value):
+		push_error("Session.collection s'écrit par note_collection")
 
 var _mode := Mode.NONE
 var _opponent_name := Labels.OPPONENT
 var _opponent_present := false
 var _bot_failed := false
 var _catalog: CardCatalog
+var _pseudo := Labels.DEFAULT_PLAYER_NAME
+var _collection: CardCollection
 ## Vrai tant que le créateur d'une salle ne l'a pas lancée : les vues attendent.
 var _waiting_launch := false
 ## La dernière vue reçue pendant cette attente, et ses événements.
@@ -80,12 +97,13 @@ func start_host() -> void:
 	_begin(Mode.HOST, true)
 
 
-## La salle d'un ami, rejointe avec son code.
+## La salle d'un ami, rejointe avec son code : elle attend que l'ami la lance.
 func start_guest() -> void:
-	_begin(Mode.GUEST, false)
+	_begin(Mode.GUEST, true)
 
 
-## Plus de partie (retour à l'accueil). Le catalogue reste : il vaut pour toutes.
+## Plus de partie (retour à l'accueil). Le catalogue, le pseudo et la collection restent :
+## ils valent pour toutes.
 func reset() -> void:
 	_begin(Mode.NONE, false)
 
@@ -133,9 +151,14 @@ func _save() -> void:
 
 # --- La salle à lancer ---
 
-## Vrai tant que la salle créée attend que son créateur la lance.
+## Vrai tant que la salle entre amis attend que son créateur la lance.
 func waiting_launch() -> bool:
 	return _waiting_launch
+
+
+## Vrai pour le créateur de la salle : lui seul la lance.
+func hosting() -> bool:
+	return _mode == Mode.HOST
 
 
 ## Garde cette vue jusqu'au lancement de la salle (seule la dernière compte).
@@ -143,10 +166,14 @@ func hold(view: ViewData, events: Array) -> void:
 	_held = [view, events]
 
 
-## Lance la salle : rend la vue gardée (`[vue, événements]`, vide s'il n'y en a pas).
-func launch() -> Array:
-	_waiting_launch = false
+## Ce que le serveur dit du lancement de la salle : lancée, ou pas encore (une salle entre
+## amis ; contre le bot, elle l'est toujours). Une fois lancée, rend la vue gardée à montrer
+## (`[vue, événements]`), vide s'il n'y en a pas.
+func note_launched(launched: bool) -> Array:
+	_waiting_launch = not launched and _mode in [Mode.HOST, Mode.GUEST]
 	_save()
+	if _waiting_launch:
+		return []
 	var held := _held
 	_held = []
 	return held
@@ -156,6 +183,14 @@ func launch() -> Array:
 
 func note_catalog(cards: CardCatalog) -> void:
 	_catalog = cards
+
+
+func note_account(account_pseudo: String) -> void:
+	_pseudo = account_pseudo
+
+
+func note_collection(owned: CardCollection) -> void:
+	_collection = owned
 
 
 func note_opponent_present(present: bool) -> void:

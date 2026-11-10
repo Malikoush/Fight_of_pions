@@ -18,6 +18,9 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
 # L'empreinte des jetons de compte : la base ne garde jamais un jeton lui-même.
 sha2 = "0.11"
+# L'export web du client, servi sur `/` à côté de la WebSocket : une seule adresse pour la
+# page et le jeu. Compressé à l'envoi (le moteur du client pèse des dizaines de Mo).
+tower-http = { version = "0.6", features = ["fs", "compression-gzip"] }
 
 [dev-dependencies]
 tokio-tungstenite = "0.29"

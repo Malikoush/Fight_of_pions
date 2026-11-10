@@ -185,6 +185,9 @@ const CARD_RIBBON := Rect2(10, 214, 200, 30)
 const CARD_COST_CENTER := Vector2(38, 68)
 const CARD_COST_SIZE := 44.0
 const CARD_WINDOW := Rect2(35, 51, 150, 155)
+## Le corps de la carte sur la toile (le cadre sans ses marges transparentes) : une place
+## vide en pointillés le suit.
+const CARD_BODY := Rect2(18, 32, 184, 264)
 ## La largeur d'une carte de l'arsenal, et l'écart entre deux cartes.
 const CARD_WIDTH := 80.0
 const CARD_GAP := 8
@@ -242,6 +245,8 @@ const PLAY_BUTTON_STRETCH := 2.0
 ## Le draft : la largeur des cartes de la grille, celle des petites cartes des arsenaux, et
 ## la largeur maximale de l'écran sur un PC ; la hauteur des boutons de filtre.
 const DRAFT_CARD_WIDTH := 76.0
+## Les cartes du trio de cache, exposées en haut de la page Cartes : trois de front.
+const TRIO_CARD_WIDTH := 92.0
 const DRAFT_MINI_CARD := 38.0
 ## Les cartes de l'adversaire en petit (draft, panneau de l'adversaire en partie).
 const OPPONENT_CARD_WIDTH := 26.0

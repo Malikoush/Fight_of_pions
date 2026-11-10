@@ -27,6 +27,12 @@ pub enum ServerError {
     PreviewPastTheCard,
     /// Le serveur a déjà son nombre maximal de salles.
     ServerFull,
+    /// La partie n'est pas encore lancée : personne ne joue.
+    NotLaunched,
+    /// Seul le créateur de la salle la lance.
+    NotHost,
+    /// La partie ne se lance qu'une fois l'adversaire assis.
+    OpponentMissing,
     /// Le bot n'a pas pu jouer (un bug) : la partie attend.
     BotFailed(String),
     /// Le moteur refuse ce coup, ou cette configuration.
@@ -74,6 +80,11 @@ impl fmt::Display for ServerError {
                 )
             }
             ServerError::ServerFull => write!(f, "le serveur est complet, réessaie plus tard"),
+            ServerError::NotLaunched => write!(f, "la partie n'est pas encore lancée"),
+            ServerError::NotHost => write!(f, "seul le créateur de la salle la lance"),
+            ServerError::OpponentMissing => {
+                write!(f, "la partie se lance quand ton adversaire est là")
+            }
             ServerError::BotFailed(why) => {
                 write!(
                     f,
@@ -122,6 +133,9 @@ impl ServerError {
             ServerError::SeatTaken => "seat_taken",
             ServerError::PreviewPastTheCard => "preview_past_the_card",
             ServerError::ServerFull => "server_full",
+            ServerError::NotLaunched => "not_launched",
+            ServerError::NotHost => "not_host",
+            ServerError::OpponentMissing => "opponent_missing",
             ServerError::BotFailed(_) => "bot_failed",
             ServerError::Game(_) => "refused_move",
             ServerError::CardsUnavailable(_) => "cards_unavailable",

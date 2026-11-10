@@ -258,5 +258,27 @@ static func footprint(width: float = Look.CARD_WIDTH) -> Vector2:
 	return Look.CARD_CANVAS * (width / Look.CARD_CANVAS.x) + Vector2(0.0, Look.CARD_LIFT)
 
 
+## Une place vide de la taille d'une carte de cette largeur (une carte à venir au draft, une
+## place libre du trio) : des pointillés qui suivent le corps de la carte, là où elle serait
+## posée, nommée au milieu par ce texte s'il y en a un.
+static func placeholder(width: float, text := "") -> MarginContainer:
+	var body := _scaled(Look.CARD_BODY, width / Look.CARD_CANVAS.x)
+	var face := footprint(width) - Vector2(0.0, Look.CARD_LIFT)
+	var margin := MarginContainer.new()
+	margin.custom_minimum_size = footprint(width)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_theme_constant_override(&"margin_left", roundi(body.position.x))
+	margin.add_theme_constant_override(&"margin_top", roundi(Look.CARD_LIFT + body.position.y))
+	margin.add_theme_constant_override(&"margin_right", roundi(face.x - body.end.x))
+	margin.add_theme_constant_override(&"margin_bottom", roundi(face.y - body.end.y))
+	var place := PanelContainer.new()
+	place.theme_type_variation = ThemeBuilder.WAITING_PANEL
+	place.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if text != "":
+		place.add_child(Ui.centered_label(text, ThemeBuilder.SLOT_LABEL))
+	margin.add_child(place)
+	return margin
+
+
 static func _scaled(rect: Rect2, factor: float) -> Rect2:
 	return Rect2(rect.position * factor, rect.size * factor)

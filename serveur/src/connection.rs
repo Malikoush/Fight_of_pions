@@ -161,6 +161,10 @@ async fn handle(
             let seating = lobby.join(&code, Some(entrant))?;
             client.place = Some(sit(seating, outbox).await);
         }
+        ClientMessage::Launch => {
+            let (table, player) = seated(&client.place, outbox)?;
+            lock(table).launch(player)?;
+        }
         // Reprendre sa place ne demande que sa clé : la cache a été limitée en s'asseyant.
         ClientMessage::Rejoin { code, player, key } => {
             refuse_if_seated(client)?;
@@ -238,9 +242,15 @@ async fn sit(seating: Seating, outbox: &Outbox) -> (SharedTable, Player) {
         code,
         player,
         key,
+        launched,
     } = seating;
     let _ = outbox
-        .send(ServerMessage::Seated { code, player, key })
+        .send(ServerMessage::Seated {
+            code,
+            player,
+            key,
+            launched,
+        })
         .await;
     lock(&table).connect(player, outbox.clone());
     (table, player)

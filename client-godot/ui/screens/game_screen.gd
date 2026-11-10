@@ -14,7 +14,7 @@ extends Screen
 ## Il garde pour lui : montrer une vue, le choix d'une carte (lanceur, puis cibles, chaque
 ## étape étant un aperçu du serveur ; une fois complète, la carte part coup par coup), le
 ## tour adverse (annonce d'une carte, cache révélée, « Réagir ? », « Le bot réfléchit… »),
-## le bouton d'action et la fin.
+## le bouton d'action, la fin et la carte qu'elle fait gagner.
 
 ## Le joueur demande ce coup, recopié de la vue.
 signal play_requested(action: Variant)
@@ -63,6 +63,8 @@ var _stale_previews := 0
 var _main_action: Variant = null
 ## Vrai quand le panneau de fin est montré (après la dernière animation).
 var _end_shown := false
+## La carte gagnée, annoncée avant que la fin soit montrée : elle attend la fin.
+var _reward: Dictionary = {}
 ## Vrai depuis que le bot ne répond plus, jusqu'à ce qu'il joue (la vue n'attend plus sa
 ## décision) : le serveur le relance toutes les quelques secondes, et chaque relance ratée
 ## ne doit pas rouvrir sa fenêtre.
@@ -240,6 +242,18 @@ func _show_end(view: ViewData) -> void:
 	_end_shown = true
 	_board.show_winning_line(view.winning_line())
 	_apply_mode()
+	if not _reward.is_empty():
+		_ui.reveal.reward(_reward, catalog)
+		_reward = {}
+
+
+## La carte gagnée se montre par-dessus la fin : tout de suite si elle est déjà montrée,
+## sinon avec elle (le serveur l'annonce juste après le dernier coup).
+func on_reward(card: Dictionary) -> void:
+	if _end_shown:
+		_ui.reveal.reward(card, catalog)
+	else:
+		_reward = card
 
 
 ## Montre l'arsenal et la barre, ou à leur place le panneau du moment (choix, réaction, fin).

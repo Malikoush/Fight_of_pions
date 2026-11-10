@@ -9,9 +9,8 @@ extends Node
 ## décision est un choix de draft s'affiche sur l'écran du draft, les autres sur celui de la
 ## partie.
 
-## Le temps des essais, le bot est le bot aléatoire, qui ne charge pas la machine. La
-## variante est celle du jeu en ligne (draft compris), choisie par le serveur.
-const BOT_OPPONENT := "random"
+## Le bot est celui choisi à l'accueil (`Settings.bot_opponent`). La variante est celle du
+## jeu en ligne (draft compris), choisie par le serveur.
 const FRIEND_OPPONENT := "human"
 ## Les écrans construits en scène.
 const BOOT_SCENE := preload("res://ui/screens/boot_screen.tscn")
@@ -43,6 +42,10 @@ func _ready() -> void:
 	ServerLink.preview_received.connect(func(view: ViewData) -> void: _router.current.on_preview(view))
 	ServerLink.cards_received.connect(_on_cards_received)
 	ServerLink.opponent_presence.connect(_on_opponent_presence)
+	ServerLink.account_received.connect(_on_account_received)
+	ServerLink.collection_received.connect(_on_collection_received)
+	ServerLink.reward_received.connect(_on_reward_received)
+	ServerLink.room_launch.connect(_on_room_launch)
 	ServerLink.server_error.connect(_on_server_error)
 	_open_boot()
 	ServerLink.connect_to_server()
@@ -63,6 +66,8 @@ func _open_menu() -> void:
 	menu.create_room_requested.connect(_on_create_room)
 	menu.join_screen_requested.connect(_open_join)
 	menu.join_requested.connect(_on_join)
+	menu.pseudo_submitted.connect(ServerLink.set_pseudo)
+	menu.cache_trio_submitted.connect(ServerLink.set_cache_trio)
 	_router.show(menu)
 
 
@@ -157,6 +162,23 @@ func _on_opponent_presence(connected: bool) -> void:
 	_router.current.on_session_changed()
 
 
+func _on_account_received(_id: int, pseudo: String) -> void:
+	_session.note_account(pseudo)
+	_router.current.on_session_changed()
+
+
+func _on_collection_received(cards: Array, cache_trio: Array) -> void:
+	_session.note_collection(CardCollection.new(cards, cache_trio))
+	_router.current.on_session_changed()
+
+
+## Une carte gagnée : l'écran la montre, et la collection est redemandée au serveur, qui
+## seul la tient à jour.
+func _on_reward_received(card: Dictionary) -> void:
+	_router.current.on_reward(card)
+	ServerLink.request_collection()
+
+
 ## Un refus du serveur : ce qui change d'écran est décidé ici, le reste par l'écran affiché.
 func _on_server_error(category: ServerErrors.Category, message: String) -> void:
 	print("Refus du serveur : %s" % message)
@@ -176,6 +198,9 @@ func _on_server_error(category: ServerErrors.Category, message: String) -> void:
 			_router.current.on_session_changed()
 			get_tree().create_timer(Look.BOT_RETRY_DELAY).timeout.connect(ServerLink.sync)
 			return
+		ServerErrors.Category.TRIO_REFUSED:
+			# La collection du client est sans doute en retard : la redemander.
+			ServerLink.request_collection()
 	if _router.current.on_refused(category, message) == Screen.Reply.RESYNC:
 		ServerLink.sync()
 
@@ -184,7 +209,7 @@ func _on_server_error(category: ServerErrors.Category, message: String) -> void:
 
 func _on_play_bot() -> void:
 	_session.start_bot()
-	ServerLink.create_room(BOT_OPPONENT)
+	ServerLink.create_room(Settings.bot_opponent)
 
 
 func _on_create_room() -> void:
@@ -197,9 +222,15 @@ func _on_join(code: String) -> void:
 	ServerLink.join_room(code)
 
 
-## Le créateur de la salle la lance : la vue gardée s'affiche (le draft commence).
+## Le créateur de la salle la lance : le serveur l'annoncera aux deux joueurs.
 func _on_launch() -> void:
-	var held := _session.launch()
+	ServerLink.launch_room()
+
+
+## Le serveur dit où en est le lancement de la salle : une fois lancée, la vue gardée
+## s'affiche (le draft commence), chez le créateur comme chez son ami.
+func _on_room_launch(launched: bool) -> void:
+	var held := _session.note_launched(launched)
 	if held.size() == 2:
 		_on_state_received(held[0], held[1])
 
