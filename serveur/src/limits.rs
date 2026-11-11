@@ -70,6 +70,13 @@ pub const RECORD_RETRY_DELAY: Duration = Duration::from_secs(2);
 /// À l'arrêt du serveur, le temps laissé aux enregistrements en cours pour finir.
 pub const SHUTDOWN_GRACE: Duration = Duration::from_secs(10);
 
+/// L'heure (UTC) de la sauvegarde de chaque nuit, quand le serveur a un dossier où la
+/// ranger (`BACKUP_DIR`) : 2 h, soit 3 ou 4 h à Paris, quand personne ne joue.
+pub const BACKUP_HOUR_UTC: u64 = 2;
+
+/// Les sauvegardes gardées dans ce dossier : une semaine de nuits.
+pub const BACKUPS_KEPT: usize = 7;
+
 /// Les recherches de bot menées en même temps : chacune occupe un cœur, et il en reste au
 /// moins un pour les connexions.
 pub fn bot_slots() -> usize {

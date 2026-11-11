@@ -13,8 +13,12 @@
 //!
 //! `serveur --health` vérifie qu'un serveur répond sur ce port (`/health`), sans rien
 //! lancer : c'est le contrôle de santé du conteneur, sans outil de plus dans l'image.
+//!
+//! Avec un dossier dans la variable `BACKUP_DIR`, il y sauvegarde la base chaque nuit (E4i).
+//! `serveur admin <commande>` administre la même base, à côté du serveur qui tourne :
+//! comptes, cartes, parties, sauvegarde (`serveur admin aide`).
 
-use serveur::{Database, Server};
+use serveur::{Database, Server, administer};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::path::PathBuf;
@@ -26,6 +30,8 @@ const DEFAULT_DATABASE: &str = "sqlite://fight_of_pions.db";
 const DEFAULT_WEB_DIR: &str = "client-godot/export/web";
 /// L'option du contrôle de santé.
 const HEALTH_FLAG: &str = "--health";
+/// La commande d'administration.
+const ADMIN_COMMAND: &str = "admin";
 /// Le temps laissé au contrôle de santé pour se connecter, écrire et lire.
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -35,7 +41,8 @@ fn main() -> ExitCode {
         .and_then(|port| port.parse().ok())
         .unwrap_or(DEFAULT_PORT);
     let address = SocketAddr::from((Ipv4Addr::UNSPECIFIED, port));
-    if std::env::args().nth(1).as_deref() == Some(HEALTH_FLAG) {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some(HEALTH_FLAG) {
         return check_health(SocketAddr::from((Ipv4Addr::LOCALHOST, port)));
     }
     let runtime = match tokio::runtime::Runtime::new() {
@@ -45,6 +52,9 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    if args.first().map(String::as_str) == Some(ADMIN_COMMAND) {
+        return runtime.block_on(admin(&args[1..]));
+    }
     match runtime.block_on(serve(address)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
@@ -54,9 +64,45 @@ fn main() -> ExitCode {
     }
 }
 
+/// L'adresse de la base : `DATABASE_URL`, ou le fichier du dossier où l'on est.
+fn database_url() -> String {
+    std::env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE.to_string())
+}
+
+/// Le dossier des sauvegardes, s'il y en a un (`BACKUP_DIR`).
+fn backup_dir() -> Option<PathBuf> {
+    std::env::var("BACKUP_DIR")
+        .ok()
+        .filter(|folder| !folder.is_empty())
+        .map(PathBuf::from)
+}
+
+/// `serveur admin …` : la commande sur la base, son texte sur la sortie, une erreur sur la
+/// sortie d'erreur (et un code d'échec).
+async fn admin(args: &[String]) -> ExitCode {
+    let database_url = database_url();
+    // Une base qui n'existe pas n'est pas créée : l'adresse est sans doute mal réglée.
+    let database = match Database::open_existing(&database_url).await {
+        Ok(database) => database,
+        Err(error) => {
+            eprintln!("base {database_url} introuvable ou illisible : {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match administer(&database, args, backup_dir().as_deref()).await {
+        Ok(text) => {
+            println!("{text}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 async fn serve(address: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
-    let database_url =
-        std::env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE.to_string());
+    let database_url = database_url();
     let database = Database::open(&database_url)
         .await
         .map_err(|error| format!("base {database_url} : {error}"))?;
@@ -73,6 +119,13 @@ async fn serve(address: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
         None => println!("Pas de client web (aucun index.html dans WEB_DIR) : WebSocket seule"),
     }
     let server = Server::new(database, web.as_deref());
+    match backup_dir() {
+        Some(folder) => {
+            println!("Sauvegardes : chaque nuit dans {}", folder.display());
+            server.back_up_nightly(folder);
+        }
+        None => println!("Pas de sauvegarde automatique (aucun dossier dans BACKUP_DIR)"),
+    }
     // Au signal, le serveur n'accepte plus personne et ferme les connexions ; puis il attend
     // les enregistrements en cours.
     let close_connections = server.connection_closer();

@@ -11,6 +11,11 @@
 #   enregistrées, celles en cours sont perdues) et le relance avec la nouvelle image.
 # - La base des comptes vit dans le volume `donnees` : elle survit aux mises à jour et aux
 #   redémarrages. Ne jamais lancer `docker compose down -v` : le `-v` efface les volumes.
+# - Chaque nuit, le serveur en range une copie sur le disque des médias (les 7 dernières) :
+#   un autre disque que la base. Le dossier doit exister et appartenir à l'utilisateur du
+#   conteneur (10001) : docs/DEPLOIEMENT.md, « La base ».
+# - L'administration (comptes, cartes, parties, sauvegarde) :
+#     docker compose exec serveur serveur admin aide
 # - Le port n'est ouvert qu'à la machine elle-même : c'est Tailscale Funnel qui l'expose, en
 #   https (`tailscale funnel --bg 3000`).
 
@@ -29,10 +34,14 @@ services:
     # Jamais plus d'un cœur du processeur, quoi qu'il arrive : le reste est pour la machine
     # (Jellyfin…). Le serveur le voit et ne lance qu'un bot à la fois.
     cpus: 1
+    environment:
+      # Le dossier des sauvegardes de chaque nuit, dans le conteneur.
+      BACKUP_DIR: /sauvegardes
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
       - donnees:/data
+      - /mnt/media/sauvegardes/fight-of-pions:/sauvegardes
     labels:
       # Watchtower ne met à jour que les conteneurs qui portent cette étiquette.
       com.centurylinklabs.watchtower.enable: "true"

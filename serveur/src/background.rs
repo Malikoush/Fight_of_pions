@@ -3,12 +3,16 @@
 
 use crate::ServerError;
 use crate::ServerMessage;
+use crate::backup;
 use crate::database::Database;
-use crate::limits::{RECORD_ATTEMPTS, RECORD_RETRY_DELAY, SWEEP_INTERVAL, bot_slots};
+use crate::limits::{
+    BACKUP_HOUR_UTC, BACKUPS_KEPT, RECORD_ATTEMPTS, RECORD_RETRY_DELAY, SWEEP_INTERVAL, bot_slots,
+};
 use crate::lobby::{Lobby, SharedTable, lock};
 use crate::room::FinishedGame;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -117,6 +121,30 @@ impl Background {
                 }
                 for table in lobby.sweep(Instant::now()) {
                     background.record_if_finished(&table);
+                }
+            }
+        });
+    }
+
+    /// Chaque nuit à [`BACKUP_HOUR_UTC`], une sauvegarde de la base dans ce dossier (les
+    /// [`BACKUPS_KEPT`] dernières y restent), jusqu'à l'arrêt. Une sauvegarde ratée (dossier
+    /// absent, plein, interdit) est écrite dans la sortie du serveur, et la suivante tentée
+    /// la nuit d'après.
+    pub fn back_up_nightly(&self, folder: PathBuf, shutdown: CancellationToken) {
+        let database = self.database.clone();
+        self.tasks.spawn(async move {
+            loop {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default();
+                let wait = backup::delay_until_hour(now, BACKUP_HOUR_UTC);
+                tokio::select! {
+                    () = shutdown.cancelled() => return,
+                    () = tokio::time::sleep(wait) => {}
+                }
+                match backup::back_up(&database, &folder, BACKUPS_KEPT).await {
+                    Ok(file) => println!("Sauvegarde : {}", file.display()),
+                    Err(_) => eprintln!("sauvegarde ratée dans {}", folder.display()),
                 }
             }
         });

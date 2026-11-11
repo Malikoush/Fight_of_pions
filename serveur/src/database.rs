@@ -34,8 +34,18 @@ impl Database {
     /// Ouvre la base de cette adresse (`sqlite://fight_of_pions.db`), la crée au besoin, et
     /// met son schéma à jour.
     pub async fn open(url: &str) -> Result<Database, sqlx::Error> {
+        Database::open_with(url, true).await
+    }
+
+    /// Ouvre la base de cette adresse, qui doit déjà exister : l'administration
+    /// (`serveur admin`) ne crée jamais une base vide quand l'adresse est mal réglée.
+    pub async fn open_existing(url: &str) -> Result<Database, sqlx::Error> {
+        Database::open_with(url, false).await
+    }
+
+    async fn open_with(url: &str, create: bool) -> Result<Database, sqlx::Error> {
         let options = SqliteConnectOptions::from_str(url)?
-            .create_if_missing(true)
+            .create_if_missing(create)
             .foreign_keys(true)
             .journal_mode(SqliteJournalMode::Wal)
             .busy_timeout(BUSY_TIMEOUT);
@@ -54,6 +64,19 @@ impl Database {
             .max_lifetime(None)
             .connect_with(options)
             .await?;
+        Database::migrated(pool).await
+    }
+
+    /// Ouvre ce fichier de base, créé au besoin, réglé comme celui du serveur : par son
+    /// chemin, sans passer par une adresse (un chemin Windows s'y lit mal). Pour les tests.
+    #[cfg(test)]
+    pub async fn open_file(path: &std::path::Path) -> Result<Database, sqlx::Error> {
+        let options = SqliteConnectOptions::new()
+            .filename(path)
+            .create_if_missing(true)
+            .foreign_keys(true)
+            .journal_mode(SqliteJournalMode::Wal);
+        let pool = SqlitePoolOptions::new().connect_with(options).await?;
         Database::migrated(pool).await
     }
 
@@ -252,6 +275,172 @@ impl Database {
         }
         transaction.commit().await.map_err(storage)?;
         Ok(reward)
+    }
+}
+
+/// Un compte, tel que l'administration le montre.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountSummary {
+    pub id: i64,
+    pub pseudo: String,
+    /// Création et dernière visite, en texte ISO 8601 (UTC).
+    pub created_at: String,
+    pub last_seen: String,
+    /// Ses cartes, et les parties finies qu'il a jouées.
+    pub cards: i64,
+    pub games: i64,
+}
+
+/// Une partie finie, telle que l'administration la montre.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GameSummary {
+    pub id: i64,
+    pub ended_at: String,
+    /// Chaque place : qui la tenait (`human`, `mcts`, `random`, `nobody`…) et, pour un
+    /// humain avec un compte, son pseudo.
+    pub players: [(String, Option<String>); 2],
+    /// 1 ou 2, aucun pour un nul.
+    pub winner: Option<i64>,
+    /// La fin telle qu'elle est enregistrée (JSON : résultat et raison).
+    pub ending: String,
+    pub moves: i64,
+}
+
+/// L'administration (E4i, `serveur admin`) : lire les comptes et les parties, donner ou
+/// retirer des cartes, sauvegarder la base.
+impl Database {
+    /// Tous les comptes, le plus récemment vu en premier.
+    pub async fn accounts(&self) -> Result<Vec<AccountSummary>, ServerError> {
+        let rows: Vec<(i64, String, String, String, i64, i64)> = sqlx::query_as(
+            "SELECT a.id, a.pseudo, a.created_at, a.last_seen,              (SELECT COUNT(*) FROM card_grants c WHERE c.account_id = a.id),              (SELECT COUNT(*) FROM games g WHERE g.player1_account = a.id               OR g.player2_account = a.id)              FROM accounts a ORDER BY a.last_seen DESC, a.id DESC",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(id, pseudo, created_at, last_seen, cards, games)| AccountSummary {
+                    id,
+                    pseudo,
+                    created_at,
+                    last_seen,
+                    cards,
+                    games,
+                },
+            )
+            .collect())
+    }
+
+    /// Le pseudo de ce compte, s'il existe.
+    pub async fn pseudo_of(&self, account: i64) -> Result<Option<String>, ServerError> {
+        sqlx::query_scalar("SELECT pseudo FROM accounts WHERE id = ?")
+            .bind(account)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(storage)
+    }
+
+    /// Donne ces cartes à ce compte, avec cette provenance (`admin`…), en une transaction ;
+    /// une carte qu'il a déjà est laissée. Rend le nombre de cartes nouvelles.
+    pub async fn grant(
+        &self,
+        account: i64,
+        cards: &[Attack],
+        source: &str,
+    ) -> Result<usize, ServerError> {
+        let mut transaction = self.pool.begin().await.map_err(storage)?;
+        let mut added = 0;
+        for &card in cards {
+            let (family, rarity) = card_names(card)?;
+            let done = sqlx::query(
+                "INSERT OR IGNORE INTO card_grants (account_id, family, rarity, source)                  VALUES (?, ?, ?, ?)",
+            )
+            .bind(account)
+            .bind(family)
+            .bind(rarity)
+            .bind(source)
+            .execute(&mut *transaction)
+            .await
+            .map_err(storage)?;
+            if done.rows_affected() > 0 {
+                added += 1;
+            }
+        }
+        transaction.commit().await.map_err(storage)?;
+        Ok(added)
+    }
+
+    /// Retire cette carte à ce compte (et de son trio de cache) ; vrai s'il l'avait.
+    pub async fn revoke(&self, account: i64, card: Attack) -> Result<bool, ServerError> {
+        let (family, rarity) = card_names(card)?;
+        let done = sqlx::query(
+            "DELETE FROM card_grants WHERE account_id = ? AND family = ? AND rarity = ?",
+        )
+        .bind(account)
+        .bind(family)
+        .bind(rarity)
+        .execute(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(done.rows_affected() > 0)
+    }
+
+    /// Les dernières parties finies, la plus récente en premier, au plus tant.
+    pub async fn recent_games(&self, limit: i64) -> Result<Vec<GameSummary>, ServerError> {
+        type Row = (
+            i64,
+            String,
+            String,
+            Option<String>,
+            String,
+            Option<String>,
+            Option<i64>,
+            String,
+            i64,
+        );
+        let rows: Vec<Row> = sqlx::query_as(
+            "SELECT g.id, g.ended_at, g.player1_kind, a1.pseudo, g.player2_kind, a2.pseudo,              g.winner, g.ending, g.moves FROM games g              LEFT JOIN accounts a1 ON a1.id = g.player1_account              LEFT JOIN accounts a2 ON a2.id = g.player2_account              ORDER BY g.id DESC LIMIT ?",
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(id, ended_at, kind1, pseudo1, kind2, pseudo2, winner, ending, moves)| {
+                    GameSummary {
+                        id,
+                        ended_at,
+                        players: [(kind1, pseudo1), (kind2, pseudo2)],
+                        winner,
+                        ending,
+                        moves,
+                    }
+                },
+            )
+            .collect())
+    }
+
+    /// L'heure de la base, en UTC, pour nommer un fichier (`2026-11-11_031500`).
+    pub async fn file_timestamp(&self) -> Result<String, ServerError> {
+        sqlx::query_scalar("SELECT strftime('%Y-%m-%d_%H%M%S', 'now')")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(storage)
+    }
+
+    /// Une copie complète et cohérente de la base dans ce fichier, qui ne doit pas exister
+    /// (`VACUUM INTO` : SQLite la fait pendant que le serveur tourne). La base d'un fichier
+    /// seulement : celle en mémoire des tests n'écrit rien, sans erreur.
+    pub async fn back_up_into(&self, file: &std::path::Path) -> Result<(), ServerError> {
+        sqlx::query("VACUUM INTO ?")
+            .bind(file.to_string_lossy().into_owned())
+            .execute(&self.pool)
+            .await
+            .map_err(storage)?;
+        Ok(())
     }
 }
 
@@ -522,5 +711,63 @@ mod tests {
             known_cards(vec![(family, rarity), ("Dragon".into(), "Epic".into())]),
             [card]
         );
+    }
+    #[tokio::test]
+    async fn accounts_and_games_are_listed_from_the_recorded_games() {
+        use crate::room::{Room, Seat};
+        let database = Database::in_memory().await.unwrap();
+        let ana = database
+            .create_account("Ana", &token_hash("ana"), &[])
+            .await
+            .unwrap();
+        let bob = database
+            .create_account("Bob", &token_hash("bob"), &[])
+            .await
+            .unwrap();
+        let seat = |account: &Account| Seat::Human {
+            key: account.pseudo.clone(),
+            account: Some(account.id),
+        };
+        for seats in [
+            [seat(&ana), Seat::Bot(bots::BotKind::Random)],
+            [seat(&bob), seat(&ana)],
+        ] {
+            let game = Room::won_by_the_first_player(seats)
+                .take_finished()
+                .unwrap();
+            database.record_game(&game, "essai").await.unwrap();
+        }
+
+        let games = database.recent_games(10).await.unwrap();
+        assert_eq!(games.len(), 2);
+        // La plus récente d'abord : Bob contre Ana, gagnée par Bob (J1).
+        assert_eq!(
+            games[0].players,
+            [
+                ("human".to_string(), Some("Bob".to_string())),
+                ("human".to_string(), Some("Ana".to_string()))
+            ]
+        );
+        assert_eq!(games[0].winner, Some(1));
+        // Un bot n'a pas de pseudo.
+        assert_eq!(
+            games[1].players,
+            [
+                ("human".to_string(), Some("Ana".to_string())),
+                ("random".to_string(), None)
+            ]
+        );
+        assert!(games[1].ending.contains("reason"));
+        assert_eq!(database.recent_games(1).await.unwrap(), games[..1]);
+
+        let accounts = database.accounts().await.unwrap();
+        let games_of = |id| {
+            accounts
+                .iter()
+                .find(|account| account.id == id)
+                .map(|account| account.games)
+        };
+        assert_eq!(games_of(ana.id), Some(2));
+        assert_eq!(games_of(bob.id), Some(1));
     }
 }

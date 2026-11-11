@@ -22,7 +22,9 @@
 //! - `random` : le hasard des codes, des clés et des jetons.
 
 mod account;
+mod admin;
 mod background;
+mod backup;
 mod cards;
 mod collection;
 mod connection;
@@ -35,6 +37,7 @@ mod random;
 mod requests;
 mod room;
 
+pub use admin::administer;
 pub use cards::{CardFamily, CardRarity};
 pub use database::Database;
 pub use error::ServerError;
@@ -51,7 +54,7 @@ use limits::{
     MAX_CONNECTIONS, MAX_REGISTRATIONS_PER_WINDOW, REGISTRATION_WINDOW, RateLimit, SHUTDOWN_GRACE,
 };
 use lobby::Lobby;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
@@ -112,6 +115,14 @@ impl Server {
     /// Le routeur, à donner à `axum::serve`.
     pub fn router(&self) -> Router {
         self.router.clone()
+    }
+
+    /// Une sauvegarde de la base chaque nuit dans ce dossier, jusqu'à l'arrêt (E4i,
+    /// `backup`).
+    pub fn back_up_nightly(&self, folder: PathBuf) {
+        self.shared
+            .background
+            .back_up_nightly(folder, self.shared.shutdown.clone());
     }
 
     /// De quoi fermer les connexions depuis une autre tâche (celle qui attend le signal
