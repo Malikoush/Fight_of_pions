@@ -160,6 +160,9 @@ const BORDER := 2
 const BORDER_STRONG := 3
 ## Un toucher qui bouge de moins que ça reste un toucher, pas un glissé.
 const TAP_SLOP := 12.0
+## La bande du bas de l'écran d'un téléphone, en points, où part le geste du système
+## (changer d'application) : un toucher qui y commence ne touche rien (`EdgeGuard`).
+const GESTURE_EDGE_POINTS := 24.0
 
 ## Les boutons d'action hexagonaux : hauteur, largeur des pointes, tranche du bas.
 const BUTTON_HEIGHT := 60

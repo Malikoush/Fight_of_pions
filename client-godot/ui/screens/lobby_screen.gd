@@ -7,7 +7,13 @@ extends Screen
 ##   ami est là ; « FERMER LA SALLE » ;
 ## - chez son ami : l'attente du lancement ; « QUITTER LA SALLE ».
 ## La partie (son draft) ne s'affiche qu'une fois lancée, chez les deux. La flèche revient à
-## l'accueil.
+## l'accueil. En portrait (téléphone), le bouton du bas, qui fait double emploi avec la
+## flèche, est caché (Martin, 2026-11-11) ; en paysage (PC), il reste.
+##
+## Partir (la flèche, « FERMER LA SALLE », « QUITTER LA SALLE ») demande confirmation, dans
+## une fenêtre au milieu de l'écran : sur iPhone, le geste qui change d'application part du
+## bas de l'écran, là où est le bouton, et le jeu le recevait comme un appui (Martin,
+## 2026-11-11 : la salle se fermait en allant envoyer le code).
 ##
 ## Le téléphone n'a pas encore de partage natif (R9) : « PARTAGER » copie un message
 ## d'invitation, prêt à coller.
@@ -34,12 +40,17 @@ var code := ""
 @onready var _launch: Button = %Launch
 @onready var _close: Button = %Close
 
+var _leave_dialog: AlertDialog
+
 
 func _ready() -> void:
 	Ui.fit_page(_page, Look.CONTENT_MAX_WIDTH)
 	var hosting := session.hosting()
 	_header.set_title(Labels.LOBBY_TITLE if hosting else Labels.LOBBY_GUEST_TITLE)
-	_header.back_pressed.connect(home_requested.emit)
+	_leave_dialog = AlertDialog.leave_room(hosting)
+	_leave_dialog.confirmed.connect(home_requested.emit)
+	add_child(_leave_dialog)
+	_header.back_pressed.connect(_leave_dialog.ask)
 	_code_title.text = Labels.ROOM_CODE
 	_code.show_code(code)
 	_copy.text = Labels.COPY
@@ -56,8 +67,15 @@ func _ready() -> void:
 	_copy.pressed.connect(_copy_to_clipboard.bind(_copy, code, Labels.COPY, Labels.COPIED))
 	_share.pressed.connect(_copy_to_clipboard.bind(_share, Labels.INVITE % code, Labels.SHARE, Labels.INVITE_COPIED))
 	_launch.pressed.connect(launch_requested.emit)
-	_close.pressed.connect(home_requested.emit)
+	_close.pressed.connect(_leave_dialog.ask)
+	resized.connect(_arrange)
+	_arrange()
 	on_session_changed()
+
+
+## En portrait, la flèche suffit pour partir : le bouton du bas est caché.
+func _arrange() -> void:
+	_close.visible = Ui.is_landscape(self)
 
 
 ## Ton ami est là, ou n'y est plus : sa place, l'aide et « LANCER LA PARTIE » suivent.

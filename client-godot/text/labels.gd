@@ -58,6 +58,11 @@ const VERSUS := "contre"
 const LAUNCH := "LANCER LA PARTIE"
 const CLOSE_ROOM := "FERMER LA SALLE"
 const LEAVE_ROOM := "QUITTER LA SALLE"
+## La question avant de partir de la salle d'attente, chez son créateur et chez son ami.
+const CLOSE_ROOM_TITLE := "Fermer la salle ?"
+const CLOSE_ROOM_TEXT := "Ton ami ne pourra plus la rejoindre avec ce code."
+const LEAVE_ROOM_TITLE := "Quitter la salle ?"
+const LEAVE_ROOM_TEXT := "Tu pourras la rejoindre avec le code tant que la partie n'est pas lancée."
 
 ## Le draft.
 const ROOM_CODE := "CODE DE LA SALLE"

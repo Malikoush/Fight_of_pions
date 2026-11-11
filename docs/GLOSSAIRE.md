@@ -213,6 +213,7 @@ Le client (`client-godot/`) est en anglais dans le code, comme le moteur ; ses c
 
 | Terme | Nom dans le code | Rôle |
 |---|---|---|
+| Bande du geste | `EdgeGuard`, `Look.GESTURE_EDGE_POINTS` | Le bas de l'écran d'un téléphone, où part le geste du système (changer d'application) : un toucher qui y commence n'appuie sur rien |
 | Lien avec le serveur | `ServerLink` (autoload) | La WebSocket : envoie les demandes, annonce les réponses, garde la place et la reprend |
 | Format du fil | `Wire` | Le JSON échangé ; remet en entiers les nombres que Godot lit en flottants |
 | Vue (côté client) | `ViewData` | La vue du serveur, avec des lectures typées ; une case s'y écrit `Vector2i(colonne, rangée)` |

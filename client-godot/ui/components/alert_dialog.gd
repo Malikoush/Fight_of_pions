@@ -25,6 +25,13 @@ static func quit_game() -> AlertDialog:
 	return AlertDialog.new(Labels.QUIT_TITLE, Labels.QUIT_TEXT, Labels.STAY, Labels.QUIT, "retour", true)
 
 
+## « Fermer la salle ? » chez son créateur, « Quitter la salle ? » chez son ami.
+static func leave_room(hosting: bool) -> AlertDialog:
+	if hosting:
+		return AlertDialog.new(Labels.CLOSE_ROOM_TITLE, Labels.CLOSE_ROOM_TEXT, Labels.STAY, Labels.CLOSE, "retour", true)
+	return AlertDialog.new(Labels.LEAVE_ROOM_TITLE, Labels.LEAVE_ROOM_TEXT, Labels.STAY, Labels.QUIT, "retour", true)
+
+
 ## `icon` : le nom d'une icône des éléments fournis ; `threat` : elle est de braise.
 func _init(title: String, text: String, no_label: String, yes_label: String, icon: String, threat: bool) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

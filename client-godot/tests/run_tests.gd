@@ -5,7 +5,11 @@ extends SceneTree
 ##
 ## Chaque fichier de `SUITES` est un `TestCase` ; chacune de ses méthodes `test_…` est
 ## lancée sur un objet neuf, et doit rendre `true` : un test qui plante en route rend `null`
-## et compte en échec. Le code de sortie vaut 1 si un test échoue.
+## et compte en échec. Un fichier qui ne se compile pas compte aussi en échec (sinon ses
+## tests seraient sautés sans bruit). Le code de sortie vaut 1 si un test échoue.
+##
+## Les tests partent à la première image, l'arbre une fois actif : un écran ajouté par un
+## test y est prêt (`_ready`, ses `@onready`), comme dans le jeu.
 
 const SUITES := [
 	"res://tests/test_wire.gd",
@@ -21,14 +25,29 @@ const SUITES := [
 	"res://tests/test_server_link.gd",
 	"res://tests/test_menu.gd",
 	"res://tests/test_view_queue.gd",
+	"res://tests/test_edge_guard.gd",
 ]
 
 
-func _initialize() -> void:
+var _done := false
+
+
+func _process(_delta: float) -> bool:
+	if not _done:
+		_done = true
+		_run_all()
+	return false
+
+
+func _run_all() -> void:
 	var passed := 0
 	var failed := 0
 	for path: String in SUITES:
 		var suite: GDScript = load(path)
+		if suite == null or not suite.can_instantiate():
+			failed += 1
+			print("ÉCHEC %s · le fichier ne se compile pas" % path.get_file())
+			continue
 		for method: Dictionary in suite.get_script_method_list():
 			var test_name: String = method["name"]
 			if not test_name.begins_with("test_"):

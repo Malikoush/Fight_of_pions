@@ -31,6 +31,9 @@ func _ready() -> void:
 	Settings.load_saved()
 	RenderingServer.set_default_clear_color(Look.FOREST)
 	add_child(Sounds.new())
+	# Le geste du système, en bas d'un téléphone, n'appuie sur aucun bouton. Dernier enfant
+	# de la racine, il lit l'entrée avant les écrans (ordre inverse de l'arbre).
+	add_child(EdgeGuard.new())
 	_screens.theme = ThemeBuilder.shared()
 	# Une place gardée sera reprise : sa session aussi (contre qui, salle à lancer).
 	if ServerLink.has_saved_seat():
