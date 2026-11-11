@@ -157,8 +157,8 @@ func _on_cards_received(cards: CardCatalog) -> void:
 	_router.current.on_session_changed()
 
 
-func _on_opponent_presence(connected: bool) -> void:
-	_session.note_opponent_present(connected)
+func _on_opponent_presence(connected: bool, pseudo: String) -> void:
+	_session.note_opponent_present(connected, pseudo)
 	_router.current.on_session_changed()
 
 

@@ -34,17 +34,45 @@ impl Client {
 
     /// Un client connecté à un compte neuf, qui a reçu son compte et sa collection.
     async fn registered(url: &str) -> Client {
+        Client::named(url, None).await.0
+    }
+
+    /// Un client connecté à un compte neuf de ce pseudo, qui a reçu son compte et sa
+    /// collection ; son jeton.
+    async fn named(url: &str, pseudo: Option<&str>) -> (Client, String) {
         let mut client = Client::connect(url).await;
-        client.send(ClientMessage::Register { pseudo: None }).await;
-        client.account().await;
-        client.collection().await;
         client
+            .send(ClientMessage::Register {
+                pseudo: pseudo.map(str::to_string),
+            })
+            .await;
+        let (_, _, token) = client.account().await;
+        client.collection().await;
+        (client, token.unwrap())
+    }
+
+    /// Un client qui revient sur ce compte avec son jeton : rend vrai s'il est rassis dans
+    /// sa salle (sa place, puis sa vue, arrivent alors avant sa collection).
+    async fn logged_in(url: &str, token: &str) -> (Client, bool) {
+        let mut client = Client::connect(url).await;
+        client
+            .send(ClientMessage::Login {
+                token: token.to_string(),
+            })
+            .await;
+        let resumed = match client.receive().await {
+            ServerMessage::Account { resumed, .. } => resumed,
+            other => panic!("un compte était attendu, reçu : {other:?}"),
+        };
+        (client, resumed)
     }
 
     /// Le prochain message, qui doit être un compte : son numéro, son pseudo, son jeton.
     async fn account(&mut self) -> (i64, String, Option<String>) {
         match self.receive().await {
-            ServerMessage::Account { id, pseudo, token } => (id, pseudo, token),
+            ServerMessage::Account {
+                id, pseudo, token, ..
+            } => (id, pseudo, token),
             other => panic!("un compte était attendu, reçu : {other:?}"),
         }
     }
@@ -288,9 +316,9 @@ async fn a_whole_game_against_a_server_bot() {
 }
 
 #[tokio::test]
-async fn a_player_gets_its_seat_back_with_its_key() {
+async fn a_player_is_seated_again_when_logging_back_in() {
     let url = start_server().await;
-    let mut client = Client::registered(&url).await;
+    let (mut client, token) = Client::named(&url, None).await;
     client
         .send(ClientMessage::Create {
             opponent: Opponent::Human,
@@ -301,20 +329,130 @@ async fn a_player_gets_its_seat_back_with_its_key() {
     let (before, _) = client.state().await;
     drop(client);
 
-    let mut back = Client::connect(&url).await;
-    back.send(ClientMessage::Rejoin {
-        code: code.clone(),
-        player,
-        key: "faux".to_string(),
-    })
-    .await;
-    assert!(back.error().await.contains("clé"));
-    back.send(ClientMessage::Rejoin { code, player, key }).await;
-    back.seated().await;
+    let (mut back, resumed) = Client::logged_in(&url, &token).await;
+    assert!(resumed);
+    assert_eq!(back.seated().await, (code.clone(), player, key.clone()));
     assert_eq!(back.state().await.0, before);
+    back.collection().await;
     // Une vue perdue se redemande.
     back.send(ClientMessage::Sync).await;
     assert_eq!(back.state().await, (before, Vec::new()));
+
+    // Sa clé ne sert à aucun autre compte.
+    let mut other = Client::registered(&url).await;
+    other
+        .send(ClientMessage::Rejoin { code, player, key })
+        .await;
+    assert_eq!(other.error_kind().await, "bad_key");
+}
+
+#[tokio::test]
+async fn a_new_connection_of_the_account_takes_its_seat() {
+    let url = start_server().await;
+    let (mut first, token) = Client::named(&url, None).await;
+    first
+        .send(ClientMessage::Create {
+            opponent: Opponent::Human,
+            variant: None,
+        })
+        .await;
+    first.seated().await;
+    first.state().await;
+
+    let (mut second, resumed) = Client::logged_in(&url, &token).await;
+    assert!(resumed);
+    second.seated().await;
+    assert_eq!(first.error_kind().await, "seat_taken");
+    second.state().await;
+    second.collection().await;
+    // Un compte, une salle : il faut quitter celle-ci pour en ouvrir une autre.
+    second
+        .send(ClientMessage::Create {
+            opponent: Opponent::Random,
+            variant: None,
+        })
+        .await;
+    assert_eq!(second.error_kind().await, "already_seated");
+    // L'ancienne connexion n'est plus assise, mais son compte l'est toujours.
+    first
+        .send(ClientMessage::Create {
+            opponent: Opponent::Random,
+            variant: None,
+        })
+        .await;
+    assert_eq!(first.error_kind().await, "already_seated");
+}
+
+#[tokio::test]
+async fn leaving_a_launched_game_loses_it_by_forfeit() {
+    let url = start_server().await;
+    let host = Client::registered(&url).await;
+    let guest = Client::registered(&url).await;
+    let (mut one, mut two, _, _, _) = friends_room(host, guest).await;
+
+    one.send(ClientMessage::Leave).await;
+    assert_eq!(one.receive().await, ServerMessage::Left);
+    let (view, events) = two.state().await;
+    assert_eq!(
+        view.end.map(|end| (end.winner(), end.reason)),
+        Some((Some(Player::Two), fight_of_pions::EndReason::Forfeit))
+    );
+    assert!(matches!(events.last(), Some(Event::GameEnded(_))));
+
+    // Libre, il peut ouvrir une autre salle sur la même connexion.
+    one.send(ClientMessage::Create {
+        opponent: Opponent::Human,
+        variant: None,
+    })
+    .await;
+    one.seated().await;
+    one.state().await;
+    one.send(ClientMessage::Leave).await;
+    assert_eq!(one.receive().await, ServerMessage::Left);
+    one.send(ClientMessage::Leave).await;
+    assert_eq!(one.receive().await, ServerMessage::Left, "même sans salle");
+}
+
+#[tokio::test]
+async fn a_host_who_leaves_before_the_launch_closes_the_room() {
+    let url = start_server().await;
+    let mut host = Client::registered(&url).await;
+    host.send(ClientMessage::Create {
+        opponent: Opponent::Human,
+        variant: None,
+    })
+    .await;
+    let (code, _, _) = host.seated().await;
+    host.state().await;
+    let mut guest = Client::registered(&url).await;
+    guest.send(ClientMessage::Join { code: code.clone() }).await;
+    guest.seated().await;
+    guest.state().await;
+
+    host.send(ClientMessage::Leave).await;
+    assert_eq!(host.receive().await, ServerMessage::Left);
+    assert_eq!(guest.error_kind().await, "room_closed");
+    let mut late = Client::registered(&url).await;
+    late.send(ClientMessage::Join { code }).await;
+    assert_eq!(late.error_kind().await, "unknown_room");
+}
+
+#[tokio::test]
+async fn a_stopping_server_closes_its_connections() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = serveur::Server::new(Database::in_memory().await.unwrap(), None);
+    let router = server.router();
+    tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+    let mut client = Client::registered(&format!("ws://{address}/ws")).await;
+
+    server.shutdown().await;
+    loop {
+        match client.socket.next().await {
+            Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+            Some(Ok(_)) => continue,
+        }
+    }
 }
 
 #[tokio::test]
@@ -353,7 +491,7 @@ async fn the_card_catalog_is_sent_on_request_even_without_a_seat() {
 #[tokio::test]
 async fn each_player_learns_when_the_other_arrives_and_leaves() {
     let url = start_server().await;
-    let mut one = Client::registered(&url).await;
+    let (mut one, _) = Client::named(&url, Some("Ana")).await;
     one.send(ClientMessage::Create {
         opponent: Opponent::Human,
         variant: None,
@@ -362,27 +500,22 @@ async fn each_player_learns_when_the_other_arrives_and_leaves() {
     let (code, _, _) = one.seated().await;
     one.state().await;
 
-    let mut two = Client::registered(&url).await;
+    let (mut two, _) = Client::named(&url, Some("Bob")).await;
     two.send(ClientMessage::Join { code }).await;
     two.seated().await;
     assert!(matches!(
         two.receive_any().await,
         ServerMessage::State { .. }
     ));
-    assert_eq!(
-        two.receive_any().await,
-        ServerMessage::Opponent { connected: true }
-    );
-    assert_eq!(
-        one.receive_any().await,
-        ServerMessage::Opponent { connected: true }
-    );
+    let presence = |connected, pseudo: &str| ServerMessage::Opponent {
+        connected,
+        pseudo: pseudo.to_string(),
+    };
+    assert_eq!(two.receive_any().await, presence(true, "Ana"));
+    assert_eq!(one.receive_any().await, presence(true, "Bob"));
 
     drop(two);
-    assert_eq!(
-        one.receive_any().await,
-        ServerMessage::Opponent { connected: false }
-    );
+    assert_eq!(one.receive_any().await, presence(false, "Bob"));
 }
 
 /// Une partie entre deux humains (`host` crée la salle, `guest` la rejoint), jouée au plus

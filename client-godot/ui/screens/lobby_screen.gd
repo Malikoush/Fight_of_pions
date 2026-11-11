@@ -65,7 +65,7 @@ func on_session_changed() -> void:
 	var present := session.opponent_present
 	var mine := ServerLink.seat_player()
 	_me.show_seat(mine, session.pseudo, true)
-	_friend.show_seat(ViewData.other(mine), Labels.FRIEND, present)
+	_friend.show_seat(ViewData.other(mine), session.opponent_name, present)
 	var status: String
 	if session.hosting():
 		status = Labels.LOBBY_READY if present else Labels.LOBBY_WAITING

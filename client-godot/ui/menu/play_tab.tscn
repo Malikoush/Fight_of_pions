@@ -86,11 +86,6 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"SloganLabel"
 
-[node name="Tagline" type="Label" parent="Body/PlayPanel/PanelStack/PlayInset/PlayRow/Pitch"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"MutedLabel"
-
 [node name="PlayBox" type="VBoxContainer" parent="Body/PlayPanel/PanelStack/PlayInset/PlayRow"]
 unique_name_in_owner = true
 layout_mode = 2

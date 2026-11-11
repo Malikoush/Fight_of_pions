@@ -30,11 +30,13 @@ var mode: Mode:
 		return _mode
 	set(_value):
 		push_error("Session.mode s'écrit par start_* ou reset")
+## Le nom de l'adversaire : le bot, ou le pseudo de l'ami dès que le serveur le donne
+## (message `opponent`).
 var opponent_name: String:
 	get:
 		return _opponent_name
 	set(_value):
-		push_error("Session.opponent_name s'écrit par start_* ou reset")
+		push_error("Session.opponent_name s'écrit par start_*, reset ou note_opponent_present")
 ## Vrai quand l'adversaire humain est branché sur sa place (message `opponent`).
 var opponent_present: bool:
 	get:
@@ -193,8 +195,12 @@ func note_collection(owned: CardCollection) -> void:
 	_collection = owned
 
 
-func note_opponent_present(present: bool) -> void:
+## L'adversaire humain est branché, ou ne l'est plus ; son pseudo, s'il est connu, devient
+## son nom.
+func note_opponent_present(present: bool, opponent_pseudo := "") -> void:
 	_opponent_present = present
+	if opponent_pseudo != "" and _mode in [Mode.HOST, Mode.GUEST]:
+		_opponent_name = opponent_pseudo
 
 
 func note_bot_failed(failed: bool) -> void:

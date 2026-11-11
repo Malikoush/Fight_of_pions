@@ -73,6 +73,8 @@ fn measure(label: &str, config: GameConfig, games: u64) {
             Some(EndReason::Frozen) => ends[1] += 1,
             Some(EndReason::TurnLimit) => ends[2] += 1,
             Some(EndReason::TooFewPions) => ends[3] += 1,
+            // Les parties au hasard n'abandonnent jamais.
+            Some(EndReason::Forfeit) => {}
             None => {}
         }
     }

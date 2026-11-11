@@ -5,8 +5,8 @@
 use crate::ServerError;
 use bots::BotKind;
 use fight_of_pions::{
-    Action, Attack, Decision, Event, Game, GameConfig, GameEnd, GameError, GameRecord, Player,
-    PlayerView, Rng,
+    Action, Attack, Decision, EndReason, Event, Game, GameConfig, GameEnd, GameError, GameRecord,
+    Player, PlayerView, Rng,
 };
 use std::time::SystemTime;
 
@@ -93,8 +93,12 @@ impl Contestant {
 impl FinishedGame {
     /// Le gagnant à récompenser, et son compte : un humain avec un compte qui a battu un
     /// autre compte que le sien, ou le MCTS. Rien pour un nul, une victoire contre le bot
-    /// aléatoire (trop facile à enchaîner), ni contre soi-même.
+    /// aléatoire (trop facile à enchaîner), contre soi-même, ni par forfait (un second
+    /// compte qui abandonne aussitôt ferait gagner des cartes sans jouer).
     pub fn rewarded(&self) -> Option<(Player, i64)> {
+        if self.end.reason == EndReason::Forfeit {
+            return None;
+        }
         let winner = self.end.winner()?;
         let account = self.players[winner.index()].account()?;
         let deserved = match self.players[winner.opponent().index()] {
@@ -216,6 +220,36 @@ impl Room {
         Ok(())
     }
 
+    /// Libère la place de cet humain, qui quitte la salle avant le lancement : un autre peut
+    /// la prendre. Sa cache n'est plus limitée par sa collection : le suivant la limitera
+    /// par la sienne.
+    pub fn free(&mut self, player: Player) -> Result<(), ServerError> {
+        self.seats[player.index()] = Seat::Free;
+        let catalog = self.catalog();
+        self.limit_cache(player, &catalog)
+    }
+
+    /// Vrai si un humain occupe cette place.
+    pub fn is_human(&self, player: Player) -> bool {
+        matches!(self.seats[player.index()], Seat::Human { .. })
+    }
+
+    /// Le compte de l'humain assis à cette place, s'il en a un.
+    pub fn account_of(&self, player: Player) -> Option<i64> {
+        match &self.seats[player.index()] {
+            Seat::Human { account, .. } => *account,
+            Seat::Free | Seat::Bot(_) => None,
+        }
+    }
+
+    /// La clé de l'humain assis à cette place, s'il y en a un.
+    pub fn key_of(&self, player: Player) -> Option<&str> {
+        match &self.seats[player.index()] {
+            Seat::Human { key, .. } => Some(key),
+            Seat::Free | Seat::Bot(_) => None,
+        }
+    }
+
     /// La partie, si elle vient de finir : rendue une seule fois, pour être enregistrée.
     pub fn take_finished(&mut self) -> Option<FinishedGame> {
         if self.finished_taken {
@@ -252,20 +286,37 @@ impl Room {
             })
     }
 
-    /// Vérifie que cette clé est celle de l'humain assis à cette place.
-    pub fn check_key(&self, player: Player, key: &str) -> Result<(), ServerError> {
+    /// Vérifie que cette clé et ce compte sont ceux de l'humain assis à cette place.
+    pub fn check_key(
+        &self,
+        player: Player,
+        key: &str,
+        account: Option<i64>,
+    ) -> Result<(), ServerError> {
         match &self.seats[player.index()] {
-            Seat::Human { key: own, .. } if own == key => Ok(()),
+            Seat::Human {
+                key: own,
+                account: seated,
+            } if own == key && *seated == account => Ok(()),
             _ => Err(ServerError::BadKey),
         }
     }
 
     /// Joue le coup de cet humain, s'il doit décider ; rend ce que le coup a produit.
+    /// Abandonner passe par [`Room::resign`] : sinon un joueur pourrait faire abandonner
+    /// son adversaire.
     pub fn play(&mut self, player: Player, action: Action) -> Result<Vec<Event>, ServerError> {
+        refuse_resign(&[action])?;
         if self.decider() != Some(player) {
             return Err(ServerError::NotYourTurn);
         }
         self.apply(action)
+    }
+
+    /// Ce joueur abandonne : il perd par forfait, à tout moment de la partie, même hors de
+    /// son tour. Le forfait est enregistré comme les autres coups.
+    pub fn resign(&mut self, player: Player) -> Result<Vec<Event>, ServerError> {
+        self.apply(Action::Resign(player))
     }
 
     /// Ce que verrait ce joueur au fil des choix d'une carte (la carte, son lanceur, ses
@@ -279,6 +330,7 @@ impl Room {
         player: Player,
         actions: &[Action],
     ) -> Result<Option<PlayerView>, ServerError> {
+        refuse_resign(actions)?;
         if self.decider() != Some(player) {
             return Err(ServerError::NotYourTurn);
         }
@@ -359,6 +411,19 @@ impl Room {
         let events = self.game.apply(action)?;
         self.record.actions.push(action);
         Ok(events)
+    }
+}
+
+/// Refuse un abandon parmi ces coups : il ne se joue ni ne s'essaie par `play` ou
+/// `preview`, seulement par [`Room::resign`].
+fn refuse_resign(actions: &[Action]) -> Result<(), ServerError> {
+    if actions
+        .iter()
+        .any(|action| matches!(action, Action::Resign(_)))
+    {
+        Err(ServerError::Game(GameError::UnexpectedAction))
+    } else {
+        Ok(())
     }
 }
 
@@ -444,8 +509,55 @@ mod tests {
             room.sit(Player::Two, "autre".to_string(), None),
             Err(ServerError::RoomFull)
         );
-        assert_eq!(room.check_key(Player::Two, "deux"), Ok(()));
-        assert_eq!(room.check_key(Player::Two, "un"), Err(ServerError::BadKey));
+        assert_eq!(room.check_key(Player::Two, "deux", None), Ok(()));
+        assert_eq!(
+            room.check_key(Player::Two, "un", None),
+            Err(ServerError::BadKey)
+        );
+        assert_eq!(
+            room.check_key(Player::Two, "deux", Some(2)),
+            Err(ServerError::BadKey),
+            "pas le compte assis"
+        );
+        room.free(Player::Two).unwrap();
+        assert_eq!(
+            room.free_seat(),
+            Some(Player::Two),
+            "libérée avant le lancement"
+        );
+    }
+
+    #[test]
+    fn a_player_resigns_at_any_time_but_never_for_the_opponent() {
+        let mut room = duel();
+        assert_eq!(
+            room.play(Player::One, Action::Resign(Player::Two)),
+            Err(ServerError::Game(GameError::UnexpectedAction))
+        );
+        assert_eq!(
+            room.preview(Player::One, &[Action::Resign(Player::One)]),
+            Err(ServerError::Game(GameError::UnexpectedAction)),
+            "ni en aperçu"
+        );
+        assert!(!room.is_over());
+        // C'est à J1 de décider ; J2 abandonne quand même.
+        room.resign(Player::Two).unwrap();
+        assert!(room.is_over());
+        assert_eq!(room.game.winner(), Some(Player::One));
+        assert_eq!(room.record.actions, [Action::Resign(Player::Two)]);
+        assert_eq!(
+            room.resign(Player::One),
+            Err(ServerError::Game(GameError::GameOver))
+        );
+    }
+
+    #[test]
+    fn a_victory_by_forfeit_is_not_rewarded() {
+        let mut room = Room::new(GameConfig::default(), 0, [player(1), player(2)]).unwrap();
+        room.resign(Player::Two).unwrap();
+        let finished = room.take_finished().unwrap();
+        assert_eq!(finished.end.winner(), Some(Player::One));
+        assert_eq!(finished.rewarded(), None);
     }
 
     #[test]

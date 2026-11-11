@@ -41,7 +41,6 @@ var _join_card: RoomCard
 @onready var _play_row: GridContainer = %PlayRow
 @onready var _pitch: VBoxContainer = %Pitch
 @onready var _slogan: Label = %Slogan
-@onready var _tagline: Label = %Tagline
 @onready var _play_box: VBoxContainer = %PlayBox
 @onready var _play_button: Button = %PlayButton
 @onready var _play_caption: Label = %PlayCaption
@@ -120,7 +119,6 @@ func show_refusal(category: ServerErrors.Category, message: String) -> void:
 func _fill_texts() -> void:
 	_logo.text = Labels.GAME_NAME
 	_slogan.text = Labels.SLOGAN
-	_tagline.text = Labels.TAGLINE
 	_play_button.text = Labels.PLAY_BOT
 	_play_caption.text = Labels.BOT_DETAILS[Settings.bot_opponent]
 	_friends_title.text = Labels.FRIENDS_SECTION

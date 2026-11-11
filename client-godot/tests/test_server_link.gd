@@ -144,3 +144,91 @@ func test_the_launch_is_heard_when_seated_and_when_announced() -> bool:
 	if not kept_seat.is_empty():
 		link._save_seat(kept_seat)
 	return true
+
+
+func test_leaving_ignores_the_room_until_the_server_answers() -> bool:
+	var link: Node = Engine.get_main_loop().root.get_node("ServerLink")
+	var kept_seat: Dictionary = link._seat.duplicate()
+	var views: Array = []
+	var listen := func(view: ViewData, _events: Array) -> void: views.append(view)
+	link.state_received.connect(listen)
+	# Sans connexion : `leave` partira à la prochaine ouverture.
+	link.leave_room()
+	check(link._leaving, "le départ attend sa réponse")
+	link._receive('{"type":"state","view":{},"events":[]}')
+	link._receive('{"type":"left"}')
+	check(not link._leaving, "le serveur a répondu")
+	link._receive('{"type":"state","view":{},"events":[]}')
+	link.state_received.disconnect(listen)
+	equal(views.size(), 1, "seule la vue d'après le départ compte")
+	if not kept_seat.is_empty():
+		link._save_seat(kept_seat)
+	return true
+
+
+func test_the_presence_of_the_opponent_comes_with_a_pseudo() -> bool:
+	var link: Node = Engine.get_main_loop().root.get_node("ServerLink")
+	var heard: Array = []
+	var listen := func(connected: bool, pseudo: String) -> void: heard.append([connected, pseudo])
+	link.opponent_presence.connect(listen)
+	link._receive('{"type":"opponent","connected":true,"pseudo":"Bob"}')
+	link._receive('{"type":"opponent","connected":false}')
+	link._receive('{"type":"opponent","connected":true,"pseudo":7}')
+	link.opponent_presence.disconnect(listen)
+	equal(heard, [[true, "Bob"], [false, ""]], "le pseudo, absent d'un ancien serveur ; mal formé ignoré")
+	return true
+
+
+func test_a_saved_seat_the_server_does_not_resume_is_lost() -> bool:
+	var link: Node = Engine.get_main_loop().root.get_node("ServerLink")
+	var kept_seat: Dictionary = link._seat.duplicate()
+	var kept := _keep_account(link)
+	var heard: Array = []
+	var listen := func(category: ServerErrors.Category, _message: String) -> void: heard.append(category)
+	link.server_error.connect(listen)
+	link._seat = {"code": "K7QXM", "player": "Two", "key": "cle"}
+	link._logging_in = true
+	link._receive('{"type":"account","id":12,"pseudo":"Martin","resumed":true}')
+	check(link.has_saved_seat(), "reprise : la place reste")
+	link._logging_in = true
+	link._receive('{"type":"account","id":12,"pseudo":"Martin"}')
+	link._receive('{"type":"account","id":12,"pseudo":"Martin le Pion"}')
+	link.server_error.disconnect(listen)
+	equal(heard, [ServerErrors.Category.SEAT_LOST], "pas reprise : perdue, une seule fois")
+	check(not link.has_saved_seat(), "la place est oubliée")
+	_restore_account(link, kept)
+	if not kept_seat.is_empty():
+		link._save_seat(kept_seat)
+	return true
+
+
+func test_leaving_still_hears_the_refusals_of_the_account() -> bool:
+	var link: Node = Engine.get_main_loop().root.get_node("ServerLink")
+	var kept_seat: Dictionary = link._seat.duplicate()
+	var kept := _keep_account(link)
+	var heard: Array = []
+	var listen := func(category: ServerErrors.Category, _message: String) -> void: heard.append(category)
+	link.server_error.connect(listen)
+	link.leave_room()
+	link._receive('{"type":"error","kind":"seat_taken","message":"ta place a été reprise"}')
+	link._receive('{"type":"error","kind":"storage","message":"base indisponible"}')
+	link._token = "perdu"
+	link._receive('{"type":"error","kind":"unknown_account","message":"ce compte n\'existe pas"}')
+	link._receive('{"type":"left"}')
+	link.server_error.disconnect(listen)
+	equal(heard, [ServerErrors.Category.OTHER], "la salle quittée se tait, la base parle")
+	check(not link.has_account(), "le jeton inconnu est oublié")
+	_restore_account(link, kept)
+	if not kept_seat.is_empty():
+		link._save_seat(kept_seat)
+	return true
+
+
+func test_a_refused_login_waits_no_more() -> bool:
+	var link: Node = Engine.get_main_loop().root.get_node("ServerLink")
+	var kept := _keep_account(link)
+	link._logging_in = true
+	link._on_error("storage", "base indisponible")
+	check(not link._logging_in, "la connexion au compte a eu sa réponse")
+	_restore_account(link, kept)
+	return true

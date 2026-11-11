@@ -71,7 +71,7 @@ impl Collection {
     pub fn check_trio(&self, trio: &[Attack]) -> Result<(), ServerError> {
         if trio.len() > TRIO_SIZE {
             return Err(ServerError::BadCacheTrio(format!(
-                "un trio a au plus {TRIO_SIZE} cartes"
+                "ta cache a au plus {TRIO_SIZE} cartes"
             )));
         }
         for (index, card) in trio.iter().enumerate() {

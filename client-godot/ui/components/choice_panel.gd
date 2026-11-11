@@ -84,7 +84,7 @@ func show_choice(session: CardChoice, attack: Dictionary, catalog: CardCatalog, 
 			_title.text = Labels.CHOOSE_TARGET
 		_:
 			_title.text = Labels.READY_TO_PLAY
-	_count.text = Labels.TARGETS_CHOSEN % session.targets
+	_count.text = Labels.targets_chosen(session.targets)
 	_count.visible = deciding == "ChooseTarget"
 	_finish.disabled = choices == null or choices.simple_action("FinishAttack") == null
 	_tokens.visible = choices != null and choices.simple_action("ChooseEnemyTokens") != null

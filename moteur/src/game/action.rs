@@ -53,4 +53,8 @@ pub enum Action {
     /// Finir son tour, gratuitement ; les actions restantes sont gardées dans la limite
     /// de [`crate::GameConfig::max_banked_actions`].
     EndTurn,
+    /// Ce joueur abandonne : il perd par forfait ([`crate::EndReason::Forfeit`]). Permis à
+    /// tout moment de la partie, à l'un comme à l'autre joueur, même hors de son tour ; ce
+    /// n'est jamais une décision attendue, donc jamais dans [`crate::Game::legal_actions`].
+    Resign(crate::Player),
 }

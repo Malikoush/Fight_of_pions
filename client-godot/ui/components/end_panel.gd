@@ -9,6 +9,8 @@ signal replay_requested
 signal home_requested
 
 const WON := "Won"
+## La raison d'une fin par abandon (`EndReason`).
+const FORFEIT := "Forfeit"
 
 var _banner: PanelContainer
 var _result: Label
@@ -49,6 +51,9 @@ func show_end(view: ViewData, opponent_name: String) -> void:
 	# Le bandeau d'or ne va qu'à la victoire.
 	_banner.theme_type_variation = ThemeBuilder.BANNER if won else ThemeBuilder.BANNER_DARK
 	_result.theme_type_variation = ThemeBuilder.BANNER_LABEL if won else ThemeBuilder.BANNER_LIGHT_LABEL
-	var reason: String = Labels.END_REASONS.get(Wire.tag(end.get("reason") if end is Dictionary else null), "")
+	var reason_tag: Variant = Wire.tag(end.get("reason") if end is Dictionary else null)
+	var reason: String = Labels.END_REASONS.get(reason_tag, "")
+	if reason_tag == FORFEIT:
+		reason = Labels.FORFEIT_WON if won else Labels.FORFEIT_LOST
 	_reason.text = reason % view.config().get("align_to_win", 0) if "%d" in reason else reason
 	_caption.text = Labels.END_CAPTION % [opponent_name, view.turn()]

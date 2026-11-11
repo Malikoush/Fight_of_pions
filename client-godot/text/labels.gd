@@ -11,33 +11,31 @@ Pions"
 ## La phrase d'accroche du plateau de l'accueil, en paysage.
 const SLOGAN := "Aligne 6 pions
 avant ton adversaire."
-const TAGLINE := "Morpion géant, cartes d'attaque, en 1 contre 1."
 
 const CONNECTING := "Connexion au serveur…"
 const UNREACHABLE := "Serveur injoignable, nouvel essai…"
 const RETRY := "RÉESSAYER"
 
 const PLAY_BOT := "JOUER CONTRE LE BOT"
-## Le temps des essais, le client joue contre le bot aléatoire, qui ne charge pas la machine.
 ## Le bot à affronter (`Settings.bot_opponent`) : son nom sur sa pastille, et ce qu'il
 ## promet sous le bouton.
 const BOT_LEVELS := {"random": "FACILE", "mcts": "DIFFICILE"}
 const BOT_DETAILS := {
-	"random": "Bot aléatoire · pour s'entraîner, sans carte à gagner",
-	"mcts": "Bot MCTS · une carte à gagner par victoire",
+	"random": "Pour s'entraîner, sans récompense",
+	"mcts": "Chaque victoire débloque une carte",
 }
 const FRIENDS_SECTION := "PARTIE ENTRE AMIS"
 const CREATE_ROOM := "CRÉER UNE SALLE"
 const CREATE_ROOM_DETAIL := "Un code à envoyer"
 const JOIN := "REJOINDRE"
-const JOIN_DETAIL := "Avec un code de 5 lettres"
+const JOIN_DETAIL := "Avec le code de ton ami"
 ## La partie entre amis en paysage, à droite de l'accueil.
 const FRIENDS_TITLE := "Partie entre amis"
-const FRIENDS_INTRO := "Crée une salle et envoie le code à ton ami : tu lanceras la partie dès qu'il sera là."
+const FRIENDS_INTRO := "Crée une salle, envoie le code à ton ami et lance la partie quand il arrive."
 const OR := "ou"
 const JOIN_WITH_CODE := "Rejoindre avec un code"
-const CODE_HINT := "Tape le code au clavier, il se remplit tout seul."
-const RESUME_TIP := "Coupé en pleine partie ? Relance le jeu : ta place t'attend."
+const CODE_HINT := "Tape le code au clavier."
+const RESUME_TIP := "Déconnecté pendant une partie ? Reviens vite pour la reprendre."
 ## Le pseudo, tant que le compte n'est pas connu.
 const DEFAULT_PLAYER_NAME := "Joueur"
 const JOIN_TITLE := "Rejoindre une salle"
@@ -46,12 +44,12 @@ const BACK := "RETOUR"
 const FRIEND := "Ton ami"
 ## La salle d'attente d'une partie entre amis.
 const LOBBY_TITLE := "Créer une salle"
-const LOBBY_WAITING := "Envoie ce code à ton ami. Tu lanceras la partie quand il sera là."
-const LOBBY_READY := "Ton ami est là : tu peux lancer la partie."
+const LOBBY_WAITING := "Envoie ce code à ton ami, puis lance la partie quand il arrive."
+const LOBBY_READY := "Ton ami est arrivé. Tu peux lancer la partie."
 ## La salle d'attente chez l'ami qui l'a rejointe, et qui commence (tiré au sort).
 const LOBBY_GUEST_TITLE := "Salle de ton ami"
-const LOBBY_GUEST_READY := "Tu es prêt : ton ami va lancer la partie."
-const LOBBY_GUEST_ALONE := "Ton ami s'est déconnecté : la partie attend son retour."
+const LOBBY_GUEST_READY := "C'est bon, ton ami va lancer la partie."
+const LOBBY_GUEST_ALONE := "Ton ami s'est déconnecté. On attend son retour."
 const LOBBY_YOU_START := "Tirage au sort : tu commences."
 const LOBBY_FRIEND_STARTS := "Tirage au sort : ton ami commence."
 const PLAYER_READY := "PRÊT"
@@ -74,7 +72,7 @@ const CODE_CARET := "|"
 const SHARE := "PARTAGER"
 const INVITE_COPIED := "INVITATION COPIÉE"
 const INVITE := "Rejoins-moi sur Fight of Pions avec le code %s."
-const ROOM_WAITING := "Envoie ce code à ton ami : il rejoint la salle avec lui."
+const ROOM_WAITING := "Envoie ce code à ton ami pour qu'il te rejoigne."
 const MY_ARSENAL := "MON ARSENAL"
 const DRAFT_CHOOSE := "CHOISIS UNE CARTE"
 const DRAFT_WAIT := "%s choisit…"
@@ -84,9 +82,9 @@ const DRAFT_PHASES := {"Ban": "BANS", "Pick": "PICKS", "Cache": "CACHE"}
 ## Ce qu'on fait à chaque étape : le titre, l'aide, le bouton (avec le nom de la carte).
 const DRAFT_TITLES := {"Ban": "Bannis une carte", "Pick": "À toi de prendre", "Cache": "Choisis ta carte cachée"}
 const DRAFT_HELP := {
-	"Ban": "Les cartes tirées. Une carte bannie ne sera prise par personne.",
-	"Pick": "Une carte tirée rejoint ton arsenal. Les picks sont publics.",
-	"Cache": "Dans tout le catalogue. L'adversaire ne la verra qu'au moment où tu la lanceras.",
+	"Ban": "Une carte bannie ne pourra être prise par personne.",
+	"Pick": "La carte prise rejoint ton arsenal. Ton adversaire voit tes picks.",
+	"Cache": "Ton adversaire ne la découvrira que quand tu la lanceras.",
 }
 const DRAFT_ACTIONS := {"Ban": "BANNIR %s", "Pick": "PRENDRE %s", "Cache": "VALIDER MA CACHE"}
 ## Ce que fait l'adversaire pendant qu'il choisit.
@@ -148,7 +146,6 @@ const STEP_TARGETS := "CIBLES"
 const CHOOSE_LAUNCHER := "Choisis le lanceur"
 const CHOOSE_TARGET := "Choisis une cible"
 const READY_TO_PLAY := "Prête à jouer"
-const TARGETS_CHOSEN := "%d cible(s) choisie(s)"
 const CANCEL := "ANNULER"
 const PLAY_CARD := "JOUER LA CARTE"
 const AIM_TOKENS := "VISER LES JETONS"
@@ -170,23 +167,23 @@ const CARDS_TITLE := "Cartes"
 const CARDS_COUNT := "%d familles · %d réactions"
 const REACTIONS_FILTER := "RÉACTIONS"
 ## Le filtre de la collection : ses cartes seulement (par défaut), ou tout le catalogue ;
-## avec leur nombre. Une carte pas encore gagnée est grisée, étiquetée.
+## avec leur nombre. Une carte pas encore débloquée est grisée, étiquetée.
 const OWNED_FILTER := "MES CARTES · %d"
 const CATALOG_FILTER := "TOUTES · %d"
-const TAG_NOT_OWNED := "À GAGNER"
-const NO_CARD_MATCHES := "Aucune de tes cartes ne passe ce filtre. Gagne des parties pour en obtenir."
+const TAG_NOT_OWNED := "À DÉBLOQUER"
+const NO_CARD_MATCHES := "Aucune de tes cartes ne correspond à ce filtre. Gagne des parties pour en débloquer."
 ## Le trio de cache, choisi dans la page Cartes et gardé par le serveur : au draft, la cache
 ## se choisit dans ce trio. Le bouton de la fiche, et où il en est.
 const TRIO_ADD := "AJOUTER À MA CACHE"
 const TRIO_REMOVE := "RETIRER DE MA CACHE"
-const TRIO_FULL := "TRIO COMPLET"
-const TRIO_NOT_OWNED := "PAS ENCORE GAGNÉE"
+const TRIO_FULL := "CACHE PLEINE"
+const TRIO_NOT_OWNED := "PAS ENCORE DÉBLOQUÉE"
 const TRIO_TITLE := "MA CACHE"
 const TRIO_SLOTS := "%d / %d"
 const TRIO_FREE := "LIBRE"
-const TRIO_HELP := "Touche une de tes cartes pour la mettre dans ta cache. Sans trio, ta cache est tirée au hasard parmi tes cartes à chaque partie."
-const CARDS_LOADING := "Le catalogue des cartes arrive du serveur…"
-const COLLECTION_LOADING := "Ta collection arrive du serveur…"
+const TRIO_HELP := "Touche une de tes cartes pour l'ajouter à ta cache. Sans cartes, ta cache est tirée au hasard dans ta collection à chaque partie."
+const CARDS_LOADING := "Chargement des cartes…"
+const COLLECTION_LOADING := "Chargement de ta collection…"
 const RULES_TITLE := "Règles"
 ## Le carrousel des règles : la page (« 1 / 6 »), les boutons, et ce que montrent ses dessins.
 const RULES_PAGE := "%d / %d"
@@ -201,25 +198,25 @@ const SETTINGS_TITLE := "Réglages"
 ## Les réglages (maquettes) : ses sections et ses lignes.
 const SETTINGS_PROFILE := "PROFIL"
 const SETTING_NAME := "Pseudo"
-const SETTING_NAME_NOTE := "Gardé avec ton compte. Valide avec Entrée."
+const SETTING_NAME_NOTE := "Appuie sur Entrée pour valider."
 const SETTINGS_SOUND := "SON"
 const SETTING_MUSIC := "Musique"
 const SETTING_EFFECTS := "Effets"
 const SETTING_VIBRATION := "Vibrations (téléphone)"
 const SETTINGS_ABOUT := "À PROPOS"
 const ABOUT_TEXT := "Fight of Pions, version de développement.\nUn jeu de Martin Ouedraogo et Théo Da Costa."
-const SETTINGS_NOTE := "Le son et les vibrations sont gardés sur cet appareil."
+const SETTINGS_NOTE := "Le son et les vibrations ne valent que pour cet appareil."
 ## Une valeur en pourcentage (« 60 »).
 const PERCENT := "%d"
 ## L'essentiel des règles, section par section (`[titre, texte]`), d'après le carnet de
 ## règles (docs/REGLES.md) ; le détail des cartes est dans la page Cartes.
 const RULES := [
 	["Aligne 6 pions", "Aligne 6 pions de ta couleur, en ligne, en colonne ou en diagonale, avant ton adversaire. Si plus personne ne peut jouer, ou après la limite de tours, c'est match nul."],
-	["Ton tour", "Tu peux poser un pion gratuitement. Tu gagnes 1 point d'action par tour ; ceux que tu ne dépenses pas restent en banque, jusqu'à 3. Touche « FINIR LE TOUR » quand tu as fini."],
+	["Ton tour", "Chaque tour, tu peux poser un pion gratuitement et tu gagnes 1 point d'action. Les points que tu ne dépenses pas restent en banque, jusqu'à 3."],
 	["Cartes et points", "Une carte coûte des points d'action, puis se recharge quelques tours. Elle part d'un de tes pions, le lanceur, posé avant ce tour. Un pion tué part à l'infirmerie quelques tours, puis revient dans ta réserve."],
 	["Réactions", "Certaines cartes se jouent pendant le tour adverse, juste après un coup qui les déclenche, payées avec ta banque. Une seule par tour adverse."],
-	["La règle d'or", "Une ligne gagne au début de ton tour, si elle est encore là : ton adversaire a son tour pour la casser."],
-	["Le draft", "Avant la partie, 10 cartes sont tirées : chacun en bannit une, puis en prend 3 en serpent. Enfin, chacun choisit une carte cachée dans tout le catalogue : l'adversaire ne la découvre que lorsque tu la lances."],
+	["Tenir sa ligne", "Une ligne ne gagne qu'au début de ton tour suivant, si elle tient encore. Ton adversaire a donc un tour pour la casser."],
+	["Le draft", "Avant la partie, 10 cartes sont tirées : chacun en bannit une, puis en prend 3 en serpent. Enfin, chacun choisit une carte cachée parmi les 3 cartes de sa cache. L'adversaire ne la découvre que quand tu la lances."],
 ]
 
 ## La fin de partie, les coupures et les départs (E3g).
@@ -233,11 +230,18 @@ const END_REASONS := {
 	"TurnLimit": "Limite de tours atteinte.",
 	"TooFewPions": "Plus assez de pions pour aligner.",
 }
+## La fin par abandon, selon qu'on gagne (l'adversaire est parti, ou absent trop longtemps)
+## ou qu'on perd (on était absent trop longtemps : qui part lui-même ne voit pas la fin).
+const FORFEIT_WON := "Ton adversaire a abandonné."
+const FORFEIT_LOST := "Tu as été absent trop longtemps : défaite par abandon."
 const REPLAY := "REJOUER"
 ## Sous la raison de la fin : contre qui, et à quel tour.
 const END_CAPTION := "Contre %s · tour %d"
+## La place gardée que le serveur n'a plus, au retour (salle fermée, partie perdue par
+## absence).
+const SEAT_GONE := "Ta partie a été fermée pendant ton absence."
 const SEAT_TAKEN_TITLE := "Partie ouverte ailleurs"
-const SEAT_TAKEN_TEXT := "Ta place a été reprise par une autre connexion : un autre appareil ou un autre onglet."
+const SEAT_TAKEN_TEXT := "Ta partie est ouverte sur un autre appareil ou dans un autre onglet."
 const RESUME_HERE := "JOUER ICI"
 ## Les fenêtres de coupure (maquettes) : connexion perdue, bot muet, serveur complet.
 const CONNECTION_LOST_TITLE := "Connexion perdue"
@@ -248,9 +252,9 @@ const WAIT := "ATTENDRE"
 const SERVER_FULL_TITLE := "Serveur complet"
 const SERVER_FULL_TEXT := "Trop de parties sont en cours. Réessaie dans un instant."
 const BOT_FAILED := "Le bot ne répond plus, nouvel essai…"
-const FRIEND_LEFT := "Ton ami s'est déconnecté : la partie attend son retour."
+const FRIEND_LEFT := "Ton ami s'est déconnecté. S'il ne revient pas vite, tu gagnes par abandon."
 const QUIT_TITLE := "Quitter la partie ?"
-const QUIT_TEXT := "Ta place sera libérée : tu ne pourras plus revenir dans cette partie."
+const QUIT_TEXT := "Si tu quittes, tu abandonnes : ton adversaire gagne et tu ne pourras pas revenir dans la partie."
 const STAY := "RESTER"
 const QUIT := "QUITTER"
 
@@ -265,7 +269,7 @@ const REVEAL_DETAIL := "%s · coût %d"
 const TAP_TO_CONTINUE := "Toucher pour continuer"
 ## La carte gagnée par une victoire, montrée comme la cache révélée.
 const REWARD_TAG := "NOUVELLE CARTE"
-const REWARD_TITLE := "Ta victoire te rapporte une carte"
+const REWARD_TITLE := "Tu débloques une carte"
 const REWARD_DETAIL := "%s · ajoutée à ta collection"
 const REACT_QUESTION := "Réagir ?"
 const REACT_DEFAULT_TITLE := "L'adversaire vient de jouer"
@@ -275,7 +279,7 @@ const NOT_PLAYABLE_NOW := "pas jouable maintenant"
 ## Le journal des coups.
 const JOURNAL_TITLE := "JOURNAL DES COUPS"
 const JOURNAL_ORDER := "les plus récents en haut"
-const JOURNAL_EMPTY := "Rien pour l'instant : les coups s'inscriront ici."
+const JOURNAL_EMPTY := "Aucun coup pour l'instant."
 const JOURNAL_TURN := "T%d"
 ## Les lettres des colonnes, de gauche à droite (le moteur s'arrête aussi à Z).
 const COLUMN_LETTERS := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -348,6 +352,11 @@ static func token_pile(tokens: int, reward: Variant) -> String:
 ## « 1 tour », « 2 tours » (la recharge d'une carte).
 static func turns(count: int) -> String:
 	return _plural(count, "tour")
+
+
+## « 1 cible choisie », « 3 cibles choisies ».
+static func targets_chosen(count: int) -> String:
+	return "%s %s" % [_plural(count, "cible"), "choisies" if count > 1 else "choisie"]
 
 
 ## « 1 jeton », « 3 jetons ».

@@ -323,6 +323,19 @@ Quand la partie s'arrête ainsi (figée ou limite de tours), une ligne qui atten
 
 Le moteur retient la raison de la fin, en plus du résultat. Le résultat hors alignement est pour l'instant toujours le nul ; un départage pourra le remplacer sans toucher au reste.
 
+### Abandon (2026-11-10)
+
+Demandé par Martin le 2026-11-10 : « partie abandonnée : forfait, victoire de l'autre ».
+
+- **Un joueur peut abandonner à tout moment** de la partie, draft compris, même hors de son tour et au milieu d'une attaque (`Action::Resign(joueur)`). Il perd ; l'autre gagne. La raison de la fin est `EndReason::Forfeit` (« abandon »).
+- Abandonner n'est jamais une décision attendue : l'action n'est pas dans `legal_actions`, et les bots ne la jouent pas. Une partie finie ne s'abandonne plus (`GameOver`).
+- L'abandon est une action comme les autres : il est dans l'enregistrement de la partie, qui se rejoue à l'identique.
+- **En ligne** (le serveur), un joueur abandonne :
+  - en **quittant** une partie lancée et pas finie (le bouton « Quitter » du jeu, après confirmation) ;
+  - en restant **débranché plus de 3 minutes** d'une partie lancée (`ABSENCE_LIMIT`, réglage d'hébergement). Contre un bot aussi. Avant le lancement d'une salle entre amis, personne ne perd.
+  - Un joueur ne peut jamais faire abandonner son adversaire : `play` refuse `Resign`, l'abandon ne passe que par le départ ou l'absence.
+- **Réponse par défaut, à confirmer** : une victoire par abandon **ne rapporte pas de carte** (sinon, un second compte qui abandonne aussitôt ferait gagner des cartes sans jouer). Elle est enregistrée comme les autres parties.
+
 ## Pas encore implémenté
 
 - Toutes les cartes des fiches sont codées : les attaques et les cinq réactions (B8).
@@ -480,6 +493,7 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | B9 | Une même carte peut-elle être deux fois dans un arsenal (la cache identique à un pick ou à une carte de départ) ? | Oui, deux emplacements et deux recharges | **2026-11-03** : oui (réponse par défaut). |
 | B9 | La cache se choisit-elle avant le tirage, ou en dernier ? Et plus tard, avec les collections ? | En dernier, en connaissant tout le draft ; plus tard, parmi 3 cartes préparées avant la partie | **2026-11-05** : en dernier (Martin), dans tout le catalogue tant qu'il n'y a pas de collection. Avec les comptes : chaque joueur prépare 3 cartes de cache avant la partie et en garde 1 au draft (à coder avec les comptes). **2026-11-10** (E4b) : codé ; le serveur limite la cache au trio du joueur (`Game::limit_cache_choices`), ou, s'il n'a pas rangé de trio, à 3 cartes de sa collection tirées au hasard à chaque partie (Martin, 2026-11-10 : jamais toute la collection, sinon la cache ne sert à rien). Un bot du serveur choisit toujours dans tout le catalogue. |
 | E3e | Pendant la fenêtre de la Feintaille, la vue doit-elle dire l'attaque qui menace (la carte, son lanceur, les pions visés) ? Le carnet dit que le joueur visé la connaît (B9, 2026-11-03), mais la vue ne la donne que si c'est une carte de la cache (`CardRevealed`) : l'attaque n'est annoncée (`AttackUsed`) qu'une fois résolue. Le client ne peut donc pas afficher « L'adversaire attaque ton pion en H8 » (maquettes). | Oui : un champ de la vue, rempli seulement pendant cette fenêtre (moteur, puis client) | En attente. D'ici là, le client dit le dernier coup adverse raconté, et les pions visés apparaissent quand on choisit la Feintaille (ses lanceurs proposés). |
+| E4g | Abandonner aussitôt une partie contre un bot, encore et encore, remplit la base de parties « abandon » (une par salle ouverte). Faut-il enregistrer une partie abandonnée sans aucun coup du joueur, ou limiter les parties par compte ? | L'enregistrer comme les autres pour l'instant (le débit des messages borne l'abus ; à revoir si la base grossit) | |
 
 ## Historique
 
@@ -516,4 +530,5 @@ Plan de mesure : les règles actuelles et les règles cibles sont deux configura
 | 2026-11-03 | B9a : le draft, réglable (`DraftRules`) : 1 carte en cache dans tout le catalogue, 10 cartes tirées avec la graine, 1 ban chacun, 3 picks chacun en serpent (J2 d'abord) ; les cartes choisies remplissent l'arsenal. |
 | 2026-11-03 | B9b : la cache est secrète pour l'adversaire et révélée à sa première utilisation (`ArsenalSlot::is_secret`, `Event::CardRevealed`). |
 | 2026-11-03 | Correctif du secret (relecture du gardien) : la cache est révélée dès qu'on la lance ; les cartes tirées se cachent jusqu'au premier ban ou pick ; l'adversaire reçoit « carte mise en cache » sans la carte (`Event::CardCached`) au lieu de rien ; la Feintaille n'esquive pas vers une case où l'attaque arrive ; un pion chargé par le Coup du taureau n'est pas visé ; Terre brûlée rejouée par un Perroquet frappe l'attaquant. |
+| 2026-11-10 | Abandon (`Action::Resign`, `EndReason::Forfeit`) : à tout moment, même hors de son tour ; l'autre joueur gagne. En ligne : en quittant une partie lancée, ou absent plus de 3 minutes. Une victoire par abandon ne rapporte pas de carte (réponse par défaut). |
 | 2026-11-03 | Séduction esquivée : rien n'est posé (`Effect::Seduce`, qui ne pose que si le kill a lieu). Médecin Épique sur une tombe occupée : le pion est visé, la résurrection a lieu même s'il esquive. |

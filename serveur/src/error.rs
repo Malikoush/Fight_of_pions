@@ -57,6 +57,12 @@ pub enum ServerError {
     Storage,
     /// Le fichier du paquet de départ est mal écrit (un bug, que les tests empêchent).
     StarterUnavailable(String),
+    /// Le créateur de la salle l'a quittée avant de la lancer : elle est fermée.
+    RoomClosed,
+    /// Le serveur a créé trop de comptes ces dernières secondes.
+    TooManyRegistrations,
+    /// Ce client envoie trop de messages : sa connexion est fermée.
+    TooManyMessages,
 }
 
 impl fmt::Display for ServerError {
@@ -100,7 +106,7 @@ impl fmt::Display for ServerError {
             ServerError::UnknownAccount => write!(f, "ce compte n'existe pas"),
             ServerError::BadPseudo(why) => write!(f, "pseudo refusé : {why}"),
             ServerError::NotOwned(card) => write!(f, "tu ne possèdes pas la carte {card}"),
-            ServerError::BadCacheTrio(why) => write!(f, "trio de cache refusé : {why}"),
+            ServerError::BadCacheTrio(why) => write!(f, "cache refusée : {why}"),
             ServerError::NothingToCache => write!(
                 f,
                 "aucune de tes cartes ne peut être mise en cache dans cette variante"
@@ -111,6 +117,14 @@ impl fmt::Display for ServerError {
             ),
             ServerError::StarterUnavailable(why) => {
                 write!(f, "le paquet de départ est illisible ({why})")
+            }
+            ServerError::RoomClosed => write!(f, "le créateur de la salle l'a fermée"),
+            ServerError::TooManyRegistrations => write!(
+                f,
+                "trop de comptes créés en ce moment, réessaie dans une minute"
+            ),
+            ServerError::TooManyMessages => {
+                write!(f, "trop de messages envoyés : la connexion est fermée")
             }
         }
     }
@@ -148,6 +162,9 @@ impl ServerError {
             ServerError::NothingToCache => "nothing_to_cache",
             ServerError::Storage => "storage",
             ServerError::StarterUnavailable(_) => "starter_unavailable",
+            ServerError::RoomClosed => "room_closed",
+            ServerError::TooManyRegistrations => "too_many_registrations",
+            ServerError::TooManyMessages => "too_many_messages",
         }
     }
 }

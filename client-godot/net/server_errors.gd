@@ -5,8 +5,8 @@ extends RefCounted
 ## client ne raisonne que par catégorie.
 
 enum Category {
-	## La place gardée n'existe plus (salle fermée, mauvaise clé, salle pleine à la reprise) :
-	## revenir à l'accueil.
+	## La place gardée n'existe plus (salle fermée, par son créateur ou faute de joueurs,
+	## mauvaise clé, salle pleine à la reprise) : revenir à l'accueil.
 	SEAT_LOST,
 	## Une autre connexion a repris la place : ne plus se reconnecter, proposer de la reprendre.
 	SEAT_TAKEN,
@@ -31,6 +31,7 @@ const _CATEGORIES := {
 	"unknown_room": Category.SEAT_LOST,
 	"bad_key": Category.SEAT_LOST,
 	"room_full": Category.SEAT_LOST,
+	"room_closed": Category.SEAT_LOST,
 	"seat_taken": Category.SEAT_TAKEN,
 	"not_your_turn": Category.STALE_VIEW,
 	"refused_move": Category.STALE_VIEW,
@@ -40,6 +41,9 @@ const _CATEGORIES := {
 	"not_owned": Category.TRIO_REFUSED,
 	"bad_cache_trio": Category.TRIO_REFUSED,
 }
+## Les catégories des refus qui parlent d'une salle : pendant qu'on la quitte, ils ne
+## comptent plus (`ServerLink`). Les autres (le compte, la base…) comptent toujours.
+const ROOM_CATEGORIES := [Category.SEAT_LOST, Category.SEAT_TAKEN, Category.STALE_VIEW, Category.BOT_DOWN]
 ## Le refus d'un jeton de compte que le serveur ne connaît pas : le lien le traite lui-même
 ## (il crée un compte neuf), sans catégorie.
 const UNKNOWN_ACCOUNT := "unknown_account"
@@ -52,6 +56,11 @@ const _REQUEST_REFUSALS := {
 	"set_pseudo": {"storage": Category.PSEUDO_REFUSED},
 	"set_cache_trio": {"storage": Category.TRIO_REFUSED},
 }
+
+
+## Vrai si ce refus parle d'une salle (sa place, son tour, son bot).
+static func is_about_room(kind: String) -> bool:
+	return category(kind) in ROOM_CATEGORIES
 
 
 ## La catégorie de ce refus. `pending` : le `type` de la demande qui attend sa réponse

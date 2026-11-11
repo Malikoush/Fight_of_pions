@@ -9,7 +9,9 @@ use fight_of_pions::{Action, Attack, Event, Player, PlayerView};
 use serde::{Deserialize, Serialize};
 
 /// Un message du client. Créer ou rejoindre une salle demande d'être connecté à son compte
-/// (`register` la première fois, puis `login`) : la cache se choisit parmi ses cartes.
+/// (`register` la première fois, puis `login`) : la cache se choisit parmi ses cartes. Un
+/// compte n'est assis que dans une salle à la fois ; s'y connecter le rassoit dans sa salle
+/// en cours, s'il en a une ([`ServerMessage::Account`], `resumed`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClientMessage {
@@ -19,8 +21,8 @@ pub enum ClientMessage {
     Create {
         /// Contre qui jouer.
         opponent: Opponent,
-        /// Le nom d'une variante (`bots::variants`) ; par défaut, celle du jeu en ligne
-        /// (`bots::ONLINE_VARIANT`).
+        /// Le nom de la variante ; seule celle du jeu en ligne (`bots::ONLINE_VARIANT`) est
+        /// acceptée, et c'est celle par défaut.
         #[serde(default)]
         variant: Option<String>,
     },
@@ -29,7 +31,8 @@ pub enum ClientMessage {
         /// Le code donné à celui qui a créé la salle.
         code: String,
     },
-    /// Reprendre sa place après une déconnexion.
+    /// Reprendre sa place après une déconnexion, avec sa clé, depuis le compte assis à
+    /// cette place. Rarement utile : se connecter à son compte rassoit déjà dans sa salle.
     Rejoin {
         /// Le code de la salle.
         code: String,
@@ -38,6 +41,11 @@ pub enum ClientMessage {
         /// La clé reçue en s'asseyant ([`ServerMessage::Seated`]).
         key: String,
     },
+    /// Quitter sa salle. Une partie lancée et pas finie est perdue par forfait ; avant le
+    /// lancement, la place de l'invité redevient libre, et la salle de son créateur est
+    /// fermée (l'invité reçoit l'erreur `room_closed`). Réponse : [`ServerMessage::Left`],
+    /// même sans salle. On peut ensuite créer ou rejoindre une autre salle.
+    Leave,
     /// Lancer la partie de la salle qu'on a créée, une fois l'adversaire assis : les deux
     /// joueurs reçoivent [`ServerMessage::Launched`]. Avant, personne ne peut jouer.
     Launch,
@@ -143,12 +151,16 @@ pub enum ServerMessage {
         cards: Vec<CardFamily>,
     },
     /// L'adversaire humain vient de se brancher sur sa place, ou de s'en débrancher (fermé,
-    /// coupé). Envoyé aussi à celui qui s'assoit, juste après sa vue, s'il trouve son
-    /// adversaire déjà là. Jamais pour un bot, toujours là.
+    /// coupé, parti). Envoyé aussi à celui qui s'assoit, juste après sa vue, dès qu'un
+    /// humain occupe l'autre place, là ou non. Jamais pour un bot, toujours là.
     Opponent {
         /// Vrai s'il est branché.
         connected: bool,
+        /// Son pseudo.
+        pseudo: String,
     },
+    /// La réponse à [`ClientMessage::Leave`] : le client n'est plus dans aucune salle.
+    Left,
     /// Le compte de cette connexion, après `register`, `login` ou `set_pseudo`.
     Account {
         /// Son numéro, stable.
@@ -159,6 +171,10 @@ pub enum ServerMessage {
         /// le serveur ne le redonnera jamais.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         token: Option<String>,
+        /// Vrai si la connexion au compte vient de le rasseoir dans sa salle en cours :
+        /// [`ServerMessage::Seated`] suit. Faux sinon, et après `register` ou `set_pseudo`.
+        #[serde(default)]
+        resumed: bool,
     },
     /// Ce que possède le compte : après `register`, `login`, `collection` ou
     /// `set_cache_trio`.

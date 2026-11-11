@@ -38,6 +38,9 @@ async fn the_web_client_is_served_next_to_the_websocket() {
     let page = format!("<p>Fight of Pions</p>{}", " ".repeat(2000));
     std::fs::write(folder.join("index.html"), &page).unwrap();
     std::fs::write(folder.join("index.wasm"), b"\0asm").unwrap();
+    // Un fichier déjà compressé à côté de l'original : envoyé tel quel.
+    std::fs::write(folder.join("index.pck"), b"original").unwrap();
+    std::fs::write(folder.join("index.pck.gz"), b"precompresse").unwrap();
     let address = start_server(&folder).await;
 
     let index = get(address, "/", false).await;
@@ -48,10 +51,24 @@ async fn the_web_client_is_served_next_to_the_websocket() {
     );
     let wasm = get(address, "/index.wasm", false).await;
     assert!(wasm.contains("content-type: application/wasm"), "{wasm}");
+    assert!(
+        index.contains("cache-control: no-cache"),
+        "revalidée à chaque visite"
+    );
     let compressed = get(address, "/index.html", true).await;
     assert!(
         compressed.contains("content-encoding: gzip"),
         "{compressed}"
+    );
+    let precompressed = get(address, "/index.pck", true).await;
+    assert!(
+        precompressed.contains("content-encoding: gzip") && precompressed.ends_with("precompresse"),
+        "{precompressed}"
+    );
+    assert!(
+        get(address, "/index.pck", false)
+            .await
+            .ends_with("original")
     );
     assert!(
         get(address, "/absent.js", false)

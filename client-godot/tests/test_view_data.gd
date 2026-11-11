@@ -49,6 +49,13 @@ func test_a_placed_pion_is_found_by_cell_and_by_identity() -> bool:
 	return true
 
 
+func test_the_chosen_targets_are_counted_in_good_french() -> bool:
+	equal(Labels.targets_chosen(0), "0 cible choisie", "aucune")
+	equal(Labels.targets_chosen(1), "1 cible choisie", "une")
+	equal(Labels.targets_chosen(3), "3 cibles choisies", "plusieurs")
+	return true
+
+
 func test_a_picks_view_tells_what_was_chosen_and_where_the_draft_stands() -> bool:
 	var view := view_of("draft_picks_view")
 	var history := view.draft_history()

@@ -426,6 +426,7 @@ fn random_games_freeze_exactly_when_the_rules_say_so() {
                     }),
                     "partie {seed} perdue par manque de pions à tort"
                 ),
+                Some(EndReason::Forfeit) => panic!("partie {seed} abandonnée sans abandon"),
                 Some(EndReason::TurnLimit) | None => assert!(
                     !frozen_by_the_rules(&game),
                     "partie {seed} figée mais pas arrêtée : {:?}",

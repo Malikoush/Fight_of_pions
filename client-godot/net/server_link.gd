@@ -1,11 +1,13 @@
 extends Node
 ## Le lien avec le serveur (autoload `ServerLink`) : une WebSocket, un message JSON par trame
 ## (docs/PROTOCOLE.md). Il ne connaît aucune règle : il envoie les demandes du client et
-## annonce ce que le serveur répond. Il garde la place (code, joueur, clé) sur le disque et
-## la reprend tout seul après une coupure, ou au lancement suivant.
+## annonce ce que le serveur répond.
 ## À chaque ouverture, il se connecte d'abord au compte du joueur (`login` avec le jeton
 ## gardé, ou `register` la première fois : le serveur l'exige pour créer ou rejoindre une
-## salle), puis demande le catalogue des cartes (noms et textes à afficher).
+## salle), puis demande le catalogue des cartes (noms et textes à afficher). Le serveur
+## rassoit tout seul le compte dans sa salle en cours, après une coupure ou au lancement
+## suivant. La place (code, joueur, clé) est aussi gardée sur le disque : avec elle, le jeu
+## sait au démarrage qu'une partie l'attend, et si le serveur ne l'a plus.
 ## Il classe chaque refus du serveur par catégorie (`ServerErrors`).
 
 ## L'état de la connexion.
@@ -18,8 +20,8 @@ signal state_received(view: ViewData, events: Array)
 signal preview_received(view: ViewData)
 ## Le catalogue des cartes : les familles, leurs noms et leurs textes.
 signal cards_received(cards: CardCatalog)
-## L'adversaire humain s'est branché sur sa place, ou s'en est débranché.
-signal opponent_presence(connected: bool)
+## L'adversaire humain s'est branché sur sa place, ou s'en est débranché ; son pseudo.
+signal opponent_presence(connected: bool, pseudo: String)
 ## Une demande refusée : sa catégorie, et le message du serveur, en français, à afficher.
 signal server_error(category: ServerErrors.Category, message: String)
 ## Le compte de cette connexion : son numéro et son pseudo (après la connexion au compte,
@@ -52,8 +54,12 @@ const INBOUND_BUFFER_BYTES := 1 << 20
 ## Les attentes entre deux essais de connexion, en secondes ; la dernière se répète.
 const RETRY_DELAYS: Array[float] = [0.5, 1.0, 2.0, 4.0]
 ## Les demandes qui peuvent attendre l'ouverture de la connexion. Un coup préparé avant une
-## coupure, lui, est perdu : la vue reçue au retour fait foi.
+## coupure, lui, est perdu : la vue reçue au retour fait foi. Quitter sa salle attend aussi,
+## à part (`_leaving`).
 const QUEUED_REQUESTS := ["create", "join"]
+## Les messages de la salle qu'on quitte, ignorés jusqu'à la réponse `left`, avec ses refus
+## (`ServerErrors.is_about_room`) ; ceux du compte comptent toujours.
+const ROOM_MESSAGES := ["seated", "launched", "state", "preview", "opponent"]
 ## La réponse de chaque demande qui attend (`_pending`), par le `type` de la réponse.
 const _REPLIES := {"seated": "join", "account": "set_pseudo", "collection": "set_cache_trio"}
 ## La longueur d'un message illisible recopiée dans le journal.
@@ -75,7 +81,11 @@ var _seat := {}
 ## Le `type` de la demande qui attend sa réponse et dont un refus ne parle que d'elle
 ## (`join`, `set_pseudo`, `set_cache_trio` : `ServerErrors.category`), ou vide.
 var _pending := ""
-var _reopen_after_close := false
+## Vrai de la demande `leave` à sa réponse `left` : les nouvelles de la salle quittée sont
+## ignorées, et la demande est renvoyée à chaque ouverture tant qu'elle n'a pas de réponse.
+var _leaving := false
+## Vrai de la connexion au compte à sa réponse : sans reprise, une place gardée est perdue.
+var _logging_in := false
 ## Le jeton du compte, vide tant qu'aucun compte n'a été créé sur cet appareil.
 var _token := ""
 
@@ -125,7 +135,7 @@ func disconnect_from_server() -> void:
 		_socket.close()
 
 
-## Vrai si une place est gardée : elle sera reprise à l'ouverture de la connexion.
+## Vrai si une place est gardée : le serveur devrait y rasseoir le compte à l'ouverture.
 func has_saved_seat() -> bool:
 	return not _seat.is_empty()
 
@@ -135,14 +145,14 @@ func forget_seat() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SEAT_PATH))
 
 
-## Quitter sa salle : la place est oubliée et une connexion neuve s'ouvre, car le serveur
-## n'accepte qu'une salle par connexion. Une demande faite d'ici là attend la nouvelle.
+## Quitter sa salle : la place est oubliée, et le serveur le saura (`leave`) dès que
+## possible. Une partie en cours est perdue par abandon. Une demande faite ensuite (créer,
+## rejoindre) passe après.
 func leave_room() -> void:
 	forget_seat()
-	if _socket != null:
-		_reopen_after_close = true
-		_socket.close()
-		_set_status(Status.CONNECTING)
+	_leaving = true
+	if _is_open():
+		_write({"type": "leave"})
 
 
 ## Créer une salle et s'y asseoir, à une place tirée au sort par le serveur. `opponent` :
@@ -232,7 +242,7 @@ func _process(delta: float) -> void:
 	_socket.poll()
 	match _socket.get_ready_state():
 		WebSocketPeer.STATE_OPEN:
-			if status != Status.ONLINE and not _reopen_after_close:
+			if status != Status.ONLINE:
 				_on_opened()
 			while _socket != null and _socket.get_available_packet_count() > 0:
 				_receive(_socket.get_packet().get_string_from_utf8())
@@ -254,11 +264,12 @@ func _on_opened() -> void:
 	failed_attempts = 0
 	_set_status(Status.ONLINE)
 	# Le compte d'abord : le serveur traite les messages dans l'ordre, et les demandes en
-	# attente (créer, rejoindre) en ont besoin.
+	# attente (quitter, créer, rejoindre) en ont besoin. Le compte rassoit dans sa salle.
 	_write(_account_request())
+	_logging_in = true
 	_write({"type": "cards"})
-	if has_saved_seat():
-		_write({"type": "rejoin", "code": _seat["code"], "player": _seat["player"], "key": _seat["key"]})
+	if _leaving:
+		_write({"type": "leave"})
 	var waiting := _outbox
 	_outbox = []
 	for text in waiting:
@@ -269,11 +280,8 @@ func _on_closed() -> void:
 	_socket = null
 	# Une demande perdue avec la connexion n'attend plus de réponse.
 	_pending = ""
-	if _reopen_after_close:
-		_reopen_after_close = false
-		failed_attempts = 0
-		_open()
-	elif _wants_connection:
+	_logging_in = false
+	if _wants_connection:
 		_schedule_retry()
 	else:
 		_set_status(Status.OFFLINE)
@@ -288,7 +296,7 @@ func _schedule_retry() -> void:
 ## Envoie ce message, ou le met en attente de la connexion s'il peut attendre ; rend faux
 ## s'il est perdu.
 func _send(message: Dictionary) -> bool:
-	if status == Status.ONLINE and _socket != null and not _reopen_after_close:
+	if _is_open():
 		_write(message)
 	elif message.get("type", "") in QUEUED_REQUESTS:
 		_outbox.append(Wire.encode(message))
@@ -307,12 +315,18 @@ func _write(message: Dictionary) -> void:
 	_socket.send_text(Wire.encode(message))
 
 
+func _is_open() -> bool:
+	return status == Status.ONLINE and _socket != null
+
+
 ## Lit un message du serveur. Un message mal formé (pas du JSON, ou un champ attendu
 ## absent ou du mauvais type) est signalé dans le journal et ignoré.
 func _receive(text: String) -> void:
 	var message: Variant = Wire.decode(text)
 	if not (message is Dictionary) or not _is_well_formed(message):
 		push_warning("Message mal formé du serveur : %s" % text.left(LOGGED_CHARACTERS))
+		return
+	if _leaving and (message["type"] in ROOM_MESSAGES or (message["type"] == "error" and ServerErrors.is_about_room(message["kind"]))):
 		return
 	if _REPLIES.get(message["type"]) == _pending:
 		_pending = ""
@@ -330,7 +344,9 @@ func _receive(text: String) -> void:
 		"cards":
 			cards_received.emit(CardCatalog.new(message["cards"]))
 		"opponent":
-			opponent_presence.emit(message["connected"])
+			opponent_presence.emit(message["connected"], message.get("pseudo", ""))
+		"left":
+			_leaving = false
 		"account":
 			_on_account(message)
 		"collection":
@@ -348,7 +364,7 @@ static func _is_well_formed(message: Dictionary) -> bool:
 				SEAT_FIELDS.all(func(field: String) -> bool: return message.get(field) is String)
 				and (not message.has("launched") or message["launched"] is bool)
 			)
-		"launched":
+		"launched", "left":
 			return true
 		"state":
 			return message.get("view") is Dictionary and message.get("events", []) is Array
@@ -359,12 +375,13 @@ static func _is_well_formed(message: Dictionary) -> bool:
 		"cards":
 			return message.get("cards") is Array
 		"opponent":
-			return message.get("connected") is bool
+			return message.get("connected") is bool and message.get("pseudo", "") is String
 		"account":
 			return (
 				message.get("id") is int
 				and message.get("pseudo") is String
 				and (not message.has("token") or message["token"] is String)
+				and message.get("resumed", false) is bool
 			)
 		"collection":
 			return message.get("cards") is Array and message.get("cache_trio") is Array
@@ -377,9 +394,11 @@ static func _is_well_formed(message: Dictionary) -> bool:
 ## reconnexions ; puis il est annoncé par sa catégorie. Un compte inconnu du serveur (sa
 ## base a été vidée) est oublié et remplacé par un compte neuf, sans rien annoncer.
 func _on_error(kind: String, text: String) -> void:
+	# Un refus pendant la connexion au compte lui répond : elle n'attend plus.
+	_logging_in = false
 	if kind == ServerErrors.UNKNOWN_ACCOUNT:
 		forget_account()
-		if status == Status.ONLINE and _socket != null:
+		if _is_open():
 			_write(_account_request())
 		return
 	var category := ServerErrors.category(kind, _pending)
@@ -405,8 +424,15 @@ func _account_request() -> Dictionary:
 	return {"type": "register"}
 
 
-## Le compte de la connexion : son jeton est gardé s'il vient d'être créé.
+## Le compte de la connexion : son jeton est gardé s'il vient d'être créé. À la connexion
+## au compte, une place gardée que le serveur ne reprend pas est perdue (partie fermée,
+## perdue par absence) : elle est oubliée et annoncée comme telle.
 func _on_account(message: Dictionary) -> void:
+	if _logging_in:
+		_logging_in = false
+		if has_saved_seat() and not message.get("resumed", false) and not _leaving:
+			forget_seat()
+			server_error.emit(ServerErrors.Category.SEAT_LOST, Labels.SEAT_GONE)
 	account_id = message["id"]
 	account_pseudo = message["pseudo"]
 	var token: String = message.get("token", "")

@@ -409,6 +409,10 @@ impl Game {
         if self.end.is_some() {
             return Err(GameError::GameOver);
         }
+        // Abandonner se peut à tout moment, draft compris.
+        if let Action::Resign(_) = action {
+            return Ok(());
+        }
         if self.draft.is_some() {
             return self.validate_draft(action);
         }
@@ -505,6 +509,11 @@ impl Game {
             Action::Pass => self.execute_pass(&mut events),
             Action::Draft(attack) => self.execute_draft(attack, &mut events),
             Action::EndTurn => self.finish_turn(&mut events),
+            Action::Resign(player) => self.finish_game(
+                Outcome::Won(player.opponent()),
+                EndReason::Forfeit,
+                &mut events,
+            ),
         }
         self.announce_placements(placements_before, &mut events);
         events

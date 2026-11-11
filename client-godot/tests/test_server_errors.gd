@@ -20,6 +20,7 @@ func test_a_typed_code_that_leads_nowhere_is_a_refused_join() -> bool:
 	equal(ServerErrors.category("unknown_room", "join"), ServerErrors.Category.JOIN_REFUSED, "code inconnu")
 	equal(ServerErrors.category("room_full", "join"), ServerErrors.Category.JOIN_REFUSED, "salle pleine")
 	equal(ServerErrors.category("unknown_room"), ServerErrors.Category.SEAT_LOST, "à la reprise : place perdue")
+	equal(ServerErrors.category("room_closed"), ServerErrors.Category.SEAT_LOST, "le créateur est parti")
 	return true
 
 
@@ -35,4 +36,12 @@ func test_a_server_message_reads_as_a_sentence() -> bool:
 	equal(Labels.sentence("aucune salle n'a le code K7QXM"), "Aucune salle n'a le code K7QXM.", "capitale et point")
 	equal(Labels.sentence("Déjà une phrase."), "Déjà une phrase.", "rien à ajouter")
 	equal(Labels.sentence("  "), "", "vide")
+	return true
+
+
+func test_only_room_refusals_are_about_the_room() -> bool:
+	check(ServerErrors.is_about_room("seat_taken"), "la place")
+	check(ServerErrors.is_about_room("not_your_turn"), "le tour")
+	check(not ServerErrors.is_about_room("storage"), "la base")
+	check(not ServerErrors.is_about_room("unknown_account"), "le compte")
 	return true

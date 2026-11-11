@@ -43,7 +43,8 @@ Un même mot désigne toujours la même chose, dans le GDD, dans le carnet de r�
 | Actions légales | `legal_actions()` | La liste exacte des actions acceptées maintenant |
 | Fin de partie | `GameEnd`, `Event::GameEnded` | Le résultat et la raison de la fin |
 | Résultat | `Outcome` | `Won(Player)` ou `Draw` (match nul) |
-| Raison de la fin | `EndReason` | `Alignment`, `Frozen` (partie figée) ou `TurnLimit` |
+| Raison de la fin | `EndReason` | `Alignment`, `Frozen` (partie figée), `TurnLimit`, `TooFewPions` ou `Forfeit` (abandon) |
+| Abandon | `Action::Resign(joueur)`, `EndReason::Forfeit` | Un joueur abandonne, à tout moment, même hors de son tour : l'autre gagne. Jamais dans `legal_actions`. En ligne : quitter une partie lancée, ou rester absent trop longtemps (« forfait ») |
 | Partie figée | `EndReason::Frozen` | Plus personne ne pourra jamais agir autrement qu'en finissant son tour, et rien de programmé ne peut changer la situation (aucun effet continu, personne à l'infirmerie) |
 | Limite de tours | `max_turns` | Le tour après lequel la partie s'arrête en match nul (200 par défaut) : filet de sécurité |
 | Graine | `seed`, `Game::seed()` | Choisie par le client à la création (`Game::new(config, seed)`). Elle fait partie de la partie et initialise le hasard du jeu. |
@@ -185,18 +186,24 @@ Le serveur (`serveur/`) est en anglais dans le code, comme le moteur ; ses messa
 |---|---|---|
 | Salle | `Room` | Une partie et ses deux places, sans réseau : qui a le droit de jouer, les coups des bots, ce que voit chacun |
 | Table | `Table`, `SharedTable` | Une salle et les clients branchés sur chacune de ses places ; elle diffuse les vues |
-| Hall | `Lobby` | Les salles ouvertes, par code ; il ferme les salles abandonnées |
+| Hall | `Lobby`, `Hall` | Les salles ouvertes, par code, et la salle de chaque compte assis (un compte, une salle) ; il ferme les salles abandonnées |
+| Reprise | `Lobby::resume`, `ServerMessage::Account { resumed }` | À la connexion à son compte, être rassis dans sa salle en cours, sans rien demander |
+| Départ | `ClientMessage::Leave`, `ServerMessage::Left`, `Table::leave`, `Departure` | Quitter sa salle : abandon d'une partie lancée, place libérée avant le lancement, salle fermée si c'est son créateur |
+| Absence | `Table::away_since`, `limits::ABSENCE_LIMIT` | Depuis quand un joueur est débranché ; trop longtemps pendant une partie lancée, il perd par abandon |
+| Balayage | `Lobby::sweep`, `Background::sweep_regularly` | Le passage régulier qui déclare les forfaits d'absence et ferme les salles abandonnées |
+| Tâches de fond | `Background` | Les bots, l'enregistrement des parties finies, le balayage ; à l'arrêt, le serveur attend les enregistrements |
+| Demandes d'un client | `requests::Client` | Ce que le serveur sait d'un client connecté (sa place, son compte), et une fonction par message |
 | Code de salle | `code` | 5 caractères à donner à l'adversaire pour qu'il rejoigne |
 | Place | `Seat` | Libre, un humain, ou un bot du serveur |
-| Clé de place | `key`, `ServerError::BadKey`, `ServerError::SeatTaken` | Le secret reçu en s'asseyant, pour reprendre sa place après une coupure (pas « jeton » : ce mot est au Massacre divin). Une reconnexion remplace l'ancienne connexion, qui ne joue plus |
+| Clé de place | `key`, `ServerError::BadKey`, `ServerError::SeatTaken` | Le secret reçu en s'asseyant, pour reprendre sa place avec `rejoin`, depuis le même compte (pas « jeton » : ce mot est au Massacre divin ; le « jeton de compte » est celui du compte). Une reconnexion remplace l'ancienne connexion, qui l'apprend et ne joue plus |
 | Sorte d'erreur | `ServerError::kind`, `ServerMessage::Error { kind }` | Un mot stable (`not_your_turn`, `unknown_room`…) pour que le client réagisse sans lire le message en français |
 | Se remettre à jour | `ClientMessage::Sync`, `Table::state` | Redemander sa vue actuelle, sans événement |
 | Coup de repli | `Room::play_bot` | Le premier coup permis par le moteur, joué à la place d'un bot sans coup valable |
 | Aperçu | `ClientMessage::Preview`, `ServerMessage::Preview`, `Room::preview` | Les choix d'une carte essayés sur une copie, sans rien jouer ; il s'arrête au coup qui finit ces choix (réponse `null`) |
 | Recherche de bot | `BotSearch`, `BotMove`, `Table::start_bots` | La copie de la partie sur laquelle un bot cherche son coup, hors du verrou de la salle ; le coup n'est joué que si la partie n'a pas changé |
-| Variante en ligne | `bots::ONLINE_VARIANT` | La configuration jouée quand le client n'en demande pas : les règles actuelles avec draft |
+| Variante en ligne | `bots::ONLINE_VARIANT` | La seule configuration jouable en ligne : les règles actuelles avec draft |
 | Catalogue des cartes | `ClientMessage::Cards`, `ServerMessage::Cards`, `CardFamily`, `CardRarity`, `serveur/data/cartes.json` | Le nom, le résumé, les règles et l'effet de chaque rareté de chaque famille, à afficher ; demandé par le client, sans place nécessaire |
-| Limites | `serveur/src/limits.rs` | Taille des messages, file d'envoi, nombre de salles, inactivité, cœurs des bots |
+| Limites | `serveur/src/limits.rs`, `RateLimit` | Taille des messages, file d'envoi, nombre de salles et de connexions, inactivité, absence, pings et délais, débit des messages et des comptes créés, cœurs des bots, arrêt |
 
 ## Client Godot
 
@@ -247,7 +254,7 @@ Le client (`client-godot/`) est en anglais dans le code, comme le moteur ; ses c
 | Joueur de la salle | `LobbySeat` | Dans la salle d'attente : la case et le palet d'un joueur assis, ou sa place libre en pointillés, avec son nom et s'il est prêt |
 | Barre des étapes, ordre en serpent, arsenal en petit | `StepBar`, `SnakeOrder`, `MiniArsenal` | Des étapes en losanges numérotés (au draft : bans, picks, cache ; pendant le choix d'une carte : lanceur, cibles), l'ordre des picks en palets, les cartes d'un joueur en petit (au draft avec ses places encore vides ; en partie, dans le panneau de l'adversaire) |
 | Fiche d'une carte | `CardSheet`, `CardView.details_requested` | La feuille qui montre une carte en grand, son coût, sa recharge et son effet ; ouverte par un clic droit ou un appui long |
-| Trio de cache | `Settings.cache_trio`, `Settings.toggle_trio` | Les 3 cartes au plus que le joueur compte cacher, choisies dans la page Cartes, gardées sur l'appareil, mises en avant au draft |
+| Trio de cache | `CardCollection.cache_trio`, `set_cache_trio` | Les 3 cartes au plus parmi lesquelles le joueur choisira sa cache au draft, rangées dans la page Cartes et gardées par le serveur avec le compte. Affiché « ma cache » au joueur : le mot « trio » reste dans le code |
 | Dessin d'éléments | `ElementArt` | Un petit dessin fait des éléments du plateau fournis (cases, palets, places libres), posés par leur ancre |
 | File des vues | `ViewQueue` | Les vues de la partie qui attendent la fin de l'animation de la précédente ; une carte qui part coup par coup n'y montre que sa dernière vue |
 | Mise en page de la partie, gestes | `GameLayout`, `BoardGestures` | Les éléments de l'écran de partie et leurs boîtes (portrait, paysage) ; les gestes sur le plateau, seul endroit où un toucher devient un coup |

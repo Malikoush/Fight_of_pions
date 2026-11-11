@@ -25,6 +25,8 @@ pub enum EndReason {
     /// Un joueur n'a plus assez de pions pour aligner (plateau, réserve et infirmerie) :
     /// le cimetière lui en a pris trop. Il perd ; si c'est le cas des deux, match nul.
     TooFewPions,
+    /// Un joueur a abandonné ([`crate::Action::Resign`]) : l'autre gagne.
+    Forfeit,
 }
 
 /// « limite de tours atteinte » : la raison, à afficher après le résultat.
@@ -35,6 +37,7 @@ impl fmt::Display for EndReason {
             EndReason::Frozen => write!(f, "partie figée, plus personne ne peut jouer"),
             EndReason::TurnLimit => write!(f, "limite de tours atteinte"),
             EndReason::TooFewPions => write!(f, "plus assez de pions pour aligner"),
+            EndReason::Forfeit => write!(f, "abandon"),
         }
     }
 }

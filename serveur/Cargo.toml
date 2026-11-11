@@ -9,7 +9,15 @@ bots = { path = "../bots" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 axum = { version = "0.8", features = ["ws"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync"] }
+# `time` : les pings et les délais des connexions, le balayage des salles ; `signal` : l'arrêt
+# propre (Ctrl+C, ou SIGTERM de Docker).
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }
+# Déjà tiré par Axum : `TaskTracker` (attendre les enregistrements à l'arrêt) et
+# `CancellationToken` (fermer les connexions à l'arrêt).
+tokio-util = { version = "0.7", features = ["rt"] }
+# Le hasard cryptographique du système, pour les clés, les jetons et les codes. Déjà tiré
+# par d'autres dépendances ; sans dépendance à lui.
+getrandom = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 # La base des comptes : SQLite, compilée dans le serveur (aucune installation). Les requêtes
 # sont écrites sans les macros vérifiées à la compilation : le serveur se construit sans base
@@ -19,8 +27,9 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 # L'empreinte des jetons de compte : la base ne garde jamais un jeton lui-même.
 sha2 = "0.11"
 # L'export web du client, servi sur `/` à côté de la WebSocket : une seule adresse pour la
-# page et le jeu. Compressé à l'envoi (le moteur du client pèse des dizaines de Mo).
-tower-http = { version = "0.6", features = ["fs", "compression-gzip"] }
+# page et le jeu. Compressé (le moteur du client pèse des dizaines de Mo), et revalidé à
+# chaque visite (`set-header`).
+tower-http = { version = "0.6", features = ["fs", "compression-gzip", "set-header"] }
 
 [dev-dependencies]
 tokio-tungstenite = "0.29"

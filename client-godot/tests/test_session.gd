@@ -109,3 +109,17 @@ func test_a_damaged_session_file_is_ignored() -> bool:
 	equal(session.mode, Session.Mode.NONE, "un mode inconnu")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	return true
+
+
+func test_a_friend_is_named_by_its_pseudo() -> bool:
+	var session := Session.new()
+	session.start_guest()
+	equal(session.opponent_name, Labels.FRIEND, "avant son pseudo")
+	session.note_opponent_present(true, "Bob")
+	equal(session.opponent_name, "Bob", "son pseudo")
+	session.note_opponent_present(false)
+	equal(session.opponent_name, "Bob", "parti, il garde son nom")
+	session.start_bot()
+	session.note_opponent_present(true, "Bob")
+	equal(session.opponent_name, Labels.BOT, "le bot garde le sien")
+	return true
