@@ -1,27 +1,56 @@
-# Le serveur de Fight of Pions sur une machine à soi (docs/FEUILLE_DE_ROUTE.md, E4e).
+# Fight of Pions sur l'OptiPlex (docs/DEPLOIEMENT.md, E4h). Ce fichier suffit : ni le code
+# source, ni Rust, ni Godot sur la machine. L'image (serveur et jeu web) est construite par
+# GitHub à chaque push sur `main` (.github/workflows/deployer.yml).
 #
-#   docker compose up -d --build     lancer, ou mettre à jour après un `git pull`
-#   docker compose logs -f           suivre ce qu'il écrit
+#   docker compose up -d          lancer (une seule fois : ensuite, tout est automatique)
+#   docker compose ps             « healthy » : le serveur répond
+#   docker compose logs -f serveur
 #
-# - La base des comptes vit dans le volume `donnees` : elle survit aux mises à jour.
-# - L'export web du client (client-godot/export/web, fait avec Godot, jamais commité) est
-#   servi sur `/` : le remplacer suffit, sans reconstruire ni relancer. Après chaque export,
-#   `python outils/precompresser_web.py` en compresse les gros fichiers.
-# - Le port n'est ouvert qu'à la machine elle-même : c'est Tailscale Funnel (ou un autre
-#   tunnel) qui l'expose, en https.
+# - Watchtower regarde toutes les 5 minutes si une nouvelle image `latest` est publiée ; si
+#   oui, il la télécharge, arrête proprement le serveur (les parties finies sont
+#   enregistrées, celles en cours sont perdues) et le relance avec la nouvelle image.
+# - La base des comptes vit dans le volume `donnees` : elle survit aux mises à jour et aux
+#   redémarrages. Ne jamais lancer `docker compose down -v` : le `-v` efface les volumes.
+# - Le port n'est ouvert qu'à la machine elle-même : c'est Tailscale Funnel qui l'expose, en
+#   https (`tailscale funnel --bg 3000`).
+
+# Le nom du projet fixe celui du volume (`fight-of-pions_donnees`), quel que soit le dossier
+# où ce fichier est posé.
+name: fight-of-pions
+
 services:
   serveur:
-    build: .
+    image: ghcr.io/malikoush/fight_of_pions:latest
     restart: unless-stopped
     # Un petit init comme processus 1 : il relaie les signaux et ramasse les processus finis.
     init: true
     # Le temps laissé au serveur pour finir d'enregistrer les parties à l'arrêt.
     stop_grace_period: 20s
+    # Jamais plus d'un cœur du processeur, quoi qu'il arrive : le reste est pour la machine
+    # (Jellyfin…). Le serveur le voit et ne lance qu'un bot à la fois.
+    cpus: 1
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
       - donnees:/data
-      - ./client-godot/export/web:/web:ro
+    labels:
+      # Watchtower ne met à jour que les conteneurs qui portent cette étiquette.
+      com.centurylinklabs.watchtower.enable: "true"
+
+  # La mise à jour automatique : la suite maintenue de Watchtower (l'original, archivé, ne
+  # parle plus aux versions récentes de Docker).
+  watchtower:
+    image: nickfedor/watchtower:1.23.2
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: "300"
+      WATCHTOWER_CLEANUP: "true"
+      # Le délai d'arrêt laissé au serveur, comme son `stop_grace_period` (qui prime déjà,
+      # d'après la doc du fork) : dit deux fois, il ne dépend pas d'une version de Watchtower.
+      WATCHTOWER_TIMEOUT: "20s"
 
 volumes:
   donnees:

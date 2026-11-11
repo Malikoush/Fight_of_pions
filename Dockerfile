@@ -1,31 +1,41 @@
 # syntax=docker/dockerfile:1
-# Le serveur de Fight of Pions, en conteneur.
+# Fight of Pions en conteneur : le serveur, et le jeu web qu'il sert sur `/`.
 #
-#   docker build -t fight-of-pions .
-#   docker run -p 3000:3000 -v fight-of-pions-data:/data \
-#     -v "$PWD/client-godot/export/web:/web:ro" fight-of-pions
+# L'image publiée est construite par GitHub à chaque push sur `main`
+# (.github/workflows/deployer.yml, docs/DEPLOIEMENT.md) : le workflow exporte d'abord le
+# jeu web avec Godot dans client-godot/export/web, puis construit cette image, jeu compris.
+#
+# À la main :
+#   docker build -t fight-of-pions .                   le serveur et le jeu (export déjà fait)
+#   docker build --target serveur -t fight-of-pions .  le serveur seul, sans le jeu web
 #
 # La base des comptes est dans le volume /data : sans lui, elle disparaît à chaque nouvelle
-# version du conteneur, avec les comptes et leurs cartes. L'export web du client est monté
-# sur /web et servi sur `/` : le changer ne demande pas de reconstruire l'image ; sans lui,
-# le serveur ne sert que la WebSocket. Avant de le monter, `python outils/precompresser_web.py`
-# compresse une fois pour toutes ses gros fichiers.
+# version du conteneur, avec les comptes et leurs cartes.
 
-# 1. La compilation. Tout le workspace est copié (le serveur dépend du moteur et des bots, et
-#    Cargo lit les manifestes de tous les membres), mais seul le serveur est compilé. Les
-#    dépendances téléchargées et déjà compilées sont gardées d'une construction à l'autre
-#    (caches de BuildKit) : une mise à jour ne recompile que ce qui a changé.
+# 1. La compilation. Seuls les manifestes et les sources Rust du workspace sont copiés (le
+#    serveur dépend du moteur et des bots, et Cargo lit les manifestes de tous les
+#    membres) : un changement du jeu web ne recompile pas le serveur. Seul le serveur est
+#    compilé. Les dépendances téléchargées et déjà compilées sont gardées d'une
+#    construction à l'autre sur une même machine (caches de BuildKit). Sur GitHub, ces
+#    caches ne sont pas gardés : un changement du code Rust recompile tout le serveur,
+#    dépendances comprises (quelques minutes) ; un changement du seul jeu web, rien.
 FROM rust:1-bookworm AS build
 WORKDIR /src
-COPY . .
+COPY Cargo.toml Cargo.lock ./
+COPY moteur moteur
+COPY bots bots
+COPY serveur serveur
+COPY terminal terminal
+COPY labo labo
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release --locked -p serveur \
     && cp target/release/serveur /usr/local/bin/serveur
 
-# 2. L'image finale : le binaire seul. Les textes des cartes, le paquet de départ, les
-#    migrations et SQLite y sont compris.
-FROM debian:bookworm-slim
+# 2. Le serveur seul : le binaire. Les textes des cartes, le paquet de départ, les
+#    migrations et SQLite y sont compris. Sans jeu web dans /web, il ne sert que la
+#    WebSocket (un dossier peut y être monté : `-v …/export/web:/web:ro`).
+FROM debian:bookworm-slim AS serveur
 RUN useradd --system --uid 10001 pions \
     && mkdir /data \
     && chown pions /data
@@ -43,3 +53,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # parties avant de s'arrêter.
 STOPSIGNAL SIGTERM
 CMD ["serveur"]
+
+# 3. L'image complète (celle par défaut, celle qui est publiée) : le serveur et le jeu web,
+#    déjà exporté et précompressé (outils/precompresser_web.py) dans client-godot/export/web.
+#    Les fichiers appartiennent à root : le serveur les lit, il ne peut pas les modifier.
+FROM serveur AS complet
+COPY client-godot/export/web /web

@@ -1,0 +1,108 @@
+# Déploiement
+
+Comment Fight of Pions est mis en ligne, et comment l'installer sur l'OptiPlex (Ubuntu Server). Tâche E4h de la feuille de route.
+
+## Le principe
+
+```
+git push (main)
+   │
+   ▼
+GitHub Actions (.github/workflows/deployer.yml)
+   ├─ verifier : format, clippy, tests du moteur et du serveur
+   ├─ jeu-web  : tests du client, export web avec Godot, précompression
+   └─ image    : l'image Docker complète (serveur + jeu web), si les deux passent
+                 → ghcr.io/malikoush/fight_of_pions:latest  (et :sha-1a2b3c4)
+   │
+   ▼
+OptiPlex : Watchtower voit la nouvelle image (toutes les 5 min),
+           la télécharge et relance le serveur
+```
+
+- Sur l'OptiPlex, un seul fichier : `docker-compose.yml`. Ni le code source, ni Rust, ni Godot.
+- Rien n'est compilé sur l'OptiPlex, et le serveur n'a jamais plus d'un cœur du processeur (`cpus: 1`).
+- Une étape qui échoue (un test, une erreur de script dans l'export, la compilation) arrête tout : rien n'est publié, l'ancienne version continue de tourner, et GitHub envoie un mail.
+- Une mise à jour redémarre le serveur : les parties finies sont enregistrées avant l'arrêt, **celles en cours sont perdues**. Les comptes et les cartes, dans le volume de la base, sont gardés.
+- Compter 10 à 20 minutes entre le push et la mise en ligne : un changement du code Rust fait recompiler tout le serveur, dépendances comprises ; un changement du seul jeu web est plus rapide. Le déroulé se suit dans l'onglet **Actions** du dépôt.
+- Watchtower reçoit le socket de Docker (`/var/run/docker.sock`) : c'est ce qui lui permet de remplacer le conteneur, et cela vaut un accès administrateur à la machine. C'est son fonctionnement normal ; il ne met à jour que le conteneur qui porte son étiquette, le serveur.
+
+## Mise en place, une seule fois
+
+### 1. Sur GitHub
+
+1. Faire un premier push sur `main` (ou lancer le workflow à la main : onglet **Actions**, « Déployer », **Run workflow**).
+2. Attendre qu'il soit vert. L'image apparaît dans les **Packages** du compte (`fight_of_pions`).
+3. **Rendre l'image publique**, sinon l'OptiPlex ne peut pas la télécharger sans se connecter : page du package, **Package settings**, **Change visibility**, **Public**. Le code du jeu y est déjà public, puisque le dépôt l'est.
+
+Si le dépôt redevient privé un jour, l'image peut rester privée : il faudra alors connecter l'OptiPlex au registre une fois (`docker login ghcr.io` avec un jeton GitHub qui a le droit `read:packages`), et le donner à Watchtower (voir sa documentation, « registry authentication »).
+
+### 2. Sur l'OptiPlex
+
+Docker (avec Compose), s'il n'y est pas déjà (`docker --version`) :
+
+```
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER      # puis se déconnecter et se reconnecter
+```
+
+Le jeu :
+
+```
+mkdir ~/fight-of-pions && cd ~/fight-of-pions
+curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/Malikoush/Fight_of_pions/main/docker-compose.yml
+docker compose up -d
+docker compose ps                  # le serveur doit passer « healthy » en moins d'une minute
+curl -s http://127.0.0.1:3000/health
+```
+
+L'ouvrir sur internet avec Tailscale Funnel (Tailscale déjà installé et connecté) :
+
+```
+sudo tailscale funnel --bg 3000                 # https://optiplex.<réseau>.ts.net/
+sudo tailscale funnel --bg --https=8443 3000    # si le port 443 sert déjà (Jellyfin)
+tailscale funnel status                         # l'adresse à donner aux amis
+```
+
+La première fois, Tailscale peut demander d'autoriser Funnel pour cette machine : il affiche un lien vers sa console.
+
+## Au quotidien
+
+| Je veux… | Je fais… |
+|---|---|
+| Mettre le jeu à jour | `git push` sur `main`. C'est tout. |
+| Voir où en est une mise à jour | Onglet **Actions** du dépôt sur GitHub |
+| Savoir si le serveur va bien | `docker compose ps` (« healthy ») |
+| Lire ce qu'écrit le serveur | `docker compose logs -f serveur` |
+| Savoir si Watchtower a mis à jour | `docker compose logs watchtower` |
+| Redémarrer le serveur | `docker compose restart serveur` |
+| Arrêter le jeu | `docker compose down` (sans `-v` : la base est gardée) |
+
+**Revenir à une version précédente** : dans l'onglet **Actions** ou la page du package, repérer l'étiquette `sha-…` de la version voulue, et la mettre à la place de `latest` dans `docker-compose.yml` (`image: ghcr.io/malikoush/fight_of_pions:sha-1a2b3c4`), puis `docker compose up -d`. Watchtower ne touche pas à une étiquette `sha-…`, qui ne change jamais. Remettre `latest` pour reprendre les mises à jour.
+
+**Quand `docker-compose.yml` lui-même change** dans le dépôt (rare), le retélécharger avec la même commande `curl`, puis `docker compose up -d`.
+
+## La base
+
+- Elle vit dans le volume Docker `fight-of-pions_donnees` (fichier `/data/fight_of_pions.db` dans le conteneur). Elle survit aux mises à jour, aux redémarrages et aux coupures de courant.
+- **Ne jamais lancer `docker compose down -v`** ni `docker volume rm` : le volume, et avec lui tous les comptes et leurs cartes, serait effacé.
+- Gérer la base (donner des cartes, sauvegarder chaque nuit) : tâche E4i, à venir.
+
+## Si ça coince
+
+| Ce qu'on voit | Où regarder |
+|---|---|
+| GitHub envoie un mail d'échec | Onglet **Actions**, l'étape en rouge : son journal dit quel test ou quelle commande a échoué. Rien n'a changé sur l'OptiPlex. |
+| `docker compose ps` dit « unhealthy » ou redémarre en boucle | `docker compose logs serveur` : la base illisible, un port déjà pris… |
+| La page ne s'ouvre pas de l'extérieur | `tailscale funnel status`, et `curl -s http://127.0.0.1:3000/health` sur l'OptiPlex |
+| Watchtower ne met pas à jour | `docker compose logs watchtower` ; l'image est-elle bien publique ? |
+| Le jeu affiche une ancienne version | Recharger la page sans le cache du navigateur (Ctrl+F5) |
+
+## Construire l'image à la main
+
+Rarement utile, puisque GitHub le fait. Depuis la racine du dépôt, avec Docker :
+
+```
+docker build -t fight-of-pions .                   # export web déjà fait et précompressé
+docker build --target serveur -t fight-of-pions .  # le serveur seul, sans le jeu web
+```

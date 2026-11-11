@@ -1,10 +1,16 @@
-# Ce que Docker n'envoie pas à la construction : seuls les sources Rust du workspace servent.
+# Ce que Docker n'envoie pas à la construction : les sources Rust du workspace et, du client
+# Godot, seulement son export web (client-godot/export/web), copié dans l'image complète.
 target
-client-godot
 design
 docs
+outils
 .git
+.github
 .claude
-*.db
-*.db-shm
-*.db-wal
+**/*.db
+**/*.db-shm
+**/*.db-wal
+client-godot/*
+!client-godot/export
+client-godot/export/*
+!client-godot/export/web

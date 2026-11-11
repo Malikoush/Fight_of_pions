@@ -203,6 +203,8 @@ Le serveur (`serveur/`) est en anglais dans le code, comme le moteur ; ses messa
 | Recherche de bot | `BotSearch`, `BotMove`, `Table::start_bots` | La copie de la partie sur laquelle un bot cherche son coup, hors du verrou de la salle ; le coup n'est joué que si la partie n'a pas changé |
 | Variante en ligne | `bots::ONLINE_VARIANT` | La seule configuration jouable en ligne : les règles actuelles avec draft |
 | Catalogue des cartes | `ClientMessage::Cards`, `ServerMessage::Cards`, `CardFamily`, `CardRarity`, `serveur/data/cartes.json` | Le nom, le résumé, les règles et l'effet de chaque rareté de chaque famille, à afficher ; demandé par le client, sans place nécessaire |
+| Image complète | `Dockerfile` (étape `complet`), `ghcr.io/malikoush/fight_of_pions` | L'image Docker publiée : le serveur et le jeu web exporté ; l'étape `serveur` est le serveur seul |
+| Déploiement automatique | `.github/workflows/deployer.yml`, Watchtower | À chaque push sur `main`, GitHub vérifie, exporte le jeu et publie l'image ; la machine qui héberge la remplace toute seule (docs/DEPLOIEMENT.md) |
 | Limites | `serveur/src/limits.rs`, `RateLimit` | Taille des messages, file d'envoi, nombre de salles et de connexions, inactivité, absence, pings et délais, débit des messages et des comptes créés, cœurs des bots, arrêt |
 
 ## Client Godot
