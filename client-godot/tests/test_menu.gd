@@ -70,3 +70,46 @@ func test_the_lobby_close_button_is_only_shown_in_landscape() -> bool:
 	root.size = saved_size
 	lobby.free()
 	return true
+
+
+## La page Réglages : le code de récupération se montre une fois créé, et un code tapé est
+## remis à l'écran du menu, qui demande confirmation.
+func test_the_settings_show_the_recovery_code_and_ask_before_changing_account() -> bool:
+	var page := SettingsPage.new("Ana")
+	var asked: Array = []
+	page.recovery_asked.connect(func(code: String) -> void: asked.append(code))
+	Engine.get_main_loop().root.add_child(page)
+	check(not page._code_row.visible, "pas de code avant d'en créer un")
+	page.show_recovery("K7QX-M2PA-9ZTR-4HWD", false, "Ana")
+	check(page._code_row.visible, "le code créé est montré")
+	equal(page._code_shown.text, "K7QX-M2PA-9ZTR-4HWD", "le code, à copier")
+	equal(page._create_code.text, Labels.RECOVERY_RENEW, "le bouton en crée un nouveau")
+	page._ask_recovery()
+	equal(asked, [], "rien sans code tapé")
+	page._recover_field.text = " k7qx m2pa 9ztr 4hwd "
+	page._ask_recovery()
+	equal(asked, ["k7qx m2pa 9ztr 4hwd"], "le code tapé, sans espace autour, à confirmer par le menu")
+	page.show_recovery_refusal("aucun compte n'a ce code de récupération")
+	check(page._recover_status.visible, "le refus, sous le champ")
+	page.show_recovery("", true, "Bob")
+	equal(page._recover_status.text, Labels.RECOVERED % "Bob", "le compte retrouvé")
+	page.free()
+	return true
+
+
+## L'écran du menu pose la question avant de changer de compte par un code, par-dessus
+## tout l'écran ; il ne transmet le code qu'une fois la réponse donnée.
+func test_the_menu_asks_before_changing_account_by_a_code() -> bool:
+	var menu: MenuScreen = load("res://ui/screens/menu_screen.tscn").instantiate()
+	menu.session = Session.new()
+	var requested: Array = []
+	menu.recovery_requested.connect(func(code: String) -> void: requested.append(code))
+	Engine.get_main_loop().root.add_child(menu)
+	menu._ask_recovery("K7QX-M2PA-9ZTR-4HWD")
+	equal(requested, [], "rien avant la réponse")
+	check(menu._recover_dialog.visible, "la question est posée")
+	equal(menu._recover_dialog.get_index(), menu.get_child_count() - 1, "par-dessus le reste de l'écran")
+	menu._recover_dialog._answer(menu._recover_dialog.confirmed)
+	equal(requested, ["K7QX-M2PA-9ZTR-4HWD"], "le code, une fois la réponse donnée")
+	menu.free()
+	return true

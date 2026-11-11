@@ -45,3 +45,8 @@ func test_only_room_refusals_are_about_the_room() -> bool:
 	check(not ServerErrors.is_about_room("storage"), "la base")
 	check(not ServerErrors.is_about_room("unknown_account"), "le compte")
 	return true
+
+
+func test_a_refused_recovery_code_has_its_own_category() -> bool:
+	equal(ServerErrors.category("bad_recovery_code"), ServerErrors.Category.RECOVERY_REFUSED, "code de récupération")
+	return true

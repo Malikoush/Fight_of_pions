@@ -23,6 +23,8 @@ enum Category {
 	## Le trio de cache demandé est refusé : la collection du client est sans doute en retard,
 	## la redemander.
 	TRIO_REFUSED,
+	## Le code de récupération tapé n'ouvre aucun compte : le dire sous le champ.
+	RECOVERY_REFUSED,
 	## Un autre refus (un bug du client, le plus souvent) : rien de particulier à faire.
 	OTHER,
 }
@@ -40,6 +42,7 @@ const _CATEGORIES := {
 	"bad_pseudo": Category.PSEUDO_REFUSED,
 	"not_owned": Category.TRIO_REFUSED,
 	"bad_cache_trio": Category.TRIO_REFUSED,
+	"bad_recovery_code": Category.RECOVERY_REFUSED,
 }
 ## Les catégories des refus qui parlent d'une salle : pendant qu'on la quitte, ils ne
 ## comptent plus (`ServerLink`). Les autres (le compte, la base…) comptent toujours.
@@ -47,6 +50,9 @@ const ROOM_CATEGORIES := [Category.SEAT_LOST, Category.SEAT_TAKEN, Category.STAL
 ## Le refus d'un jeton de compte que le serveur ne connaît pas : le lien le traite lui-même
 ## (il crée un compte neuf), sans catégorie.
 const UNKNOWN_ACCOUNT := "unknown_account"
+## Le refus d'un code de récupération : le lien remet l'appareil sur son compte, puis
+## l'annonce (`RECOVERY_REFUSED`).
+const BAD_RECOVERY_CODE := "bad_recovery_code"
 
 ## Les refus qui, pendant qu'une de ces demandes attend sa réponse, ne parlent que d'elle
 ## (par le `type` de la demande) : un code tapé qui ne mène nulle part n'est pas une place

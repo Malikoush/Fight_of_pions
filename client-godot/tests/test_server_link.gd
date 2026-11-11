@@ -232,3 +232,49 @@ func test_a_refused_login_waits_no_more() -> bool:
 	check(not link._logging_in, "la connexion au compte a eu sa réponse")
 	_restore_account(link, kept)
 	return true
+
+
+func test_a_recovery_code_is_announced_when_it_arrives() -> bool:
+	var link: Node = Engine.get_main_loop().root.get_node("ServerLink")
+	var heard: Array = []
+	var listen := func(code: String) -> void: heard.append(code)
+	link.recovery_code_received.connect(listen)
+	link._pending = "new_recovery_code"
+	link._receive('{"type":"recovery_code","code":"K7QX-M2PA-9ZTR"}')
+	link._receive('{"type":"recovery_code","code":12}')
+	link.recovery_code_received.disconnect(listen)
+	equal(heard, ["K7QX-M2PA-9ZTR"], "le code, et rien pour un message mal formé")
+	equal(link._pending, "", "la demande a eu sa réponse")
+	return true
+
+
+func test_a_recovery_code_logs_this_device_into_its_account() -> bool:
+	var link: Node = Engine.get_main_loop().root.get_node("ServerLink")
+	var kept := _keep_account(link)
+	var recovered: Array = []
+	var listen := func(pseudo: String) -> void: recovered.append(pseudo)
+	link.account_recovered.connect(listen)
+	link._recovery = "K7QX-M2PA-9ZTR"
+	equal(link._account_request(), {"type": "recover", "code": "K7QX-M2PA-9ZTR"}, "le code au lieu du jeton")
+	link._receive('{"type":"account","id":7,"pseudo":"Ana","token":"jeton-de-cet-appareil"}')
+	link.account_recovered.disconnect(listen)
+	equal(recovered, ["Ana"], "le compte retrouvé est annoncé")
+	equal(link._token, "jeton-de-cet-appareil", "cet appareil garde son jeton neuf")
+	equal(link._recovery, "", "le code n'est plus essayé")
+	equal(link._account_request(), {"type": "login", "token": "jeton-de-cet-appareil"}, "ensuite, le jeton")
+	_restore_account(link, kept)
+	return true
+
+
+func test_a_refused_recovery_code_keeps_the_device_on_its_account() -> bool:
+	var link: Node = Engine.get_main_loop().root.get_node("ServerLink")
+	var heard: Array = []
+	var listen := func(category: ServerErrors.Category, _message: String) -> void: heard.append(category)
+	link.server_error.connect(listen)
+	link._recovery = "AAAA-AAAA-AAAA"
+	link._on_error("bad_recovery_code", "aucun compte n'a ce code de récupération")
+	link.server_error.disconnect(listen)
+	equal(heard, [ServerErrors.Category.RECOVERY_REFUSED], "le refus, pour la page Réglages")
+	equal(link._recovery, "", "le code n'est plus essayé")
+	check(link._account_request()["type"] != "recover", "l'appareil revient à son compte")
+	return true

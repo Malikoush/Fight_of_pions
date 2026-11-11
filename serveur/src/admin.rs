@@ -6,7 +6,7 @@
 //! du catalogue en ligne, un pseudo suit les mêmes règles que dans le jeu. Ce qu'il change
 //! (cartes, pseudo), un joueur connecté le voit en rechargeant la page.
 
-use crate::account::checked_pseudo;
+use crate::account::{checked_pseudo, new_recovery_code, recovery_hash};
 use crate::backup;
 use crate::database::{Database, GameSummary};
 use crate::limits::BACKUPS_KEPT;
@@ -31,6 +31,7 @@ Commandes de serveur admin :
   donner-tout <compte>                  donne tout le catalogue en ligne
   retirer <compte> <famille> <rareté>   retire une carte (et de la cache)
   renommer <compte> <pseudo>            change le pseudo
+  code <compte>                         un code de récupération neuf (remplace l'ancien)
   parties [nombre]                      les dernières parties finies ({GAMES_SHOWN} par défaut)
   sauvegarder                           une sauvegarde de la base, tout de suite
 Un compte se désigne par son numéro (3 ou #3). Familles et raretés s'écrivent sans souci
@@ -62,6 +63,7 @@ pub async fn administer(
         ["renommer", id, pseudo @ ..] if !pseudo.is_empty() => {
             rename(database, account_id(id)?, &pseudo.join(" ")).await
         }
+        ["code", id] => recovery_code(database, account_id(id)?).await,
         ["parties"] => games(database, GAMES_SHOWN).await,
         ["parties", count] => {
             let count = count
@@ -166,6 +168,19 @@ async fn rename(database: &Database, id: i64, pseudo: &str) -> Result<String, St
     let pseudo = checked_pseudo(pseudo).map_err(text)?;
     database.set_pseudo(id, &pseudo).await.map_err(text)?;
     Ok(format!("{who} s'appelle maintenant {pseudo}."))
+}
+
+/// Un code de récupération neuf pour ce compte, à donner au joueur qui l'a perdu : il le
+/// tape dans Réglages, « Retrouver mon compte ».
+async fn recovery_code(database: &Database, id: i64) -> Result<String, String> {
+    let who = who(database, id).await?;
+    let code = new_recovery_code();
+    let hash = recovery_hash(&code).ok_or_else(|| "code de récupération mal formé".to_string())?;
+    database.set_recovery(id, &hash).await.map_err(text)?;
+    Ok(format!(
+        "Code de récupération de {who} : {code}\n\
+         (il remplace l'ancien ; à taper dans Réglages, « Retrouver mon compte »)"
+    ))
 }
 
 async fn games(database: &Database, count: i64) -> Result<String, String> {
@@ -508,5 +523,22 @@ mod tests {
                 EndReason::Forfeit
             )
         );
+    }
+
+    #[tokio::test]
+    async fn a_recovery_code_made_by_the_admin_opens_the_account() {
+        let (database, ana) = base_with_ana().await;
+        let shown = run(&database, &format!("code {ana}")).await.unwrap();
+        let code = shown
+            .split_whitespace()
+            .find(|word| word.matches('-').count() == 3)
+            .unwrap();
+        let hash = recovery_hash(code).unwrap();
+        let found = database
+            .recover(&hash, "jeton de l'appareil")
+            .await
+            .unwrap();
+        assert_eq!(found.map(|account| account.id), Some(ana));
+        assert!(run(&database, "code 999").await.is_err());
     }
 }

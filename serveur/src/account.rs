@@ -4,7 +4,7 @@
 //! pourrait pas se connecter.
 
 use crate::ServerError;
-use crate::random::{random_key, random_u64};
+use crate::random::{CODE_ALPHABET, random_code, random_key, random_u64};
 use sha2::{Digest, Sha256};
 use std::ops::RangeInclusive;
 
@@ -13,6 +13,13 @@ const PSEUDO_LENGTH: RangeInclusive<usize> = 3..=16;
 
 /// Les signes permis dans un pseudo, en plus des lettres (accents compris) et des chiffres.
 const PSEUDO_SIGNS: &str = " -_.";
+
+/// La longueur d'un code de récupération (80 bits : même si la base fuyait, retrouver un
+/// code à partir de son empreinte resterait hors de portée), et ses groupes à l'affichage
+/// (`K7QX-M2PA-9ZTR-4HWD`).
+const RECOVERY_CODE_LENGTH: usize = 16;
+const RECOVERY_GROUP: usize = 4;
+const RECOVERY_SEPARATOR: char = '-';
 
 /// Un compte connecté.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +33,30 @@ pub struct Account {
 /// Un jeton de compte neuf : secret, à donner une seule fois au client.
 pub fn new_token() -> String {
     random_key()
+}
+
+/// Un code de récupération neuf, à montrer une seule fois (`K7QX-M2PA-9ZTR-4HWD`) : il permet de
+/// retrouver son compte sur un autre appareil. La base n'en garde que l'empreinte
+/// ([`recovery_hash`]).
+pub fn new_recovery_code() -> String {
+    let code: Vec<char> = random_code(RECOVERY_CODE_LENGTH).chars().collect();
+    code.chunks(RECOVERY_GROUP)
+        .map(|group| group.iter().collect::<String>())
+        .collect::<Vec<_>>()
+        .join(&RECOVERY_SEPARATOR.to_string())
+}
+
+/// L'empreinte d'un code de récupération tapé : sans espaces ni tirets, en capitales ; un
+/// signe hors de l'alphabet des codes le rend faux (aucune empreinte : `None`).
+pub fn recovery_hash(typed: &str) -> Option<String> {
+    let code: String = typed
+        .chars()
+        .filter(|sign| !sign.is_whitespace() && *sign != RECOVERY_SEPARATOR)
+        .flat_map(char::to_uppercase)
+        .collect();
+    let valid = code.chars().count() == RECOVERY_CODE_LENGTH
+        && code.bytes().all(|byte| CODE_ALPHABET.contains(&byte));
+    valid.then(|| token_hash(&code))
 }
 
 /// L'empreinte d'un jeton, telle que la base la garde (SHA-256, en hexadécimal). Un jeton
@@ -70,6 +101,20 @@ pub fn checked_pseudo(pseudo: &str) -> Result<String, ServerError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_recovery_code_is_read_whatever_its_dashes_and_case() {
+        let code = new_recovery_code();
+        assert_eq!(code.len(), 19, "{code}");
+        assert_eq!(code.matches('-').count(), 3, "{code}");
+        let hash = recovery_hash(&code).unwrap();
+        let typed = format!(" {} ", code.replace('-', " ").to_lowercase());
+        assert_eq!(recovery_hash(&typed), Some(hash.clone()));
+        assert_ne!(recovery_hash(&new_recovery_code()), Some(hash));
+        // Trop court, ou un signe ambigu (O, 0) : aucune empreinte.
+        assert_eq!(recovery_hash("K7QX-M2PA-9ZTR"), None);
+        assert_eq!(recovery_hash("K7QX-M2PA-9ZTR-4HW0"), None);
+    }
 
     #[test]
     fn a_pseudo_is_trimmed_and_checked() {

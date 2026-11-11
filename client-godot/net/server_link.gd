@@ -31,6 +31,11 @@ signal account_received(id: int, pseudo: String)
 signal collection_received(cards: Array, cache_trio: Array)
 ## La partie vient de finir et le joueur a gagné cette carte (`{"kind", "rarity"}`).
 signal reward_received(card: Dictionary)
+## Le code de récupération du compte, tout juste créé (`request_recovery_code`) : à montrer
+## une seule fois, le serveur n'en garde que l'empreinte.
+signal recovery_code_received(code: String)
+## Cet appareil vient de passer sur le compte d'un code de récupération (`recover_account`).
+signal account_recovered(pseudo: String)
 ## Où en est le lancement de la salle : dit en s'asseyant (`seated`), puis quand son créateur
 ## la lance (`launched`, vrai). Avant, personne ne joue.
 signal room_launch(launched: bool)
@@ -61,7 +66,12 @@ const QUEUED_REQUESTS := ["create", "join"]
 ## (`ServerErrors.is_about_room`) ; ceux du compte comptent toujours.
 const ROOM_MESSAGES := ["seated", "launched", "state", "preview", "opponent"]
 ## La réponse de chaque demande qui attend (`_pending`), par le `type` de la réponse.
-const _REPLIES := {"seated": "join", "account": "set_pseudo", "collection": "set_cache_trio"}
+const _REPLIES := {
+	"seated": "join",
+	"account": "set_pseudo",
+	"collection": "set_cache_trio",
+	"recovery_code": "new_recovery_code",
+}
 ## La longueur d'un message illisible recopiée dans le journal.
 const LOGGED_CHARACTERS := 200
 
@@ -88,6 +98,9 @@ var _leaving := false
 var _logging_in := false
 ## Le jeton du compte, vide tant qu'aucun compte n'a été créé sur cet appareil.
 var _token := ""
+## Le code de récupération à essayer à la prochaine connexion au compte, au lieu du jeton
+## (`recover_account`) ; vide sinon.
+var _recovery := ""
 
 
 func _ready() -> void:
@@ -187,6 +200,24 @@ func forget_account() -> void:
 	account_id = 0
 	account_pseudo = ""
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(ACCOUNT_PATH))
+
+
+## Créer un code de récupération pour son compte, à la place de l'ancien (réponse :
+## `recovery_code_received`).
+func request_recovery_code() -> void:
+	_ask({"type": "new_recovery_code"})
+
+
+## Passer cet appareil sur le compte de ce code de récupération : la connexion est rouverte
+## et se connecte avec le code au lieu du jeton (`recover`). Réponse : `account_recovered`
+## (le jeton de cet appareil est remplacé), ou un refus `RECOVERY_REFUSED`, et l'appareil
+## reste sur son compte. Une place gardée est quittée d'abord.
+func recover_account(code: String) -> void:
+	_recovery = code
+	if has_saved_seat():
+		leave_room()
+	if _socket != null:
+		_socket.close()
 
 
 ## Changer son pseudo (réponse : `account_received`, ou un refus `bad_pseudo`).
@@ -353,6 +384,8 @@ func _receive(text: String) -> void:
 			collection_received.emit(message["cards"], message["cache_trio"])
 		"reward":
 			reward_received.emit(message["card"])
+		"recovery_code":
+			recovery_code_received.emit(message["code"])
 		"error":
 			_on_error(message["kind"], message["message"])
 
@@ -387,6 +420,8 @@ static func _is_well_formed(message: Dictionary) -> bool:
 			return message.get("cards") is Array and message.get("cache_trio") is Array
 		"reward":
 			return message.get("card") is Dictionary
+		"recovery_code":
+			return message.get("code") is String
 	return false
 
 
@@ -400,6 +435,14 @@ func _on_error(kind: String, text: String) -> void:
 		forget_account()
 		if _is_open():
 			_write(_account_request())
+		return
+	if kind == ServerErrors.BAD_RECOVERY_CODE and _recovery != "":
+		# Le code n'ouvre aucun compte : l'appareil reste sur le sien.
+		_recovery = ""
+		if _is_open():
+			_write(_account_request())
+			_logging_in = true
+		server_error.emit(ServerErrors.Category.RECOVERY_REFUSED, text)
 		return
 	var category := ServerErrors.category(kind, _pending)
 	_pending = ""
@@ -417,8 +460,11 @@ func _set_status(new_status: Status) -> void:
 		status_changed.emit(status)
 
 
-## La demande qui connecte au compte : `login` avec le jeton gardé, ou `register`.
+## La demande qui connecte au compte : `recover` avec un code de récupération à essayer,
+## `login` avec le jeton gardé, ou `register`.
 func _account_request() -> Dictionary:
+	if _recovery != "":
+		return {"type": "recover", "code": _recovery}
 	if has_account():
 		return {"type": "login", "token": _token}
 	return {"type": "register"}
@@ -442,6 +488,9 @@ func _on_account(message: Dictionary) -> void:
 		file.set_value(ACCOUNT_SECTION, ACCOUNT_TOKEN, token)
 		file.save(ACCOUNT_PATH)
 	account_received.emit(account_id, account_pseudo)
+	if token != "" and _recovery != "":
+		_recovery = ""
+		account_recovered.emit(account_pseudo)
 
 
 func _load_account() -> void:

@@ -82,6 +82,17 @@ pub enum ClientMessage {
         /// Le jeton reçu à la création du compte.
         token: String,
     },
+    /// Retrouver un compte sur cet appareil par son code de récupération, au lieu de `login`
+    /// ou `register` : la réponse ([`ServerMessage::Account`]) donne un jeton neuf pour cet
+    /// appareil (les autres appareils du compte gardent le leur), puis
+    /// [`ServerMessage::Collection`]. Refus : `bad_recovery_code`.
+    Recover {
+        /// Le code, tel que tapé (tirets, espaces et minuscules permis).
+        code: String,
+    },
+    /// Créer un code de récupération pour son compte, à la place de l'ancien. Réponse :
+    /// [`ServerMessage::RecoveryCode`].
+    NewRecoveryCode,
     /// Changer son pseudo. Réponse : [`ServerMessage::Account`].
     SetPseudo {
         /// Le nouveau pseudo.
@@ -161,14 +172,20 @@ pub enum ServerMessage {
     },
     /// La réponse à [`ClientMessage::Leave`] : le client n'est plus dans aucune salle.
     Left,
-    /// Le compte de cette connexion, après `register`, `login` ou `set_pseudo`.
+    /// Le code de récupération du compte, en réponse à `new_recovery_code` : montré une seule
+    /// fois, le serveur n'en garde que l'empreinte.
+    RecoveryCode {
+        /// Le code (`K7QX-M2PA-9ZTR-4HWD`).
+        code: String,
+    },
+    /// Le compte de cette connexion, après `register`, `login`, `recover` ou `set_pseudo`.
     Account {
         /// Son numéro, stable.
         id: i64,
         /// Son pseudo.
         pseudo: String,
-        /// Son jeton secret, seulement en réponse à `register` : le client doit le garder,
-        /// le serveur ne le redonnera jamais.
+        /// Son jeton secret, seulement en réponse à `register` ou `recover` : le client doit
+        /// le garder, le serveur ne le redonnera jamais.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         token: Option<String>,
         /// Vrai si la connexion au compte vient de le rasseoir dans sa salle en cours :

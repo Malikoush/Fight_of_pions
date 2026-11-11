@@ -49,6 +49,12 @@ func _ready() -> void:
 	ServerLink.collection_received.connect(_on_collection_received)
 	ServerLink.reward_received.connect(_on_reward_received)
 	ServerLink.room_launch.connect(_on_room_launch)
+	ServerLink.recovery_code_received.connect(func(code: String) -> void:
+		_session.note_recovery_code(code)
+		_router.current.on_session_changed())
+	ServerLink.account_recovered.connect(func(_pseudo: String) -> void:
+		_session.note_recovered()
+		_router.current.on_session_changed())
 	ServerLink.server_error.connect(_on_server_error)
 	_open_boot()
 	ServerLink.connect_to_server()
@@ -71,6 +77,10 @@ func _open_menu() -> void:
 	menu.join_requested.connect(_on_join)
 	menu.pseudo_submitted.connect(ServerLink.set_pseudo)
 	menu.cache_trio_submitted.connect(ServerLink.set_cache_trio)
+	menu.recovery_code_requested.connect(ServerLink.request_recovery_code)
+	menu.recovery_requested.connect(func(code: String) -> void:
+		_session.note_recovery_started()
+		ServerLink.recover_account(code))
 	_router.show(menu)
 
 

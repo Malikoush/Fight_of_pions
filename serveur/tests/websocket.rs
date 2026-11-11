@@ -716,3 +716,47 @@ async fn each_player_caches_one_of_its_own_cards() {
     let (view_of_two, _) = two.state().await;
     check(&draft_choices(&view_of_two), !host_is_one);
 }
+
+/// Le code de récupération (E4k) : un autre appareil retrouve le compte, ses cartes et son
+/// pseudo, avec un jeton à lui ; le premier appareil garde le sien. Un mauvais code est
+/// refusé, et la connexion peut ensuite se connecter normalement.
+#[tokio::test]
+async fn a_recovery_code_opens_the_account_on_another_device() {
+    let url = start_server().await;
+    let (mut phone, phone_token) = Client::named(&url, Some("Ana")).await;
+    phone.send(ClientMessage::NewRecoveryCode).await;
+    let code = match phone.receive().await {
+        ServerMessage::RecoveryCode { code } => code,
+        other => panic!("un code était attendu, reçu : {other:?}"),
+    };
+    // Son numéro : la réponse à un changement de pseudo le donne.
+    phone
+        .send(ClientMessage::SetPseudo {
+            pseudo: "Ana".into(),
+        })
+        .await;
+    let (phone_id, _, _) = phone.account().await;
+
+    let mut pc = Client::connect(&url).await;
+    pc.send(ClientMessage::Recover {
+        code: "AAAA-AAAA-AAAA-AAAA".into(),
+    })
+    .await;
+    assert_eq!(pc.error_kind().await, "bad_recovery_code");
+    // Tapé en minuscules, avec des espaces au lieu des tirets.
+    pc.send(ClientMessage::Recover {
+        code: code.replace('-', " ").to_lowercase(),
+    })
+    .await;
+    let (pc_id, pseudo, pc_token) = pc.account().await;
+    assert_eq!((pc_id, pseudo.as_str()), (phone_id, "Ana"));
+    let pc_token = pc_token.expect("un jeton pour ce nouvel appareil");
+    assert_ne!(pc_token, phone_token);
+    pc.collection().await;
+
+    for token in [&phone_token, &pc_token] {
+        let (mut device, _) = Client::logged_in(&url, token).await;
+        device.send(ClientMessage::Collection).await;
+        device.collection().await;
+    }
+}

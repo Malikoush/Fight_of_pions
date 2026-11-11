@@ -102,6 +102,12 @@ impl Database {
         .fetch_one(&mut *transaction)
         .await
         .map_err(storage)?;
+        sqlx::query("INSERT INTO account_tokens (token_hash, account_id) VALUES (?, ?)")
+            .bind(token_hash)
+            .bind(id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(storage)?;
         for &card in starter {
             let (family, rarity) = card_names(card)?;
             sqlx::query(
@@ -123,16 +129,64 @@ impl Database {
     }
 
     /// Le compte de ce jeton (par son empreinte), s'il existe ; sa dernière visite est notée.
+    /// Un compte a un jeton par appareil (`account_tokens`).
     pub async fn account_by_token(&self, token_hash: &str) -> Result<Option<Account>, ServerError> {
         let row: Option<(i64, String)> = sqlx::query_as(
             "UPDATE accounts SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') \
-             WHERE token_hash = ? RETURNING id, pseudo",
+             WHERE id = (SELECT account_id FROM account_tokens WHERE token_hash = ?) \
+             RETURNING id, pseudo",
         )
         .bind(token_hash)
         .fetch_optional(&self.pool)
         .await
         .map_err(storage)?;
         Ok(row.map(|(id, pseudo)| Account { id, pseudo }))
+    }
+
+    /// Donne à ce compte ce code de récupération (son empreinte), à la place de l'ancien ;
+    /// faux si le compte n'existe pas.
+    pub async fn set_recovery(
+        &self,
+        account: i64,
+        recovery_hash: &str,
+    ) -> Result<bool, ServerError> {
+        let done = sqlx::query("UPDATE accounts SET recovery_hash = ? WHERE id = ?")
+            .bind(recovery_hash)
+            .bind(account)
+            .execute(&self.pool)
+            .await
+            .map_err(storage)?;
+        Ok(done.rows_affected() > 0)
+    }
+
+    /// Le compte de ce code de récupération (son empreinte), s'il existe : il reçoit ce jeton
+    /// de plus (celui de l'appareil qui le retrouve ; les autres gardent le leur), et sa
+    /// dernière visite est notée.
+    pub async fn recover(
+        &self,
+        recovery_hash: &str,
+        token_hash: &str,
+    ) -> Result<Option<Account>, ServerError> {
+        let mut transaction = self.pool.begin().await.map_err(storage)?;
+        let row: Option<(i64, String)> = sqlx::query_as(
+            "UPDATE accounts SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') \
+             WHERE recovery_hash = ? RETURNING id, pseudo",
+        )
+        .bind(recovery_hash)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(storage)?;
+        let Some((id, pseudo)) = row else {
+            return Ok(None);
+        };
+        sqlx::query("INSERT INTO account_tokens (token_hash, account_id) VALUES (?, ?)")
+            .bind(token_hash)
+            .bind(id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(storage)?;
+        transaction.commit().await.map_err(storage)?;
+        Ok(Some(Account { id, pseudo }))
     }
 
     /// Change le pseudo de ce compte (déjà vérifié).
@@ -769,5 +823,47 @@ mod tests {
         };
         assert_eq!(games_of(ana.id), Some(2));
         assert_eq!(games_of(bob.id), Some(1));
+    }
+    #[tokio::test]
+    async fn a_recovery_code_gives_the_account_to_another_device_without_logging_out_the_first() {
+        let database = Database::in_memory().await.unwrap();
+        let ana = database
+            .create_account("Ana", &token_hash("telephone"), &[])
+            .await
+            .unwrap();
+        assert_eq!(
+            database
+                .recover("empreinte", &token_hash("pc"))
+                .await
+                .unwrap(),
+            None
+        );
+        assert!(database.set_recovery(ana.id, "empreinte").await.unwrap());
+        assert!(!database.set_recovery(999, "autre").await.unwrap());
+        let found = database
+            .recover("empreinte", &token_hash("pc"))
+            .await
+            .unwrap();
+        assert_eq!(found, Some(ana.clone()));
+        // Les deux appareils se connectent au même compte.
+        for device in ["telephone", "pc"] {
+            assert_eq!(
+                database
+                    .account_by_token(&token_hash(device))
+                    .await
+                    .unwrap(),
+                Some(ana.clone()),
+                "{device}"
+            );
+        }
+        // Un nouveau code remplace l'ancien.
+        assert!(database.set_recovery(ana.id, "nouvelle").await.unwrap());
+        assert_eq!(
+            database
+                .recover("empreinte", &token_hash("tablette"))
+                .await
+                .unwrap(),
+            None
+        );
     }
 }

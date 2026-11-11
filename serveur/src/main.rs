@@ -52,8 +52,16 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    if args.first().map(String::as_str) == Some(ADMIN_COMMAND) {
-        return runtime.block_on(admin(&args[1..]));
+    match args.first().map(String::as_str) {
+        None => {}
+        Some(ADMIN_COMMAND) => return runtime.block_on(admin(&args[1..])),
+        // Un mot inconnu ne lance pas un second serveur : il le dit.
+        Some(other) => {
+            eprintln!(
+                "commande inconnue : {other} (serveur, serveur {HEALTH_FLAG}, serveur {ADMIN_COMMAND} aide)"
+            );
+            return ExitCode::FAILURE;
+        }
     }
     match runtime.block_on(serve(address)) {
         Ok(()) => ExitCode::SUCCESS,

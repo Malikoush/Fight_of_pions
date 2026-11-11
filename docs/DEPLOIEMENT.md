@@ -103,6 +103,7 @@ Le serveur a ses commandes d'administration : elles passent par son code (une ca
 | `donner-tout 3` | Tout le catalogue en ligne |
 | `retirer 3 Ours Epique` | Retire une carte (et de la cache) |
 | `renommer 3 Ana` | Change le pseudo |
+| `code 3` | Un code de récupération neuf pour le compte n° 3 (il remplace l'ancien) : à donner au joueur qui a perdu son compte, qui le tape dans Réglages, « Retrouver mon compte » |
 | `parties` ou `parties 50` | Les dernières parties finies : qui, contre qui, qui gagne, comment |
 | `sauvegarder` | Une sauvegarde tout de suite |
 | `aide` | La liste des commandes |

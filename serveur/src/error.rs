@@ -63,6 +63,8 @@ pub enum ServerError {
     TooManyRegistrations,
     /// Ce client envoie trop de messages : sa connexion est fermée.
     TooManyMessages,
+    /// Aucun compte n'a ce code de récupération.
+    BadRecoveryCode,
 }
 
 impl fmt::Display for ServerError {
@@ -126,6 +128,9 @@ impl fmt::Display for ServerError {
             ServerError::TooManyMessages => {
                 write!(f, "trop de messages envoyés : la connexion est fermée")
             }
+            ServerError::BadRecoveryCode => {
+                write!(f, "aucun compte n'a ce code de récupération")
+            }
         }
     }
 }
@@ -165,6 +170,7 @@ impl ServerError {
             ServerError::RoomClosed => "room_closed",
             ServerError::TooManyRegistrations => "too_many_registrations",
             ServerError::TooManyMessages => "too_many_messages",
+            ServerError::BadRecoveryCode => "bad_recovery_code",
         }
     }
 }

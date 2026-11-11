@@ -19,3 +19,45 @@ pub fn random_u64() -> u64 {
 pub fn random_key() -> String {
     format!("{:016x}{:016x}", random_u64(), random_u64())
 }
+
+/// Les caractères d'un code tapé par un joueur (code de salle, code de récupération) : sans
+/// 0, O, 1 ni I, faciles à confondre. 32 caractères : 5 bits chacun.
+pub const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/// Un code de cette longueur, tiré dans [`CODE_ALPHABET`] ; au-delà de 12 caractères (60
+/// bits d'un tirage), un tirage neuf prend le relais (un code de récupération en a 16).
+pub fn random_code(length: usize) -> String {
+    let len = CODE_ALPHABET.len() as u64;
+    let mut value = random_u64();
+    let mut left = u64::MAX;
+    (0..length)
+        .map(|_| {
+            if left < len {
+                value = random_u64();
+                left = u64::MAX;
+            }
+            let letter = CODE_ALPHABET[(value % len) as usize];
+            value /= len;
+            left /= len;
+            char::from(letter)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_long_code_keeps_drawing_past_one_draw() {
+        // Au-delà de 12 caractères, un tirage épuisé ne donnerait plus que des « A ».
+        let codes: Vec<String> = (0..20).map(|_| random_code(16)).collect();
+        assert!(
+            codes
+                .iter()
+                .all(|code| code.len() == 16
+                    && code.bytes().all(|byte| CODE_ALPHABET.contains(&byte)))
+        );
+        assert!(codes.iter().any(|code| &code[12..] != "AAAA"));
+    }
+}

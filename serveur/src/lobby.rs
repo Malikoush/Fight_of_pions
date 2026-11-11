@@ -4,7 +4,7 @@
 
 use crate::collection::Collection;
 use crate::limits::{ABSENCE_LIMIT, MAX_ROOMS, ROOM_IDLE_LIMIT};
-use crate::random::{random_key, random_u64};
+use crate::random::{random_code, random_key, random_u64};
 use crate::room::{BotMove, BotSearch, FinishedGame, Room, Seat};
 use crate::{Opponent, ServerError, ServerMessage};
 use bots::{BotKind, ONLINE_VARIANT, variants};
@@ -14,8 +14,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 use tokio::sync::mpsc::Sender;
 
-/// Les caractères d'un code de salle : sans 0, O, 1 ni I, faciles à confondre.
-const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+/// La longueur d'un code de salle (ses caractères : [`crate::random::CODE_ALPHABET`]).
 const CODE_LENGTH: usize = 5;
 
 /// Les variantes qu'on peut jouer en ligne : celle du jeu. Les autres (`bots::variants`)
@@ -473,7 +472,7 @@ impl Lobby {
             return Err(ServerError::ServerFull);
         }
         let code = loop {
-            let code = random_code();
+            let code = random_room_code();
             if !hall.tables.contains_key(&code) {
                 break code;
             }
@@ -642,16 +641,8 @@ fn online_config(name: &str) -> Result<GameConfig, ServerError> {
         .ok_or_else(|| ServerError::UnknownVariant(name.to_string()))
 }
 
-fn random_code() -> String {
-    let mut value = random_u64();
-    (0..CODE_LENGTH)
-        .map(|_| {
-            let len = CODE_ALPHABET.len() as u64;
-            let letter = CODE_ALPHABET[(value % len) as usize];
-            value /= len;
-            char::from(letter)
-        })
-        .collect()
+fn random_room_code() -> String {
+    random_code(CODE_LENGTH)
 }
 
 #[cfg(test)]

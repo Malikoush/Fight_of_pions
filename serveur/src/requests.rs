@@ -2,7 +2,10 @@
 //! sa salle ou à la base, et sa réponse. Aucune règle ici.
 
 use crate::Shared;
-use crate::account::{Account, checked_pseudo, default_pseudo, new_token, token_hash};
+use crate::account::{
+    Account, checked_pseudo, default_pseudo, new_recovery_code, new_token, recovery_hash,
+    token_hash,
+};
 use crate::cards;
 use crate::collection::{Collection, starter_cards};
 use crate::lobby::{Entrant, Outbox, Seating, SharedTable, lock};
@@ -48,6 +51,8 @@ impl Client {
             }
             ClientMessage::Register { pseudo } => self.register(pseudo).await?,
             ClientMessage::Login { token } => self.login(&token).await?,
+            ClientMessage::Recover { code } => self.recover(&code).await?,
+            ClientMessage::NewRecoveryCode => self.new_recovery_code().await?,
             ClientMessage::SetPseudo { pseudo } => self.set_pseudo(&pseudo).await?,
             ClientMessage::Collection => {
                 let collection = self.collection().await?.1;
@@ -131,6 +136,35 @@ impl Client {
             .await?
             .ok_or(ServerError::UnknownAccount)?;
         self.log_in(account, None).await
+    }
+
+    /// Retrouve le compte de ce code de récupération : cet appareil reçoit un jeton à lui.
+    async fn recover(&mut self, code: &str) -> Result<(), ServerError> {
+        self.refuse_if_logged_in()?;
+        let hash = recovery_hash(code).ok_or(ServerError::BadRecoveryCode)?;
+        let token = new_token();
+        let account = self
+            .shared
+            .background
+            .database()
+            .recover(&hash, &token_hash(&token))
+            .await?
+            .ok_or(ServerError::BadRecoveryCode)?;
+        self.log_in(account, Some(token)).await
+    }
+
+    /// Un code de récupération neuf pour ce compte, à la place de l'ancien.
+    async fn new_recovery_code(&mut self) -> Result<(), ServerError> {
+        let account = self.account.as_ref().ok_or(ServerError::NotLoggedIn)?.id;
+        let code = new_recovery_code();
+        let hash = recovery_hash(&code).ok_or(ServerError::Storage)?;
+        self.shared
+            .background
+            .database()
+            .set_recovery(account, &hash)
+            .await?;
+        self.reply(ServerMessage::RecoveryCode { code }).await;
+        Ok(())
     }
 
     /// Connecte cette connexion à ce compte, et lui envoie son compte (avec son jeton s'il

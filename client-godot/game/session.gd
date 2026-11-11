@@ -61,6 +61,14 @@ var pseudo: String:
 		return _pseudo
 	set(_value):
 		push_error("Session.pseudo s'écrit par note_account")
+## Le code de récupération créé pendant la session, ou vide.
+var recovery_code: String:
+	get:
+		return _recovery_code
+## Vrai une fois un compte retrouvé par son code pendant la session.
+var recovered: bool:
+	get:
+		return _recovered
 ## Ce que possède le compte (message `collection`) ; `null` tant qu'elle n'est pas reçue.
 var collection: CardCollection:
 	get:
@@ -74,6 +82,8 @@ var _opponent_present := false
 var _bot_failed := false
 var _catalog: CardCatalog
 var _pseudo := Labels.DEFAULT_PLAYER_NAME
+var _recovery_code := ""
+var _recovered := false
 var _collection: CardCollection
 ## Vrai tant que le créateur d'une salle ne l'a pas lancée : les vues attendent.
 var _waiting_launch := false
@@ -189,6 +199,24 @@ func note_catalog(cards: CardCatalog) -> void:
 
 func note_account(account_pseudo: String) -> void:
 	_pseudo = account_pseudo
+
+
+## Le code de récupération tout juste créé : la page Réglages le montre, jusqu'à la fin
+## de la session (il ne se redemande pas : le serveur n'en garde que l'empreinte).
+func note_recovery_code(code: String) -> void:
+	_recovery_code = code
+
+
+## Cet appareil vient de retrouver un compte par son code : la page Réglages le dit. Le
+## code montré, celui de l'ancien compte, est oublié.
+func note_recovered() -> void:
+	_recovered = true
+	_recovery_code = ""
+
+
+## Un nouveau code de récupération est essayé : le compte retrouvé avant ne se dit plus.
+func note_recovery_started() -> void:
+	_recovered = false
 
 
 func note_collection(owned: CardCollection) -> void:

@@ -14,6 +14,9 @@ signal join_requested(code: String)
 ## Les demandes du compte, faites dans Réglages et Cartes, à envoyer au serveur.
 signal pseudo_submitted(pseudo: String)
 signal cache_trio_submitted(cards: Array)
+## La page Réglages demande un code de récupération, ou de retrouver un compte par le sien.
+signal recovery_code_requested
+signal recovery_requested(code: String)
 
 enum Tab { PLAY, CARDS, RULES, SETTINGS }
 
@@ -35,6 +38,10 @@ var _shown_catalog: CardCatalog
 ## La collection que montre la page Cartes, pour ne la redessiner que quand elle change.
 var _shown_collection: CardCollection
 
+## « Changer de compte ? », avant de retrouver un compte par son code ; le code en attente
+## de la réponse.
+var _recover_dialog := AlertDialog.new(Labels.RECOVER_ASK_TITLE, Labels.RECOVER_ASK_TEXT, Labels.STAY, Labels.RECOVER_CONFIRM, "retour", true)
+var _recovery_code := ""
 @onready var _layout: VBoxContainer = %Layout
 @onready var _content: MarginContainer = %Content
 @onready var _nav: NavBar = %Nav
@@ -49,9 +56,18 @@ func _ready() -> void:
 		open_tab(Tab.PLAY)
 		(_pages[Tab.PLAY] as PlayTab).retry())
 	add_child(_server_full)
+	_recover_dialog.confirmed.connect(func() -> void: recovery_requested.emit(_recovery_code))
+	add_child(_recover_dialog)
 	resized.connect(_arrange)
 	_arrange()
 	open_tab(_tab)
+
+
+## Changer de compte par ce code de récupération : la question d'abord, par-dessus tout
+## l'écran (l'appareil quittera son compte actuel).
+func _ask_recovery(code: String) -> void:
+	_recovery_code = code
+	_recover_dialog.ask()
 
 
 ## Ouvre cet onglet (et allume le sien dans la barre).
@@ -79,6 +95,10 @@ func on_refused(category: ServerErrors.Category, message: String) -> Reply:
 		ServerErrors.Category.PSEUDO_REFUSED:
 			if _pages.has(Tab.SETTINGS):
 				(_pages[Tab.SETTINGS] as SettingsPage).show_refusal(message)
+			return Reply.HANDLED
+		ServerErrors.Category.RECOVERY_REFUSED:
+			if _pages.has(Tab.SETTINGS):
+				(_pages[Tab.SETTINGS] as SettingsPage).show_recovery_refusal(message)
 			return Reply.HANDLED
 		ServerErrors.Category.TRIO_REFUSED:
 			if _pages.has(Tab.CARDS):
@@ -132,6 +152,9 @@ func _build(tab: Tab) -> Control:
 		Tab.SETTINGS:
 			var settings := SettingsPage.new(session.pseudo)
 			settings.pseudo_submitted.connect(pseudo_submitted.emit)
+			settings.recovery_code_requested.connect(recovery_code_requested.emit)
+			settings.recovery_asked.connect(_ask_recovery)
+			settings.show_recovery(session.recovery_code, session.recovered, session.pseudo)
 			return settings
 	return _build_play()
 
@@ -145,6 +168,7 @@ func _refresh_account() -> void:
 		(_pages[Tab.PLAY] as PlayTab).refresh_player(session.pseudo)
 	if _pages.has(Tab.SETTINGS):
 		(_pages[Tab.SETTINGS] as SettingsPage).show_pseudo(session.pseudo)
+		(_pages[Tab.SETTINGS] as SettingsPage).show_recovery(session.recovery_code, session.recovered, session.pseudo)
 	if session.collection != _shown_collection:
 		_shown_collection = session.collection
 		if _pages.has(Tab.CARDS):

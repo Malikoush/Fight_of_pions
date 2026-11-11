@@ -203,6 +203,8 @@ Le serveur (`serveur/`) est en anglais dans le code, comme le moteur ; ses messa
 | Recherche de bot | `BotSearch`, `BotMove`, `Table::start_bots` | La copie de la partie sur laquelle un bot cherche son coup, hors du verrou de la salle ; le coup n'est joué que si la partie n'a pas changé |
 | Variante en ligne | `bots::ONLINE_VARIANT` | La seule configuration jouable en ligne : les règles actuelles avec draft |
 | Catalogue des cartes | `ClientMessage::Cards`, `ServerMessage::Cards`, `CardFamily`, `CardRarity`, `serveur/data/cartes.json` | Le nom, le résumé, les règles et l'effet de chaque rareté de chaque famille, à afficher ; demandé par le client, sans place nécessaire |
+| Code de récupération | `ClientMessage::Recover`, `NewRecoveryCode`, `account::new_recovery_code`, `accounts.recovery_hash` | Le code (`K7QX-M2PA-9ZTR-4HWD`) qui ouvre un compte sur un autre appareil ; montré une fois, gardé en empreinte, remplacé par le suivant |
+| Jeton de compte | `account_tokens`, `token_hash` | Le secret d'un appareil pour se connecter à son compte (`login`) ; un compte en a un par appareil |
 | Administration | `serveur admin`, `admin::administer`, `outils/admin.ps1` | Les commandes qui lisent et changent la base à côté du serveur qui tourne : comptes, collection, donner, retirer, renommer, parties, sauvegarder |
 | Sauvegarde | `backup`, `BACKUP_DIR`, `limits::BACKUPS_KEPT` | Une copie complète de la base, datée, faite chaque nuit (et sur demande) dans un dossier d'un autre disque ; seules les plus récentes sont gardées |
 | Image complète | `Dockerfile` (étape `complet`), `ghcr.io/malikoush/fight_of_pions` | L'image Docker publiée : le serveur et le jeu web exporté ; l'étape `serveur` est le serveur seul |
