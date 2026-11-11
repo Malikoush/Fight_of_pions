@@ -38,35 +38,38 @@ Si le dépôt redevient privé un jour, l'image peut rester privée : il faudra 
 
 ### 2. Sur l'OptiPlex
 
-Docker (avec Compose), s'il n'y est pas déjà (`docker --version`) :
+La machine (analysée le 2026-11-11) : `home-server`, Ubuntu 26.04, 8 threads, 7 Go de mémoire, presque au repos. Le disque système (NVMe, où Docker range ses volumes, donc la base) a 193 Go libres (agrandi à tout le NVMe le 2026-11-11) ; le disque des médias (`/mnt/media`) servira aux sauvegardes (E4i). Les services déjà là sont rangés dans `/opt/media-stack` (Jellyfin…) ; le port 3000 est libre ; Funnel sert déjà Jellyfin sur le port 443.
+
+Docker est déjà installé. Pour s'en servir sans `sudo`, une fois (puis se déconnecter et se reconnecter) :
 
 ```
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER      # puis se déconnecter et se reconnecter
+sudo usermod -aG docker $USER
 ```
 
-Le jeu :
+Le jeu, rangé à côté des autres services :
 
 ```
-mkdir ~/fight-of-pions && cd ~/fight-of-pions
+sudo mkdir -p /opt/fight-of-pions
+sudo chown $USER: /opt/fight-of-pions
+cd /opt/fight-of-pions
 curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/Malikoush/Fight_of_pions/main/docker-compose.yml
 docker compose up -d
 docker compose ps                  # le serveur doit passer « healthy » en moins d'une minute
 curl -s http://127.0.0.1:3000/health
 ```
 
-L'ouvrir sur internet avec Tailscale Funnel (Tailscale déjà installé et connecté) :
+L'ouvrir sur internet avec Tailscale Funnel. Le port 443 sert déjà Jellyfin : le jeu prend le 8443 (Funnel n'accepte que 443, 8443 et 10000) :
 
 ```
-sudo tailscale funnel --bg 3000                 # https://optiplex.<réseau>.ts.net/
-sudo tailscale funnel --bg --https=8443 3000    # si le port 443 sert déjà (Jellyfin)
-tailscale funnel status                         # l'adresse à donner aux amis
+sudo tailscale funnel --bg --https=8443 3000
+tailscale funnel status            # https://home-server.tail663aab.ts.net:8443 : l'adresse à donner aux amis
 ```
 
-La première fois, Tailscale peut demander d'autoriser Funnel pour cette machine : il affiche un lien vers sa console.
+Jellyfin reste sur `https://home-server.tail663aab.ts.net`, sans changement. Un réseau qui bloque les ports autres que 443 (certains Wi-Fi d'école ou d'entreprise) ne laissera pas passer le 8443 : sur un téléphone en 4G, aucun souci.
 
 ## Au quotidien
+
+Les commandes `docker compose` se lancent depuis `/opt/fight-of-pions`.
 
 | Je veux… | Je fais… |
 |---|---|
